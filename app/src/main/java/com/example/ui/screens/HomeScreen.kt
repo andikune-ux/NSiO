@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,15 +21,20 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,14 +51,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
-import com.example.ui.components.tvFocusable
 import com.example.ui.theme.CyanPrimary
+import com.example.ui.theme.CyanSecondary
 
 @Composable
 fun HomeScreen(
@@ -64,6 +72,8 @@ fun HomeScreen(
     val settings by viewModel.settings.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+    val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
     val filteredList = mediaList.filter { item ->
         val matchesSearch = searchQuery.isEmpty() ||
@@ -73,6 +83,7 @@ fun HomeScreen(
             "LINK" -> item.sourceType == "LINK"
             "FILE" -> item.sourceType == "FILE"
             "SERVER" -> item.sourceType == "SERVER"
+            "FAV" -> item.isFavorite
             else -> true
         }
         matchesSearch && matchesFilter
@@ -81,127 +92,215 @@ fun HomeScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .padding(12.dp)
+            .padding(14.dp)
             .testTag("home_screen")
     ) {
         val containerWidth = maxWidth
-        val isNarrow = containerWidth < 560.dp
+        val isNarrow = containerWidth < 620.dp
+        val columns = when {
+            containerWidth < 460.dp -> 2
+            containerWidth < 750.dp -> 3
+            containerWidth < 1050.dp -> 4
+            else -> settings.gridColumns.coerceIn(3, 7)
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header Row / Column with Liquid Glass Search Pill
-            if (isNarrow) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            // Header Top Bar with Liquid Glass search & action pills
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Koleksi Konten",
-                            fontSize = 18.sp,
+                            text = "Net Stream iO",
+                            fontSize = if (isNarrow) 18.sp else 22.sp,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Box(
                             modifier = Modifier
-                                .liquidGlass(shape = RoundedCornerShape(10.dp), alpha = 0.12f, borderAlpha = 0.3f, elevation = 2.dp)
+                                .liquidGlass(
+                                    shape = RoundedCornerShape(12.dp),
+                                    alpha = 0.15f,
+                                    borderAlpha = 0.35f,
+                                    elevation = 2.dp
+                                )
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "${filteredList.size} item",
-                                fontSize = 10.sp,
+                                text = "${filteredList.size} media",
+                                fontSize = 11.sp,
                                 color = CyanPrimary,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.updateSearchQuery(it) },
-                        placeholder = { Text("Cari judul / kategori...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(22.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                            .liquidGlassTvFocusable(shape = RoundedCornerShape(22.dp))
-                            .testTag("home_search_field")
+                    Text(
+                        text = "Smart Multi-Source Streaming Hub",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
+
+                // Header Action Pills: Quick Rotate & Cloud Sync
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f, fill = false)) {
-                        Text(
-                            text = "Koleksi Konten",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "${filteredList.size} media tersedia dari Extension",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    // Orientation Toggle Button
+                    Box(
+                        modifier = Modifier
+                            .liquidGlass(
+                                shape = RoundedCornerShape(20.dp),
+                                alpha = 0.12f,
+                                borderAlpha = 0.3f,
+                                elevation = 4.dp
+                            )
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { viewModel.toggleDisplayMode() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("home_rotate_toggle_button")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ScreenRotation,
+                                contentDescription = "Ubah Orientasi",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = settings.displayMode,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { viewModel.updateSearchQuery(it) },
-                        placeholder = { Text("Cari judul / kategori...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(14.dp))
+                    // Cloud Sync Pill (Firebase status)
+                    Box(
+                        modifier = Modifier
+                            .liquidGlass(
+                                shape = RoundedCornerShape(20.dp),
+                                alpha = 0.14f,
+                                borderAlpha = 0.35f,
+                                elevation = 4.dp
+                            )
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable {
+                                if (authState is AuthState.Authenticated) {
+                                    viewModel.syncToCloud()
+                                } else {
+                                    viewModel.signInWithGoogle()
                                 }
                             }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(22.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                        ),
-                        modifier = Modifier
-                            .width(250.dp)
-                            .height(44.dp)
-                            .liquidGlassTvFocusable(shape = RoundedCornerShape(22.dp))
-                            .testTag("home_search_field")
-                    )
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("home_cloud_status_button")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = CyanPrimary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (authState is AuthState.Authenticated) Icons.Default.CloudDone else Icons.Default.CloudSync,
+                                    contentDescription = "Cloud Status",
+                                    tint = if (authState is AuthState.Authenticated) CyanPrimary else Color(0xFFF59E0B),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            val cloudLabel = when (authState) {
+                                is AuthState.Authenticated -> (authState as AuthState.Authenticated).user.displayName?.split(" ")?.firstOrNull() ?: "Cloud Aktif"
+                                is AuthState.Loading -> "Menghubungkan..."
+                                else -> "Login Cloud"
+                            }
+                            Text(
+                                text = cloudLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // Liquid Glass Search Bar Pill (spacious and clean)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = {
+                        Text(
+                            "Cari judul video, foto, atau kategori...",
+                            fontSize = 12.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Cari",
+                            tint = CyanPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Hapus teks",
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanPrimary,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidGlass(
+                            shape = RoundedCornerShape(24.dp),
+                            alpha = 0.08f,
+                            borderAlpha = 0.28f,
+                            elevation = 4.dp
+                        )
+                        .testTag("home_search_field")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Horizontally Scrollable Liquid Glass Filter Chips
             Row(
@@ -215,34 +314,32 @@ fun HomeScreen(
                     "ALL" to "Semua",
                     "LINK" to "Link Ekstensi",
                     "FILE" to "File Lokal",
-                    "SERVER" to "Server Upload"
+                    "SERVER" to "Server Upload",
+                    "FAV" to "Favorit"
                 )
 
                 filters.forEach { (key, label) ->
                     val isSelected = selectedFilter == key
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.selectFilter(key) },
-                        label = {
-                            Text(
-                                label,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    Box(
+                        modifier = Modifier
+                            .liquidGlass(
+                                shape = RoundedCornerShape(20.dp),
+                                alpha = if (isSelected) 0.25f else 0.08f,
+                                borderAlpha = if (isSelected) 0.65f else 0.25f,
+                                elevation = if (isSelected) 6.dp else 2.dp
                             )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = CyanPrimary.copy(alpha = 0.22f),
-                            selectedLabelColor = CyanPrimary,
-                            containerColor = Color.White.copy(alpha = 0.06f),
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            borderColor = if (isSelected) CyanPrimary.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.15f)
-                        ),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
-                    )
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { viewModel.selectFilter(key) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .testTag("filter_chip_$key")
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -258,82 +355,76 @@ fun HomeScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(340.dp)
                             .liquidGlass(
-                                shape = RoundedCornerShape(20.dp),
-                                alpha = 0.12f,
+                                shape = RoundedCornerShape(28.dp),
+                                alpha = 0.15f,
                                 borderAlpha = 0.35f,
                                 elevation = 12.dp
                             )
+                            .padding(horizontal = 28.dp, vertical = 24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Column(
-                            modifier = Modifier.padding(22.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(CyanPrimary.copy(alpha = 0.15f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Movie,
-                                    contentDescription = "Kosong",
-                                    tint = CyanPrimary,
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Icon(
+                                imageVector = Icons.Default.Movie,
+                                contentDescription = null,
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(54.dp)
+                            )
                             Text(
-                                text = "Belum Ada Media",
-                                fontSize = 15.sp,
+                                text = if (searchQuery.isNotEmpty()) "Tidak ada hasil untuk '$searchQuery'" else "Belum Ada Konten",
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onBackground
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Buka Menu Extension untuk menambahkan link CloudStream, video m3u8, file lokal, atau server.",
-                                fontSize = 11.sp,
+                                text = "Buka menu Extension untuk menambahkan link m3u8, video CloudStream, file lokal, atau upload server.",
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                modifier = Modifier.width(320.dp),
+                                lineHeight = 16.sp
                             )
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Button(
                                 onClick = onNavigateToExtension,
-                                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CyanPrimary,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier
+                                    .liquidGlass(
+                                        shape = RoundedCornerShape(20.dp),
+                                        alpha = 0.2f,
+                                        elevation = 8.dp
+                                    )
+                                    .testTag("btn_go_to_extension")
                             ) {
-                                Text("Buka Menu Extension", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text(
+                                    "Buka Menu Extension",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
                 }
             } else {
-                val calculatedCols = when {
-                    containerWidth < 420.dp -> 2
-                    containerWidth < 620.dp -> settings.gridColumns.coerceIn(2, 3)
-                    containerWidth < 900.dp -> settings.gridColumns.coerceIn(3, 4)
-                    else -> settings.gridColumns.coerceIn(3, 8)
-                }
-
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(calculatedCols),
-                    contentPadding = PaddingValues(bottom = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .testTag("home_media_grid")
+                    columns = GridCells.Fixed(columns),
+                    contentPadding = PaddingValues(bottom = 80.dp, top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(filteredList, key = { it.id }) { item ->
                         MediaGridCard(
-                            media = item,
+                            item = item,
                             onClick = { viewModel.playMedia(item) },
-                            onDownload = { viewModel.downloadMedia(item) },
-                            onDelete = { viewModel.deleteMedia(item) }
+                            onLongClick = { viewModel.toggleFavorite(item) }
                         )
                     }
                 }

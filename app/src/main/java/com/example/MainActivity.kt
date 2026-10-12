@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,8 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.example.ui.MainViewModel
 import com.example.ui.components.AmbientFluidBackground
+import com.example.ui.components.BottomNavGlassBar
 import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
 import com.example.ui.screens.ExtensionScreen
@@ -44,9 +48,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Enforce landscape orientation for Android TV and Landscape phone mode
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-
         enableEdgeToEdge()
 
         setContent {
@@ -76,11 +77,11 @@ class MainActivity : ComponentActivity() {
 
             MyApplicationTheme(themeMode = settings.themeMode) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 1. iOS 26 Ambient Fluid Glow Canvas (Underlying mesh gradient for Liquid Glass refraction)
+                    // 1. iOS 26 Ambient Fluid Glow Canvas (Underlying chromatic gradient)
                     val isDark = settings.themeMode != "LIGHT"
                     AmbientFluidBackground(isDark = isDark)
 
-                    // 2. Active Screen Content / Fullscreen Player
+                    // 2. Fullscreen Video Player or Main App Navigation
                     if (currentlyPlaying != null) {
                         PlayerScreen(
                             media = currentlyPlaying!!,
@@ -88,7 +89,6 @@ class MainActivity : ComponentActivity() {
                             onClose = { viewModel.closePlayer() }
                         )
                     } else {
-                        // Translucent Landscape Layout with Floating Liquid Glass Toolbar
                         Scaffold(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -96,46 +96,54 @@ class MainActivity : ComponentActivity() {
                             snackbarHost = { SnackbarHost(snackbarHostState) },
                             containerColor = Color.Transparent
                         ) { innerPadding ->
-                            Row(
+                            BoxWithConstraints(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(innerPadding)
                             ) {
-                                // Floating Liquid Glass Capsule Toolbar
-                                VerticalNavToolbar(
-                                    currentDestination = currentNav,
-                                    onNavigate = { dest -> currentNav = dest },
-                                    activeProfileName = activeProfile?.name ?: "NSiO",
-                                    activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬"
-                                )
+                                val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
 
-                                // Right Content Area
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxSize()
-                                ) {
-                                    AnimatedContent(
-                                        targetState = currentNav,
-                                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                        label = "screen_nav_transition"
-                                    ) { destination ->
-                                        when (destination) {
-                                            NavDestination.HOME -> HomeScreen(
+                                if (isLandscape) {
+                                    // Landscape Layout: Sleek Left Vertical Liquid Glass Capsule
+                                    Row(modifier = Modifier.fillMaxSize()) {
+                                        VerticalNavToolbar(
+                                            currentDestination = currentNav,
+                                            onNavigate = { dest -> currentNav = dest },
+                                            activeProfileName = activeProfile?.name ?: "NSiO",
+                                            activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬"
+                                        )
+
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxSize()
+                                        ) {
+                                            AppNavContent(
+                                                destination = currentNav,
                                                 viewModel = viewModel,
-                                                onNavigateToExtension = { currentNav = NavDestination.EXTENSION }
-                                            )
-                                            NavDestination.EXTENSION -> ExtensionScreen(
-                                                viewModel = viewModel,
-                                                onNavigateToHome = { currentNav = NavDestination.HOME }
-                                            )
-                                            NavDestination.SETTINGS -> SettingsScreen(
-                                                viewModel = viewModel
-                                            )
-                                            NavDestination.PROFILE -> ProfileScreen(
-                                                viewModel = viewModel
+                                                onNavigate = { currentNav = it }
                                             )
                                         }
+                                    }
+                                } else {
+                                    // Portrait Layout: Full Width Content + Floating Bottom Glass Capsule Bar
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxSize()
+                                        ) {
+                                            AppNavContent(
+                                                destination = currentNav,
+                                                viewModel = viewModel,
+                                                onNavigate = { currentNav = it }
+                                            )
+                                        }
+
+                                        BottomNavGlassBar(
+                                            currentDestination = currentNav,
+                                            onNavigate = { dest -> currentNav = dest }
+                                        )
                                     }
                                 }
                             }
@@ -143,6 +151,36 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppNavContent(
+    destination: NavDestination,
+    viewModel: MainViewModel,
+    onNavigate: (NavDestination) -> Unit
+) {
+    AnimatedContent(
+        targetState = destination,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "screen_nav_transition"
+    ) { targetDest ->
+        when (targetDest) {
+            NavDestination.HOME -> HomeScreen(
+                viewModel = viewModel,
+                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) }
+            )
+            NavDestination.EXTENSION -> ExtensionScreen(
+                viewModel = viewModel,
+                onNavigateToHome = { onNavigate(NavDestination.HOME) }
+            )
+            NavDestination.SETTINGS -> SettingsScreen(
+                viewModel = viewModel
+            )
+            NavDestination.PROFILE -> ProfileScreen(
+                viewModel = viewModel
+            )
         }
     }
 }

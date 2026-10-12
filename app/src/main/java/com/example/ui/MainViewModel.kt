@@ -8,17 +8,19 @@ import com.example.data.backup.BackupUtils
 import com.example.data.download.VideoDownloadManager
 import com.example.data.extractor.LinkExtractor
 import com.example.data.extractor.ParseResult
+import com.example.data.firebase.AuthState
+import com.example.data.firebase.CloudMediaRepository
+import com.example.data.firebase.FirebaseAuthManager
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.plugin.PluginManager
 import com.example.player.CS3IPlayer
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -31,6 +33,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val pluginManager = PluginManager(application)
     val downloadManager = VideoDownloadManager.getInstance(application)
     val player = CS3IPlayer(application, viewModelScope)
+
+    // Firebase Auth & Cloud Firestore Integration
+    val authManager = FirebaseAuthManager(application)
+    val authState: StateFlow<AuthState> = authManager.authState
+    val cloudRepository = CloudMediaRepository(application)
+
+    private val _isCloudSyncing = MutableStateFlow(false)
+    val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
 
     // Profiles state
     private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
@@ -62,6 +72,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadInitialData()
+        observeAuthForCloudSync()
+    }
+
+    private fun observeAuthForCloudSync() {
+        viewModelScope.launch {
+            authState.collect { state ->
+                if (state is AuthState.Authenticated) {
+                    val user = state.user
+                    try {
+                        cloudRepository.saveUserProfile(
+                            userId = user.uid,
+                            email = user.email,
+                            displayName = user.displayName,
+                            photoUrl = user.photoUrl?.toString()
+                        )
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
     }
 
     private fun loadInitialData() {
@@ -106,7 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     MediaItem(
                         id = UUID.randomUUID().toString(),
                         profileId = defaultProfile.id,
-                        title = "Sintel Cinema trailer HD",
+                        title = "Sintel Cinema Trailer HD",
                         url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
                         thumbnailUrl = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=500",
                         type = "VIDEO",
@@ -195,12 +225,93 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleDisplayMode() {
+        val nextMode = when (_settings.value.displayMode) {
+            "TV" -> "HP"
+            "HP" -> "AUTO"
+            else -> "TV"
+        }
+        val updated = _settings.value.copy(displayMode = nextMode)
+        updateSettings(updated)
+        showStatus("Mode Tampilan: $nextMode")
+    }
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
     fun selectFilter(filter: String) {
         _selectedFilter.value = filter
+    }
+
+    // --- Firebase Auth & Cloud Firestore Operations ---
+    fun signInWithGoogle() {
+        viewModelScope.launch {
+            showStatus("Menghubungkan ke Google...")
+            val result = authManager.signInWithGoogle()
+            result.onSuccess { user ->
+                showStatus("Selamat datang, ${user.displayName ?: user.email ?: "Pengguna"}")
+                // Auto sync
+                syncToCloud()
+            }.onFailure { e ->
+                showStatus("Gagal login: ${e.localizedMessage ?: "Coba lagi"}")
+            }
+        }
+    }
+
+    fun signOut() {
+        authManager.signOut()
+        showStatus("Berhasil keluar dari akun")
+    }
+
+    fun syncToCloud() {
+        val user = authManager.currentUser ?: run {
+            showStatus("Silakan login Google terlebih dahulu untuk sinkronisasi cloud")
+            return
+        }
+        viewModelScope.launch {
+            _isCloudSyncing.value = true
+            try {
+                cloudRepository.saveUserProfile(
+                    userId = user.uid,
+                    email = user.email,
+                    displayName = user.displayName,
+                    photoUrl = user.photoUrl?.toString()
+                )
+                val localItems = _mediaList.value
+                val count = cloudRepository.syncLocalListToCloud(user.uid, localItems)
+                showStatus("$count item berhasil disinkronkan ke Cloud Firestore!")
+            } catch (e: Exception) {
+                showStatus("Gagal sinkronisasi: ${e.localizedMessage}")
+            } finally {
+                _isCloudSyncing.value = false
+            }
+        }
+    }
+
+    fun restoreFromCloud() {
+        val user = authManager.currentUser ?: run {
+            showStatus("Silakan login Google terlebih dahulu untuk memulihkan dari cloud")
+            return
+        }
+        viewModelScope.launch {
+            _isCloudSyncing.value = true
+            try {
+                val cloudItems = cloudRepository.fetchMediaItems(user.uid)
+                if (cloudItems.isEmpty()) {
+                    showStatus("Tidak ada data tersimpan di Cloud Firestore")
+                } else {
+                    val currentProfileId = _activeProfile.value?.id ?: "profile_utama"
+                    val itemsForProfile = cloudItems.map { it.copy(profileId = currentProfileId) }
+                    mediaDao.insertAll(itemsForProfile)
+                    showStatus("${itemsForProfile.size} item berhasil dipulihkan dari Cloud!")
+                }
+            } catch (e: Exception) {
+                showStatus("Gagal memulihkan: ${e.localizedMessage}")
+            } finally {
+                _isCloudSyncing.value = false
+            }
+        }
     }
 
     // --- Link Parsing (B1) ---
@@ -210,11 +321,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             when (val result = LinkExtractor.parseUrl(url, currentProfileId)) {
                 is ParseResult.Single -> {
                     mediaDao.insertMedia(result.item)
+                    // If user is authenticated, sync to cloud
+                    authManager.currentUser?.let { user ->
+                        try { cloudRepository.saveMediaItem(user.uid, result.item) } catch (_: Exception) {}
+                    }
                     showStatus("1 Media berhasil ditambahkan: ${result.item.title}")
                     onFinished("Berhasil menambahkan: ${result.item.title}")
                 }
                 is ParseResult.Multiple -> {
                     mediaDao.insertAll(result.items)
+                    authManager.currentUser?.let { user ->
+                        try { cloudRepository.syncLocalListToCloud(user.uid, result.items) } catch (_: Exception) {}
+                    }
                     showStatus("${result.items.size} item berhasil ditambahkan ke beranda!")
                     onFinished("${result.items.size} item berhasil ditambahkan (${result.title})")
                 }
@@ -241,6 +359,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 category = "Penyimpanan Lokal"
             )
             mediaDao.insertMedia(newItem)
+            authManager.currentUser?.let { user ->
+                try { cloudRepository.saveMediaItem(user.uid, newItem) } catch (_: Exception) {}
+            }
             showStatus("File lokal berhasil ditambahkan ke beranda!")
         }
     }
@@ -260,13 +381,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 category = "Media Server"
             )
             mediaDao.insertMedia(newItem)
+            authManager.currentUser?.let { user ->
+                try { cloudRepository.saveMediaItem(user.uid, newItem) } catch (_: Exception) {}
+            }
             showStatus("Media berhasil di-upload ke server & beranda!")
+        }
+    }
+
+    fun toggleFavorite(item: MediaItem) {
+        viewModelScope.launch {
+            val updated = item.copy(isFavorite = !item.isFavorite)
+            mediaDao.updateMedia(updated)
+            authManager.currentUser?.let { user ->
+                try { cloudRepository.saveMediaItem(user.uid, updated) } catch (_: Exception) {}
+            }
+            showStatus(if (updated.isFavorite) "Disimpan ke Favorit" else "Dihapus dari Favorit")
         }
     }
 
     fun deleteMedia(item: MediaItem) {
         viewModelScope.launch {
             mediaDao.deleteMedia(item)
+            authManager.currentUser?.let { user ->
+                try { cloudRepository.deleteMediaItem(user.uid, item.id) } catch (_: Exception) {}
+            }
             showStatus("Media '${item.title}' dihapus")
         }
     }
@@ -283,6 +421,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val pos = player.playerState.value.currentPositionMs
             viewModelScope.launch {
                 mediaDao.updateProgress(current.id, pos)
+                authManager.currentUser?.let { user ->
+                    try { cloudRepository.saveMediaItem(user.uid, current.copy(progressMs = pos)) } catch (_: Exception) {}
+                }
             }
         }
         player.pause()

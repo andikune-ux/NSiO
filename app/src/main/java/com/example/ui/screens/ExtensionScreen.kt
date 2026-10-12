@@ -3,11 +3,10 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,12 +20,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -59,11 +61,9 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.MainViewModel
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
-import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.CyanPrimary
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ExtensionScreen(
     viewModel: MainViewModel,
@@ -84,41 +84,46 @@ fun ExtensionScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(12.dp)
+            .padding(14.dp)
             .testTag("extension_screen")
     ) {
-        // Header
-        Column(modifier = Modifier.padding(bottom = 6.dp)) {
+        // Header Title
+        Column(modifier = Modifier.padding(bottom = 10.dp)) {
             Text(
-                text = "Menu Extension (Manajemen Sumber Konten)",
-                fontSize = 17.sp,
+                text = "Menu Extension",
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Tambahkan konten dari Link, File Lokal, Server, atau Repositori Plugin",
-                fontSize = 10.sp,
+                text = "Pusat Manajemen Sumber Konten Video, Foto & Ekstensi CloudStream",
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        // Liquid Glass Tab Capsule Bar
+        // iOS 26 Liquid Glass Segmented Pill Tab Bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.3f, elevation = 4.dp)
-                .padding(2.dp)
+                .liquidGlass(
+                    shape = RoundedCornerShape(24.dp),
+                    alpha = 0.12f,
+                    borderAlpha = 0.35f,
+                    elevation = 6.dp
+                )
+                .padding(4.dp)
         ) {
             ScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
-                edgePadding = 4.dp,
+                edgePadding = 6.dp,
                 containerColor = Color.Transparent,
                 contentColor = CyanPrimary,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
                         color = CyanPrimary,
-                        height = 2.5.dp
+                        height = 3.dp
                     )
                 },
                 divider = {}
@@ -136,39 +141,41 @@ fun ExtensionScreen(
                         text = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                if (index == 2 && !isServerUnlocked) {
+                                if (index == 2) {
                                     Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Terkunci",
-                                        tint = AccentRed,
-                                        modifier = Modifier.size(13.dp)
+                                        imageVector = if (isServerUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                        contentDescription = "Status Kunci",
+                                        tint = if (isServerUnlocked) CyanPrimary else AccentRed,
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                 }
                                 Text(
                                     text = title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTabIndex == index) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp))
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Tab Contents
-        when (selectedTabIndex) {
-            0 -> LinkSourceTab(viewModel, onNavigateToHome)
-            1 -> FileSourceTab(viewModel, onNavigateToHome)
-            2 -> ServerSourceTab(viewModel, onNavigateToHome, mediaList.filter { it.sourceType == "SERVER" })
-            3 -> PluginRepoTab(viewModel, plugins, repos)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            when (selectedTabIndex) {
+                0 -> LinkSourceTab(viewModel, onNavigateToHome)
+                1 -> FileSourceTab(viewModel, onNavigateToHome)
+                2 -> ServerSourceTab(viewModel, onNavigateToHome, mediaList.filter { it.sourceType == "SERVER" })
+                3 -> PluginRepoTab(viewModel, plugins, repos)
+            }
         }
     }
 
@@ -189,7 +196,6 @@ fun ExtensionScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LinkSourceTab(
     viewModel: MainViewModel,
@@ -200,56 +206,70 @@ private fun LinkSourceTab(
     var parseFeedback by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 6.dp)
+                    .liquidGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        alpha = 0.12f,
+                        borderAlpha = 0.35f,
+                        elevation = 8.dp
+                    )
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Text(
                         text = "B1. Tambah Sumber Link",
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Mendukung Repo CloudStream JSON, Google Drive Publik, m3u/m3u8, dan link video langsung.",
-                        fontSize = 10.sp,
+                        text = "Mendukung Repo CloudStream JSON, Google Drive Publik, m3u/m3u8, dan direct video/audio URL.",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedTextField(
                         value = urlInput,
                         onValueChange = { urlInput = it },
-                        placeholder = { Text("Masukkan URL link media (http:// atau https://)...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = {
+                            Text(
+                                "Tempelkan link URL media (http:// atau https://)...",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        },
                         leadingIcon = {
-                            Icon(Icons.Default.Link, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Link,
+                                contentDescription = null,
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
                         },
                         singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
                             .testTag("link_url_input")
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(
@@ -264,34 +284,58 @@ private fun LinkSourceTab(
                                 }
                             },
                             enabled = !isLoading && urlInput.isNotBlank(),
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyanPrimary,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("btn_parse_link")
                         ) {
                             if (isLoading) {
-                                CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
+                                CircularProgressIndicator(
+                                    color = Color.Black,
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                             }
-                            Text("Urai & Tambahkan", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text(
+                                "Urai & Tambahkan Link",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
                         }
 
                         if (parseFeedback != null) {
                             Button(
                                 onClick = onNavigateToHome,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White.copy(alpha = 0.15f)
+                                ),
+                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier.height(48.dp)
                             ) {
-                                Text("Buka Beranda", color = CyanPrimary, fontSize = 11.sp)
+                                Icon(
+                                    Icons.Default.Home,
+                                    contentDescription = null,
+                                    tint = CyanPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Beranda", color = CyanPrimary, fontSize = 13.sp)
                             }
                         }
                     }
 
                     if (parseFeedback != null) {
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = parseFeedback ?: "",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             color = CyanPrimary,
                             fontWeight = FontWeight.Medium
                         )
@@ -303,7 +347,7 @@ private fun LinkSourceTab(
         item {
             Text(
                 text = "Preset Uji Coba Cepat:",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -312,22 +356,22 @@ private fun LinkSourceTab(
         val presets = listOf(
             Triple(
                 "CloudStream Repo JSON (Folder / Banyak Item)",
-                "Koleksi banyak video terstruktur JSON",
+                "Koleksi banyak video terstruktur JSON CloudStream",
                 "https://raw.githubusercontent.com/cloudstream/repo/main/plugins.json"
             ),
             Triple(
                 "IPTV Channel M3U8 Live Stream (1 Saluran)",
-                "Live stream HLS Big Buck Bunny",
+                "Live stream HLS Big Buck Bunny High Definition",
                 "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
             ),
             Triple(
                 "Google Drive Video Link",
-                "Link Google Drive dengan parsing fileId",
+                "Link Google Drive publik dengan parsing fileId otomatis",
                 "https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0/view"
             ),
             Triple(
                 "Direct MP4 1080p Video",
-                "Video langsung Elephants Dream",
+                "Video langsung Elephants Dream Open Movie",
                 "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
             )
         )
@@ -336,20 +380,33 @@ private fun LinkSourceTab(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(12.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 2.dp)
-                    .liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
-                    .clickable { urlInput = url }
+                    .liquidGlass(
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = 0.08f,
+                        borderAlpha = 0.25f,
+                        elevation = 3.dp
+                    )
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
+                        .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(text = title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
-                        Text(text = desc, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = title,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanPrimary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = desc,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     Button(
                         onClick = {
@@ -360,10 +417,13 @@ private fun LinkSourceTab(
                                 parseFeedback = it
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                        shape = RoundedCornerShape(8.dp)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.15f)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.height(40.dp)
                     ) {
-                        Text("Pakai", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Gunakan", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
@@ -371,7 +431,6 @@ private fun LinkSourceTab(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FileSourceTab(
     viewModel: MainViewModel,
@@ -381,92 +440,117 @@ private fun FileSourceTab(
     var filePathInput by remember { mutableStateOf("/storage/emulated/0/Movies/VideoLokal.mp4") }
     var isPhoto by remember { mutableStateOf(false) }
 
-    Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 6.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "B2. Sumber File (Unggah dari Perangkat)",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Impor file video/foto dari penyimpanan internal atau eksternal perangkat untuk muncul di beranda.",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        alpha = 0.12f,
+                        borderAlpha = 0.35f,
+                        elevation = 8.dp
+                    )
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "B2. Sumber File (Unggah dari Perangkat)",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Impor file video/foto dari penyimpanan internal atau eksternal perangkat untuk muncul di beranda.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                OutlinedTextField(
-                    value = titleInput,
-                    onValueChange = { titleInput = it },
-                    placeholder = { Text("Judul File / Video...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                    ),
-                    modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = filePathInput,
-                    onValueChange = { filePathInput = it },
-                    placeholder = { Text("Path atau Uri file...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
-                    leadingIcon = {
-                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                    ),
-                    modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { isPhoto = false },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (!isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
+                    OutlinedTextField(
+                        value = titleInput,
+                        onValueChange = { titleInput = it },
+                        placeholder = { Text("Judul File / Video...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = filePathInput,
+                        onValueChange = { filePathInput = it },
+                        placeholder = { Text("Path atau Uri file perangkat...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Type selection pills
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Tipe: Video", color = if (!isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface, fontSize = 10.sp)
+                        Button(
+                            onClick = { isPhoto = false },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.weight(1f).height(44.dp)
+                        ) {
+                            Text(
+                                "Tipe: Video",
+                                color = if (!isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (!isPhoto) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = { isPhoto = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.weight(1f).height(44.dp)
+                        ) {
+                            Text(
+                                "Tipe: Foto",
+                                color = if (isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isPhoto) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
 
-                    Button(
-                        onClick = { isPhoto = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
-                    ) {
-                        Text("Tipe: Foto", color = if (isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface, fontSize = 10.sp)
-                    }
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
@@ -475,11 +559,28 @@ private fun FileSourceTab(
                             titleInput = ""
                             onNavigateToHome()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanPrimary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
                     ) {
-                        Text("Impor ke Beranda", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "Impor ke Beranda",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
                     }
                 }
             }
@@ -487,7 +588,6 @@ private fun FileSourceTab(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ServerSourceTab(
     viewModel: MainViewModel,
@@ -498,76 +598,86 @@ private fun ServerSourceTab(
     var urlInput by remember { mutableStateOf("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4") }
 
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 6.dp)
+                    .liquidGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        alpha = 0.12f,
+                        borderAlpha = 0.35f,
+                        elevation = 8.dp
+                    )
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(CyanPrimary),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Storage, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                            Icon(
+                                Icons.Default.Storage,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                         Text(
                             text = "B3. Sumber Server (Terproteksi PIN)",
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedTextField(
                         value = titleInput,
                         onValueChange = { titleInput = it },
-                        placeholder = { Text("Judul konten server...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Judul konten server...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
-                        modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     OutlinedTextField(
                         value = urlInput,
                         onValueChange = { urlInput = it },
-                        placeholder = { Text("URL konten server...", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("URL konten server...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
-                        modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Button(
                             onClick = {
@@ -575,22 +685,39 @@ private fun ServerSourceTab(
                                 viewModel.uploadMediaToServer(finalTitle, urlInput, false)
                                 titleInput = ""
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyanPrimary,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
                         ) {
-                            Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Upload ke Server", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Icon(
+                                Icons.Default.CloudUpload,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Upload ke Server",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
                         }
 
                         Button(
                             onClick = onNavigateToHome,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier.height(48.dp)
                         ) {
-                            Text("Buka Beranda", color = CyanPrimary, fontSize = 10.sp)
+                            Text("Buka Beranda", color = CyanPrimary, fontSize = 13.sp)
                         }
                     }
                 }
@@ -600,7 +727,7 @@ private fun ServerSourceTab(
         item {
             Text(
                 text = "Daftar Konten Server Terupload (${serverMediaList.size} Item):",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -610,7 +737,7 @@ private fun ServerSourceTab(
             item {
                 Text(
                     text = "Belum ada konten yang di-upload ke server.",
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -619,25 +746,48 @@ private fun ServerSourceTab(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .liquidGlass(shape = RoundedCornerShape(12.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 2.dp)
-                        .liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
+                        .liquidGlass(
+                            shape = RoundedCornerShape(18.dp),
+                            alpha = 0.08f,
+                            borderAlpha = 0.25f,
+                            elevation = 3.dp
+                        )
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(10.dp),
+                            .padding(14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(text = item.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text(text = item.url, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = item.title,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = item.url,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
                         }
                         IconButton(
                             onClick = { viewModel.deleteMedia(item) },
-                            modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = AccentRed, modifier = Modifier.size(15.dp))
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Hapus",
+                                tint = AccentRed,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
@@ -653,63 +803,80 @@ private fun PluginRepoTab(
     repos: List<com.example.data.plugin.RepoManifest>
 ) {
     var repoUrlInput by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 6.dp)
+                    .liquidGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        alpha = 0.12f,
+                        borderAlpha = 0.35f,
+                        elevation = 8.dp
+                    )
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Sistem Repositori Plugin (Arsitektur CloudStream)",
-                        fontSize = 14.sp,
+                        text = "Arsitektur Plugin CloudStream",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Dukungan dynamic plugin loading (manifest.json, BasePlugin, CS3 packages).",
-                        fontSize = 10.sp,
+                        text = "Tambah URL repository JSON untuk memuat plugin scraper streaming eksternal.",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = repoUrlInput,
-                            onValueChange = { repoUrlInput = it },
-                            placeholder = { Text("URL repo.json...", fontSize = 10.sp, color = Color(0xFF94A3B8)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                                focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                                unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                            ),
-                            modifier = Modifier.weight(1f).liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
-                        )
-                        Button(
-                            onClick = {
-                                if (repoUrlInput.isNotBlank()) {
-                                    viewModel.showStatus("Repositori berhasil ditambahkan")
-                                    repoUrlInput = ""
+                    OutlinedTextField(
+                        value = repoUrlInput,
+                        onValueChange = { repoUrlInput = it },
+                        placeholder = { Text("https://repo.domain.com/plugins.json", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            if (repoUrlInput.isNotBlank()) {
+                                val url = repoUrlInput
+                                repoUrlInput = ""
+                                scope.launch {
+                                    viewModel.pluginManager.addRepository(name = "Koleksi Eksternal", url = url)
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
-                        ) {
-                            Text("Tambah", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanPrimary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(
+                            "Tambahkan Repositori",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
                     }
                 }
             }
@@ -718,38 +885,60 @@ private fun PluginRepoTab(
         item {
             Text(
                 text = "Plugin Terpasang (${plugins.size}):",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
 
         items(plugins) { plugin ->
-            val manifest = plugin.manifest
+            val pName = plugin.manifest?.name ?: plugin.filename ?: "Plugin Ekstensi"
+            val pDesc = plugin.manifest?.description ?: "Plugin streaming terpasang"
+            val pVersion = plugin.manifest?.version ?: 1
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(12.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 2.dp)
-                    .liquidGlassTvFocusable(shape = RoundedCornerShape(12.dp))
+                    .liquidGlass(
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = 0.08f,
+                        borderAlpha = 0.25f,
+                        elevation = 3.dp
+                    )
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(text = manifest?.name ?: "Plugin", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
-                        Text(text = manifest?.description ?: "", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(text = "Author: ${manifest?.author ?: "NSiO"}", fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = pName,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanPrimary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "$pDesc • v$pVersion",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Box(
+                    IconButton(
+                        onClick = { viewModel.pluginManager.unloadPlugin(plugin) },
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF30D158).copy(alpha = 0.25f))
-                            .border(0.6.dp, Color(0xFF30D158).copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.08f))
                     ) {
-                        Text("Aktif", fontSize = 9.sp, color = Color(0xFF30D158), fontWeight = FontWeight.Bold)
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Copot",
+                            tint = AccentRed,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }

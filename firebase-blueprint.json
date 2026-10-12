@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account information and app sync settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "CloudMediaItem": {
+      "title": "CloudMediaItem",
+      "description": "Media stream item synced to the cloud",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "profileId": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "type": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "category": { "type": "string" },
+        "durationMs": { "type": "number" },
+        "progressMs": { "type": "number" },
+        "isFavorite": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "url"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/media/{mediaId}": {
+      "schema": "CloudMediaItem",
+      "description": "Media bookmarks, history, and extensions synced per user"
+    }
+  }
+}

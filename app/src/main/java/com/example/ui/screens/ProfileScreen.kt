@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,10 +21,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,21 +47,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import com.example.data.firebase.AuthState
 import com.example.data.model.Profile
 import com.example.ui.MainViewModel
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
-import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.AccentGreen
 import com.example.ui.theme.CyanPrimary
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     viewModel: MainViewModel,
@@ -64,19 +69,20 @@ fun ProfileScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+    val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
     var showPinDialogForSwitch by remember { mutableStateOf(false) }
-
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .padding(12.dp)
+            .padding(14.dp)
             .testTag("profile_screen"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header
         item {
@@ -87,27 +93,211 @@ fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Menu Profil (Multi-User & Keamanan)",
-                        fontSize = 18.sp,
+                        text = "Menu Profil",
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Kelola akun mandiri, proteksi PIN, dan backup data terpadu",
-                        fontSize = 10.sp,
+                        text = "Multi-User, Proteksi PIN, Cloud Firestore & Backup Terpadu",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Button(
                     onClick = { showAddDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyanPrimary,
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.height(44.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Tambah Profil", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Tambah Profil",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        // Cloud Google Account Card
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(
+                        shape = RoundedCornerShape(22.dp),
+                        alpha = 0.12f,
+                        borderAlpha = 0.35f,
+                        elevation = 8.dp
+                    )
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CyanPrimary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CloudSync,
+                                contentDescription = null,
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Akun Cloud (Firebase Firestore)",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Penyimpanan cloud untuk semua profil & media streaming",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    when (val state = authState) {
+                        is AuthState.Authenticated -> {
+                            val user = state.user
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (!user.photoUrl?.toString().isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = user.photoUrl.toString(),
+                                        contentDescription = "Avatar Pengguna",
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, CyanPrimary, CircleShape)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(CyanPrimary),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = (user.displayName ?: "U").take(1).uppercase(),
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 18.sp,
+                                            color = Color.Black
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = user.displayName ?: "Pengguna Google",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = user.email ?: user.uid,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { viewModel.syncToCloud() },
+                                    enabled = !isSyncing,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = CyanPrimary,
+                                        contentColor = Color.Black
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.height(40.dp)
+                                ) {
+                                    if (isSyncing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            color = Color.Black,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.CloudUpload,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Sync", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                        is AuthState.Loading -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = CyanPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    "Menghubungkan ke akun Google...",
+                                    fontSize = 11.sp,
+                                    color = CyanPrimary
+                                )
+                            }
+                        }
+                        else -> {
+                            Button(
+                                onClick = { viewModel.signInWithGoogle() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CyanPrimary,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CloudDone,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Hubungkan Akun Google (Cloud Firestore)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -116,7 +306,7 @@ fun ProfileScreen(
         item {
             Text(
                 text = "Daftar Profil Aktif & Tersedia:",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -128,12 +318,12 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .liquidGlass(
-                        shape = RoundedCornerShape(14.dp),
-                        alpha = if (isActive) 0.16f else 0.08f,
-                        borderAlpha = if (isActive) 0.45f else 0.25f,
-                        elevation = 4.dp
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = if (isActive) 0.18f else 0.08f,
+                        borderAlpha = if (isActive) 0.5f else 0.22f,
+                        elevation = if (isActive) 6.dp else 2.dp
                     )
-                    .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .clickable {
                         if (!isActive) {
                             if (p.isPinEnabled && p.pin.isNotEmpty()) {
@@ -148,18 +338,18 @@ fun ProfileScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
+                        .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(if (isActive) CyanPrimary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
                                 .border(
@@ -169,39 +359,55 @@ fun ProfileScreen(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = p.avatarEmoji, fontSize = 18.sp)
+                            Text(text = p.avatarEmoji, fontSize = 20.sp)
                         }
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = p.name,
-                                    fontSize = 13.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 if (isActive) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(AccentGreen)
-                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("Aktif", fontSize = 8.sp, color = Color.Black, fontWeight = FontWeight.Black)
+                                        Text(
+                                            "Aktif",
+                                            fontSize = 9.sp,
+                                            color = Color.Black,
+                                            fontWeight = FontWeight.Black
+                                        )
                                     }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(2.dp))
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 if (p.isPinEnabled) {
-                                    Icon(Icons.Default.Lock, contentDescription = "PIN", tint = CyanPrimary, modifier = Modifier.size(11.dp))
-                                    Text("PIN Aktif", fontSize = 9.sp, color = CyanPrimary)
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = "PIN",
+                                        tint = CyanPrimary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text("PIN Dilindungi", fontSize = 10.sp, color = CyanPrimary)
                                 } else {
-                                    Text("Bebas PIN", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        "Bebas PIN",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
@@ -217,11 +423,13 @@ fun ProfileScreen(
                                     viewModel.switchProfile(p)
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White.copy(alpha = 0.14f)
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.height(38.dp)
                         ) {
-                            Text("Beralih", color = CyanPrimary, fontSize = 10.sp)
+                            Text("Beralih", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -233,7 +441,7 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Cadangan Data (Backup & Restore):",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -244,70 +452,120 @@ fun ProfileScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 4.dp)
+                    .liquidGlass(
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = 0.10f,
+                        borderAlpha = 0.30f,
+                        elevation = 6.dp
+                    )
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Backup, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
-                        Text("1. Backup Biasa (Per-Profil)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Icon(
+                            Icons.Default.Backup,
+                            contentDescription = null,
+                            tint = CyanPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "1. Backup Biasa (Per-Profil)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                     Text(
-                        text = "Mem-backup daftar link dan pengaturan khusus profil '${activeProfile?.name ?: ""}' ke NSiO/Backup.",
-                        fontSize = 10.sp,
+                        text = "Mem-backup daftar link dan pengaturan khusus profil '${activeProfile?.name ?: ""}' ke file JSON lokal.",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Button(
                         onClick = {
                             viewModel.runProfileBackup { res ->
                                 backupStatusMessage = res.message
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanPrimary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.height(42.dp)
                     ) {
-                        Text("Jalankan Backup Profil", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        Text(
+                            "Mulai Backup Profil Ini",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
         }
 
-        // Backup Aman Card
+        // Full Backup Aman Card
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.10f, borderAlpha = 0.35f, elevation = 4.dp)
+                    .liquidGlass(
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = 0.10f,
+                        borderAlpha = 0.30f,
+                        elevation = 6.dp
+                    )
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF30D158), modifier = Modifier.size(16.dp))
-                        Text("2. Backup Aman (Full Backup Keseluruhan)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Icon(
+                            Icons.Default.Security,
+                            contentDescription = null,
+                            tint = CyanPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "2. Backup Aman (Full Backup Keseluruhan)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                     Text(
-                        text = "Mem-backup seluruh isi aplikasi secara utuh (semua profil, riwayat, video, dan settings) ke NSiO/Backup Aman.",
-                        fontSize = 10.sp,
+                        text = "Mem-backup seluruh isi aplikasi: semua profil, database media, pengaturan, dan histori.",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Button(
                         onClick = {
                             viewModel.runFullBackupAman { res ->
                                 backupStatusMessage = res.message
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30D158)),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanPrimary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.height(42.dp)
                     ) {
-                        Text("Buat Full Backup Aman", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        Text(
+                            "Buat Full Backup Terpadu",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -315,125 +573,141 @@ fun ProfileScreen(
 
         if (backupStatusMessage != null) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .liquidGlass(shape = RoundedCornerShape(10.dp), alpha = 0.15f, borderAlpha = 0.4f)
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = backupStatusMessage ?: "",
-                        fontSize = 10.sp,
-                        color = CyanPrimary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = backupStatusMessage ?: "",
+                    fontSize = 11.sp,
+                    color = CyanPrimary,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }
 
-    if (showPinDialogForSwitch && pendingSwitchProfile != null) {
-        val target = pendingSwitchProfile!!
-        PinDialog(
-            title = "Proteksi Profil '${target.name}'",
-            subtitle = "Profil ini dilindungi PIN. Masukkan PIN untuk beralih.",
-            expectedPin = target.pin,
-            onSuccess = {
-                viewModel.switchProfile(target)
-                showPinDialogForSwitch = false
-                pendingSwitchProfile = null
-            },
-            onDismiss = {
-                showPinDialogForSwitch = false
-                pendingSwitchProfile = null
+    // Add Profile Dialog
+    if (showAddDialog) {
+        AddProfileDialog(
+            onDismiss = { showAddDialog = false },
+            onConfirm = { name, avatar, pin, isPinEnabled ->
+                viewModel.addProfile(name, avatar, pin, isPinEnabled)
+                showAddDialog = false
             }
         )
     }
 
-    if (showAddDialog) {
-        AddProfileGlassDialog(
-            onDismiss = { showAddDialog = false },
-            onSave = { name, emoji, pin, pinEnabled ->
-                viewModel.addProfile(name, emoji, pin, pinEnabled)
-                showAddDialog = false
+    // Pin Dialog for switching
+    if (showPinDialogForSwitch && pendingSwitchProfile != null) {
+        PinDialog(
+            title = "Verifikasi PIN Profil",
+            subtitle = "Masukkan PIN untuk beralih ke profil '${pendingSwitchProfile?.name}'",
+            expectedPin = pendingSwitchProfile?.pin ?: "",
+            onSuccess = {
+                pendingSwitchProfile?.let { viewModel.switchProfile(it) }
+                pendingSwitchProfile = null
+                showPinDialogForSwitch = false
+            },
+            onDismiss = {
+                pendingSwitchProfile = null
+                showPinDialogForSwitch = false
             }
         )
     }
 }
 
 @Composable
-private fun AddProfileGlassDialog(
+private fun AddProfileDialog(
     onDismiss: () -> Unit,
-    onSave: (String, String, String, Boolean) -> Unit
+    onConfirm: (name: String, avatar: String, pin: String, isPinEnabled: Boolean) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedEmoji by remember { mutableStateOf("🎬") }
+    var selectedAvatar by remember { mutableStateOf("🎬") }
     var pin by remember { mutableStateOf("") }
     var isPinEnabled by remember { mutableStateOf(false) }
 
-    val emojis = listOf("🎬", "🍿", "🚀", "🎮", "👑", "🌟", "🔥", "🦄")
+    val avatars = listOf("👑", "🎬", "🍿", "🚀", "🎮", "👾", "🦊", "⭐")
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismiss) {
         Box(
             modifier = Modifier
-                .width(320.dp)
+                .fillMaxWidth()
                 .liquidGlass(
-                    shape = RoundedCornerShape(20.dp),
-                    alpha = 0.16f,
+                    shape = RoundedCornerShape(24.dp),
+                    alpha = 0.18f,
                     borderAlpha = 0.45f,
                     elevation = 16.dp
                 )
+                .padding(20.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Tambah Profil Baru", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Tambah Profil Baru",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nama Profil", fontSize = 10.sp) },
+                    placeholder = { Text("Nama Profil...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                         focusedContainerColor = Color.White.copy(alpha = 0.08f),
                         unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                     ),
-                    modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Pilih Avatar Emoji:", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                    emojis.forEach { emoji ->
-                        val isSel = selectedEmoji == emoji
+                Text(
+                    text = "Pilih Avatar:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    avatars.take(5).forEach { emoji ->
+                        val isSelected = selectedAvatar == emoji
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isSel) CyanPrimary else Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, if (isSel) CyanPrimary else Color.White.copy(alpha = 0.2f), CircleShape)
-                                .clickable { selectedEmoji = emoji },
+                                .background(if (isSelected) CyanPrimary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.2f),
+                                    CircleShape
+                                )
+                                .clickable { selectedAvatar = emoji },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = emoji, fontSize = 14.sp)
+                            Text(text = emoji, fontSize = 18.sp)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(text = "Proteksi PIN", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = "Kunci dengan PIN?",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Switch(
                         checked = isPinEnabled,
                         onCheckedChange = { isPinEnabled = it },
-                        colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary)
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = CyanPrimary
+                        )
                     )
                 }
 
@@ -441,37 +715,46 @@ private fun AddProfileGlassDialog(
                     OutlinedTextField(
                         value = pin,
                         onValueChange = { if (it.length <= 4) pin = it },
-                        label = { Text("PIN 4 Digit", fontSize = 10.sp) },
+                        placeholder = { Text("PIN 4 Digit", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
-                        modifier = Modifier.fillMaxWidth().liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                    androidx.compose.material3.TextButton(onClick = onDismiss) {
-                        Text("Batal", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Text("Batal", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+
                     Button(
                         onClick = {
                             if (name.isNotBlank()) {
-                                onSave(name, selectedEmoji, pin, isPinEnabled)
+                                onConfirm(name, selectedAvatar, pin, isPinEnabled)
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanPrimary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }

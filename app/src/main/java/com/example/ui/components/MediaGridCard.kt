@@ -20,9 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,26 +53,29 @@ import com.example.ui.theme.CyanPrimary
  */
 @Composable
 fun MediaGridCard(
-    media: MediaItem,
+    item: MediaItem,
     onClick: () -> Unit,
-    onDownload: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
+    onFavorite: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .liquidGlassTvFocusable(shape = RoundedCornerShape(16.dp))
+            .liquidGlassTvFocusable(shape = RoundedCornerShape(18.dp))
             .liquidGlass(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 alpha = 0.10f,
                 borderAlpha = 0.35f,
                 elevation = 8.dp
             )
+            .clip(RoundedCornerShape(18.dp))
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-            .testTag("media_card_${media.id.take(6)}")
+            .testTag("media_card_${item.id.take(6)}")
     ) {
         Column(modifier = Modifier.padding(6.dp)) {
             // Poster / Thumbnail Container
@@ -78,13 +83,13 @@ fun MediaGridCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF0F1522))
             ) {
-                if (media.thumbnailUrl.isNotEmpty()) {
+                if (item.thumbnailUrl.isNotEmpty()) {
                     AsyncImage(
-                        model = media.thumbnailUrl,
-                        contentDescription = media.title,
+                        model = item.thumbnailUrl,
+                        contentDescription = item.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -102,19 +107,19 @@ fun MediaGridCard(
                         )
                 )
 
-                // Top Type and Source Badges (Frosted Micro-Lens Pills)
+                // Top Badges
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(5.dp),
+                        .padding(6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(
-                                when (media.type) {
+                                when (item.type) {
                                     "STREAM" -> AccentRed.copy(alpha = 0.85f)
                                     "PHOTO" -> Color(0xFFA855F7).copy(alpha = 0.85f)
                                     else -> CyanPrimary.copy(alpha = 0.9f)
@@ -123,34 +128,31 @@ fun MediaGridCard(
                             .border(
                                 0.6.dp,
                                 Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.Transparent)),
-                                RoundedCornerShape(6.dp)
+                                RoundedCornerShape(8.dp)
                             )
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = media.type,
+                            text = item.type,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.Black
                         )
                     }
 
-                    Box(
+                    // Favorite Button / Badge
+                    IconButton(
+                        onClick = { onFavorite?.invoke() ?: onLongClick?.invoke() },
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.Black.copy(alpha = 0.5f))
-                            .border(
-                                0.6.dp,
-                                Brush.linearGradient(listOf(Color.White.copy(alpha = 0.35f), Color.Transparent)),
-                                RoundedCornerShape(6.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f))
                     ) {
-                        Text(
-                            text = media.sourceType,
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
+                        Icon(
+                            imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Favorit",
+                            tint = if (item.isFavorite) AccentRed else Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
@@ -158,32 +160,32 @@ fun MediaGridCard(
                 // Center Liquid Crystal Play Orb
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f))
+                        .background(Color.White.copy(alpha = 0.22f))
                         .border(
                             1.dp,
-                            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent)),
+                            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.85f), Color.Transparent)),
                             CircleShape
                         )
                         .align(Alignment.Center),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = when (media.type) {
+                        imageVector = when (item.type) {
                             "PHOTO" -> Icons.Default.Photo
                             "STREAM" -> Icons.Default.LiveTv
                             else -> Icons.Default.PlayArrow
                         },
                         contentDescription = "Play",
                         tint = CyanPrimary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
                 // Progress Bar at bottom of thumbnail
-                if (media.durationMs > 0 && media.progressMs > 0) {
-                    val progressRatio = (media.progressMs.toFloat() / media.durationMs.toFloat()).coerceIn(0f, 1f)
+                if (item.durationMs > 0 && item.progressMs > 0) {
+                    val progressRatio = (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
                     LinearProgressIndicator(
                         progress = { progressRatio },
                         modifier = Modifier
@@ -198,24 +200,24 @@ fun MediaGridCard(
 
             // Info Section inside Glass
             Column(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = media.title,
+                    text = item.title,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(1.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = media.category,
+                        text = item.category,
                         fontSize = 9.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -223,34 +225,38 @@ fun MediaGridCard(
                         modifier = Modifier.weight(1f)
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        IconButton(
-                            onClick = onDownload,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Unduh",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        onDownload?.let { dl ->
+                            IconButton(
+                                onClick = dl,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.08f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Unduh",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = onDelete,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Hapus",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
+                        onDelete?.let { del ->
+                            IconButton(
+                                onClick = del,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.08f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Hapus",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                         }
                     }
                 }
