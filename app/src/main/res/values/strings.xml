@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Net Stream iO</string>
+    <string name="nav_home">Beranda</string>
+    <string name="nav_extension">Extension</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="nav_profile">Profil</string>
+</resources>

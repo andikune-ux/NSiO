@@ -1,0 +1,6 @@
+{
+  "name": "Net Stream iO",
+  "description": "Aplikasi pemutar video pintar dan manajemen ekstensi streaming untuk Android TV & Mobile terinspirasi CloudStream",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
