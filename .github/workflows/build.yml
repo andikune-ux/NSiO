@@ -20,10 +20,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 📦 Siapkan Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
+      - name: 📦 Terima Semua Lisensi SDK
+        run: |
+          yes | sudo /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: 🔧 Izin Gradle
         run: chmod +x gradlew
