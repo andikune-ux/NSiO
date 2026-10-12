@@ -20,15 +20,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 📦 Terima Semua Lisensi SDK
-        run: |
-          yes | sudo /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: 🔧 Izin Gradle
-        run: chmod +x gradlew
+      - name: 🛠️ Install Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
 
       - name: 🏗️ Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: 📲 Simpan Hasil APK
         uses: actions/upload-artifact@v4
