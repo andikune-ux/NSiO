@@ -1,7 +1,6 @@
 package com.example.data.backup
 
 import android.content.Context
-import android.os.Environment
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
@@ -114,93 +113,12 @@ object BackupUtils {
     }
 
     /**
-     * Backup Aman (Full Backup): Ekspor seluruh isi aplikasi ke satu file terpadu.
-     * Termasuk: Semua Profil, Semua Media Items, Semua Pengaturan, Plugin Data.
-     * Lokasi: Penyimpanan Internal -> NSiO -> Backup Aman
+     * Backup Aman (Full Backup): satu file TXT berisi pengaturan, ringkasan data,
+     * dan blok JSON untuk restore. Logika ada di BackupAmanManager.
+     * Lokasi: /sdcard/NSiO/backup aman/ (fallback: folder app)
      */
-    suspend fun createFullBackup(context: Context, database: AppDatabase): BackupResult = withContext(Dispatchers.IO) {
-        try {
-            val rootObj = JSONObject()
-            rootObj.put("backupType", "FULL_BACKUP_AMAN")
-            rootObj.put("appVersion", "1.0.0")
-            rootObj.put("version", 1)
-            rootObj.put("timestamp", System.currentTimeMillis())
-
-            val profileDao = database.profileDao()
-            val mediaDao = database.mediaDao()
-
-            val allProfiles = profileDao.getAllProfilesList()
-            val allSettings = profileDao.getAllSettingsList()
-            val allMedia = mediaDao.getAllMediaList()
-
-            // 1. Profiles Array
-            val profilesArr = JSONArray()
-            allProfiles.forEach { p ->
-                val pObj = JSONObject().apply {
-                    put("id", p.id)
-                    put("name", p.name)
-                    put("avatarEmoji", p.avatarEmoji)
-                    put("pin", p.pin)
-                    put("isPinEnabled", p.isPinEnabled)
-                    put("isDefault", p.isDefault)
-                    put("createdAt", p.createdAt)
-                }
-                profilesArr.put(pObj)
-            }
-            rootObj.put("profiles", profilesArr)
-
-            // 2. Settings Array
-            val settingsArr = JSONArray()
-            allSettings.forEach { s ->
-                val sObj = JSONObject().apply {
-                    put("profileId", s.profileId)
-                    put("language", s.language)
-                    put("themeMode", s.themeMode)
-                    put("displayMode", s.displayMode)
-                    put("gridColumns", s.gridColumns)
-                    put("serverPin", s.serverPin)
-                }
-                settingsArr.put(sObj)
-            }
-            rootObj.put("settings", settingsArr)
-
-            // 3. Media Items Array
-            val mediaArr = JSONArray()
-            allMedia.forEach { m ->
-                val mObj = JSONObject().apply {
-                    put("id", m.id)
-                    put("profileId", m.profileId)
-                    put("title", m.title)
-                    put("url", m.url)
-                    put("thumbnailUrl", m.thumbnailUrl)
-                    put("type", m.type)
-                    put("sourceType", m.sourceType)
-                    put("category", m.category)
-                    put("durationMs", m.durationMs)
-                    put("progressMs", m.progressMs)
-                    put("isFavorite", m.isFavorite)
-                    put("createdAt", m.createdAt)
-                }
-                mediaArr.put(mObj)
-            }
-            rootObj.put("mediaItems", mediaArr)
-
-            // Target directory: NSiO/Backup Aman
-            val baseDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup Aman")
-            if (!baseDir.exists()) baseDir.mkdirs()
-
-            val fileName = "full_backup_aman_${getTimestamp()}.json"
-            val file = File(baseDir, fileName)
-            file.writeText(rootObj.toString(2))
-
-            BackupResult(
-                isSuccess = true,
-                filePath = file.absolutePath,
-                message = "Backup Aman berhasil dibuat!\n${allProfiles.size} Profil, ${allMedia.size} Media, Lengkap."
-            )
-        } catch (e: Exception) {
-            BackupResult(isSuccess = false, message = "Gagal membuat Backup Aman: ${e.localizedMessage}")
-        }
+    suspend fun createFullBackup(context: Context, database: AppDatabase): BackupResult {
+        return BackupAmanManager.createBackupAman(context, database)
     }
 
     /**
@@ -208,7 +126,7 @@ object BackupUtils {
      */
     suspend fun restoreFromFile(context: Context, database: AppDatabase, jsonContent: String): BackupResult = withContext(Dispatchers.IO) {
         try {
-            val root = JSONObject(jsonContent)
+            val root = JSONObject(BackupAmanManager.extractJson(jsonContent))
             val backupType = root.optString("backupType", "UNKNOWN")
             val profileDao = database.profileDao()
             val mediaDao = database.mediaDao()
