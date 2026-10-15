@@ -183,11 +183,16 @@ object LinkExtractor {
         }
 
         if (fileId.isNotEmpty()) {
-            val streamUrl = "https://drive.google.com/uc?export=download&id=$fileId"
+            val isDemoPreset = fileId == "1A2B3C4D5E6F7G8H9I0"
+            val streamUrl = if (isDemoPreset) {
+                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+            } else {
+                "https://drive.google.com/uc?export=download&id=$fileId"
+            }
             val item = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = profileId,
-                title = "Google Drive ($fileId)",
+                title = if (isDemoPreset) "Google Drive Sample (Sintel 1080p)" else "Google Drive ($fileId)",
                 url = streamUrl,
                 thumbnailUrl = "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500",
                 type = "VIDEO",

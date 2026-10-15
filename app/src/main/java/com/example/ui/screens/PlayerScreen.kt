@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,13 +27,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -49,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -74,12 +84,13 @@ fun PlayerScreen(
 
     // Handle Android system back
     BackHandler {
+        viewModel.player.clearError()
         onClose()
     }
 
     // Auto-hide controls after 4 seconds of playback
     LaunchedEffect(showControls, playerState.isPlaying) {
-        if (showControls && playerState.isPlaying) {
+        if (showControls && playerState.isPlaying && playerState.error == null) {
             delay(4000)
             showControls = false
         }
@@ -114,7 +125,7 @@ fun PlayerScreen(
         )
 
         // Buffering Liquid Glass Indicator
-        if (playerState.isBuffering) {
+        if (playerState.isBuffering && playerState.error == null) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -136,7 +147,7 @@ fun PlayerScreen(
 
         // Custom iOS 26 Liquid Glass Player Controls Overlay
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls && playerState.error == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
@@ -160,7 +171,10 @@ fun PlayerScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
-                            onClick = onClose,
+                            onClick = {
+                                viewModel.player.clearError()
+                                onClose()
+                            },
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
@@ -179,7 +193,7 @@ fun PlayerScreen(
 
                         Column {
                             Text(
-                                text = media.title,
+                                text = playerState.title.ifEmpty { media.title },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -319,6 +333,152 @@ fun PlayerScreen(
                                 .fillMaxWidth()
                                 .liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
                         )
+                    }
+                }
+            }
+        }
+
+        // Liquid Glass Error Overlay
+        if (playerState.error != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.82f))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .liquidGlass(
+                            shape = RoundedCornerShape(26.dp),
+                            alpha = 0.22f,
+                            borderAlpha = 0.6f,
+                            elevation = 20.dp
+                        )
+                        .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f), RoundedCornerShape(26.dp))
+                        .padding(24.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEF4444).copy(alpha = 0.2f))
+                                .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.5f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ErrorOutline,
+                                contentDescription = "Kendala Pemutaran",
+                                tint = Color(0xFFF87171),
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Kendala Pemutaran Media",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = playerState.error ?: "Tidak dapat memutar video.",
+                                fontSize = 12.sp,
+                                color = Color(0xFFE2E8F0),
+                                textAlign = TextAlign.Center,
+                                lineHeight = 17.sp
+                            )
+                        }
+
+                        // Buttons
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (playerState.isFallbackAvailable) {
+                                Button(
+                                    onClick = {
+                                        viewModel.player.playFallback(media.title)
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(16.dp)),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = CyanPrimary,
+                                        contentColor = Color.Black
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Putar Stream Demo / Cadangan",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.player.retry()
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp)),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Coba Lagi", fontSize = 12.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.player.clearError()
+                                        onClose()
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp)),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.45f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFCA5A5))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Tutup", fontSize = 12.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -23,18 +23,18 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = CyanSecondary,
+    primary = Color(0xFF0284C7),
     onPrimary = Color.White,
-    secondary = CyanPrimary,
-    onSecondary = Color.Black,
-    tertiary = CyanTertiary,
-    background = LightBackground,
+    secondary = Color(0xFF0EA5E9),
+    onSecondary = Color.White,
+    tertiary = Color(0xFF6366F1),
+    background = Color(0xFFF1F5F9),
     onBackground = Color(0xFF0F172A),
-    surface = LightSurface,
+    surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF0F172A),
-    surfaceVariant = LightSurfaceVariant,
+    surfaceVariant = Color(0xFFE2E8F0),
     onSurfaceVariant = Color(0xFF475569),
-    outline = LightBorder
+    outline = Color(0xFFCBD5E1)
 )
 
 @Composable

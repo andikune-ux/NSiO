@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -30,6 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ui.MainViewModel
 import com.example.ui.components.AmbientFluidBackground
 import com.example.ui.components.BottomNavGlassBar
@@ -49,6 +52,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        hideSystemNotificationBar()
 
         setContent {
             val settings by viewModel.settings.collectAsState()
@@ -77,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
             MyApplicationTheme(themeMode = settings.themeMode) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 1. iOS 26 Ambient Fluid Glow Canvas (Underlying chromatic gradient)
+                    // 1. iOS 26 Ambient Fluid Glow Canvas
                     val isDark = settings.themeMode != "LIGHT"
                     AmbientFluidBackground(isDark = isDark)
 
@@ -90,9 +95,8 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         Scaffold(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .safeDrawingPadding(),
+                            modifier = Modifier.fillMaxSize(),
+                            contentWindowInsets = WindowInsets(0, 0, 0, 0),
                             snackbarHost = { SnackbarHost(snackbarHostState) },
                             containerColor = Color.Transparent
                         ) { innerPadding ->
@@ -152,6 +156,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemNotificationBar()
+        }
+    }
+
+    private fun hideSystemNotificationBar() {
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.hide(WindowInsetsCompat.Type.statusBars())
     }
 }
 

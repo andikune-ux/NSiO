@@ -3,9 +3,14 @@ package com.example.player
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,7 +27,8 @@ data class PlayerState(
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val title: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val isFallbackAvailable: Boolean = true
 )
 
 interface IPlayer {
@@ -33,6 +39,9 @@ interface IPlayer {
     fun seekTo(positionMs: Long)
     fun seekForward(offsetMs: Long = 10000L)
     fun seekBackward(offsetMs: Long = 10000L)
+    fun retry()
+    fun playFallback(customTitle: String? = null)
+    fun clearError()
     fun release()
 }
 
@@ -49,43 +58,102 @@ class CS3IPlayer(
     override val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
 
     private var progressJob: Job? = null
+    private var lastUrl: String = ""
+    private var lastTitle: String = ""
+    private var lastPositionMs: Long = 0L
+
+    companion object {
+        const val DEFAULT_FALLBACK_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        const val STANDARD_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 NetStream/2.0"
+    }
 
     init {
         initExoPlayer()
     }
 
     private fun initExoPlayer() {
-        exoPlayer = ExoPlayer.Builder(context).build().apply {
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    when (playbackState) {
-                        Player.STATE_BUFFERING -> {
-                            _playerState.value = _playerState.value.copy(isBuffering = true)
-                        }
-                        Player.STATE_READY -> {
-                            _playerState.value = _playerState.value.copy(
-                                isBuffering = false,
-                                durationMs = duration.coerceAtLeast(0L),
-                                isPlaying = isPlaying
-                            )
-                        }
-                        Player.STATE_ENDED -> {
-                            _playerState.value = _playerState.value.copy(
-                                isPlaying = false,
-                                currentPositionMs = duration
-                            )
-                        }
-                        Player.STATE_IDLE -> {
-                            _playerState.value = _playerState.value.copy(isBuffering = false)
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(STANDARD_USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(20000)
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Accept" to "*/*",
+                    "User-Agent" to STANDARD_USER_AGENT,
+                    "Connection" to "keep-alive"
+                )
+            )
+
+        val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
+
+        exoPlayer = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_BUFFERING -> {
+                                _playerState.value = _playerState.value.copy(
+                                    isBuffering = true,
+                                    error = null
+                                )
+                            }
+                            Player.STATE_READY -> {
+                                _playerState.value = _playerState.value.copy(
+                                    isBuffering = false,
+                                    durationMs = duration.coerceAtLeast(0L),
+                                    isPlaying = isPlaying,
+                                    error = null
+                                )
+                            }
+                            Player.STATE_ENDED -> {
+                                _playerState.value = _playerState.value.copy(
+                                    isPlaying = false,
+                                    currentPositionMs = duration
+                                )
+                            }
+                            Player.STATE_IDLE -> {
+                                _playerState.value = _playerState.value.copy(isBuffering = false)
+                            }
                         }
                     }
-                }
 
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _playerState.value = _playerState.value.copy(isPlaying = isPlaying)
-                }
-            })
-        }
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _playerState.value = _playerState.value.copy(isPlaying = isPlaying)
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        val cause = error.cause
+                        val errorDesc = when {
+                            cause is HttpDataSource.InvalidResponseCodeException -> {
+                                when (cause.responseCode) {
+                                    403 -> "Akses ditolak (HTTP 403 Forbidden). Server sumber video membatasi akses streaming langsung atau link membutuhkan izin khusus/token baru."
+                                    404 -> "Video tidak ditemukan di server sumber (HTTP 404 Not Found)."
+                                    500, 502, 503 -> "Server penyedia video sedang mengalami kendala (HTTP ${cause.responseCode})."
+                                    else -> "Gagal memuat video dari server (Kode HTTP: ${cause.responseCode})."
+                                }
+                            }
+                            cause is HttpDataSource.HttpDataSourceException -> {
+                                "Koneksi ke server video terputus atau tidak stabil. Periksa koneksi internet Anda."
+                            }
+                            else -> {
+                                error.message?.takeIf { it.isNotBlank() }
+                                    ?: "Terjadi kendala saat memproses pemutaran video."
+                            }
+                        }
+
+                        _playerState.value = _playerState.value.copy(
+                            isBuffering = false,
+                            isPlaying = false,
+                            error = errorDesc,
+                            isFallbackAvailable = true
+                        )
+                    }
+                })
+            }
         startProgressTracking()
     }
 
@@ -107,6 +175,10 @@ class CS3IPlayer(
     }
 
     override fun play(url: String, title: String, startPositionMs: Long) {
+        lastUrl = url
+        lastTitle = title
+        lastPositionMs = startPositionMs
+
         exoPlayer?.let { player ->
             _playerState.value = _playerState.value.copy(
                 title = title,
@@ -121,6 +193,21 @@ class CS3IPlayer(
             player.prepare()
             player.playWhenReady = true
         }
+    }
+
+    override fun retry() {
+        if (lastUrl.isNotEmpty()) {
+            play(lastUrl, lastTitle, lastPositionMs)
+        }
+    }
+
+    override fun playFallback(customTitle: String?) {
+        val title = customTitle ?: if (lastTitle.isNotEmpty()) "$lastTitle (Stream Cadangan)" else "Stream Cadangan Demo"
+        play(DEFAULT_FALLBACK_URL, title, 0L)
+    }
+
+    override fun clearError() {
+        _playerState.value = _playerState.value.copy(error = null)
     }
 
     override fun togglePlayPause() {
