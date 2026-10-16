@@ -109,65 +109,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val defaultSettings = ProfileSettings(profileId = defaultProfile.id)
                 profileDao.insertSettings(defaultSettings)
 
-                // Populate high quality sample streams for first launch
-                val sampleMedia = listOf(
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = defaultProfile.id,
-                        title = "Big Buck Bunny 4K (Open Source Movie)",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
-                        type = "VIDEO",
-                        sourceType = "LINK",
-                        category = "Film Pendek",
-                        durationMs = 596000L
-                    ),
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = defaultProfile.id,
-                        title = "Elephants Dream (Sci-Fi Animation)",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-                        type = "VIDEO",
-                        sourceType = "LINK",
-                        category = "Animasi Sci-Fi",
-                        durationMs = 653000L
-                    ),
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = defaultProfile.id,
-                        title = "Sintel Cinema Trailer HD",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=500",
-                        type = "VIDEO",
-                        sourceType = "FILE",
-                        category = "Trailer",
-                        durationMs = 52000L
-                    ),
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = defaultProfile.id,
-                        title = "Tears of Steel (VFX Studio)",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500",
-                        type = "VIDEO",
-                        sourceType = "SERVER",
-                        category = "Cyberpunk VFX",
-                        durationMs = 734000L
-                    ),
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = defaultProfile.id,
-                        title = "Poster Cyberpunk Wallpaper 4K",
-                        url = "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=500",
-                        type = "PHOTO",
-                        sourceType = "LINK",
-                        category = "Galeri Foto"
-                    )
-                )
-                mediaDao.insertAll(sampleMedia)
-
                 _profiles.value = listOf(defaultProfile)
                 _activeProfile.value = defaultProfile
                 _settings.value = defaultSettings

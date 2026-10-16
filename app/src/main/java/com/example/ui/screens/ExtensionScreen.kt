@@ -344,90 +344,6 @@ private fun LinkSourceTab(
             }
         }
 
-        item {
-            Text(
-                text = "Preset Uji Coba Cepat:",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        val presets = listOf(
-            Triple(
-                "CloudStream Repo JSON (Folder / Banyak Item)",
-                "Koleksi banyak video terstruktur JSON CloudStream",
-                "https://raw.githubusercontent.com/cloudstream/repo/main/plugins.json"
-            ),
-            Triple(
-                "IPTV Channel M3U8 Live Stream (1 Saluran)",
-                "Live stream HLS Big Buck Bunny High Definition",
-                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-            ),
-            Triple(
-                "Google Drive Video Link",
-                "Link Google Drive publik dengan parsing fileId otomatis",
-                "https://drive.google.com/file/d/1A2B3C4D5E6F7G8H9I0/view"
-            ),
-            Triple(
-                "Direct MP4 1080p Video",
-                "Video langsung Elephants Dream Open Movie",
-                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
-            )
-        )
-
-        items(presets) { (title, desc, url) ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = 0.08f,
-                        borderAlpha = 0.25f,
-                        elevation = 3.dp
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            text = title,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CyanPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = desc,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Button(
-                        onClick = {
-                            urlInput = url
-                            isLoading = true
-                            viewModel.parseAndAddLink(url) {
-                                isLoading = false
-                                parseFeedback = it
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.15f)
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text("Gunakan", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -437,7 +353,7 @@ private fun FileSourceTab(
     onNavigateToHome: () -> Unit
 ) {
     var titleInput by remember { mutableStateOf("") }
-    var filePathInput by remember { mutableStateOf("/storage/emulated/0/Movies/VideoLokal.mp4") }
+    var filePathInput by remember { mutableStateOf("") }
     var isPhoto by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -595,7 +511,7 @@ private fun ServerSourceTab(
     serverMediaList: List<com.example.data.model.MediaItem>
 ) {
     var titleInput by remember { mutableStateOf("") }
-    var urlInput by remember { mutableStateOf("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4") }
+    var urlInput by remember { mutableStateOf("") }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -702,7 +618,7 @@ private fun ServerSourceTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Upload ke Server",
+                                "Tambahkan URL Server",
                                 color = Color.Black,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp

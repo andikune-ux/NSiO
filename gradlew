@@ -20,7 +20,7 @@ PRGDIR=`dirname "$PRG"`
 [ -z "$PRGDIR" ] && PRGDIR=.
 APP_HOME=`cd "$PRGDIR" >/dev/null && pwd`
 
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+DEFAULT_JVM_OPTS="-Xmx64m -Xms64m"
 
 JAVA_EXE=""
 if [ -n "$JAVA_HOME" ] ; then

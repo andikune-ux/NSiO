@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.URI
 import java.util.UUID
 
 data class PluginManifest(
@@ -34,7 +35,6 @@ abstract class BasePlugin {
     open var filename: String = ""
     open var manifest: PluginManifest? = null
     open var isLoaded: Boolean = false
-
     abstract fun load(context: Context)
     abstract fun beforeUnload()
 }
@@ -42,139 +42,86 @@ abstract class BasePlugin {
 open class Plugin : BasePlugin() {
     var openSettings: (() -> Unit)? = null
     var onVideoClick: ((MediaItem) -> Unit)? = null
-
-    override fun load(context: Context) {
-        isLoaded = true
-    }
-
-    override fun beforeUnload() {
-        isLoaded = false
-    }
-
-    open fun registerVideoClickAction(action: (MediaItem) -> Unit) {
-        this.onVideoClick = action
-    }
-
-    open suspend fun searchMedia(query: String): List<MediaItem> {
-        return emptyList()
-    }
-}
-
-class SampleStreamPlugin : Plugin() {
-    init {
-        manifest = PluginManifest(
-            name = "Indo Stream & Film HD",
-            pluginClassName = "com.example.plugin.IndoStreamPlugin",
-            version = 1,
-            description = "Menyediakan katalog film Indonesia dan live streaming lokal",
-            author = "andikune"
-        )
-    }
-
-    override suspend fun searchMedia(query: String): List<MediaItem> {
-        return listOf(
-            MediaItem(
-                id = UUID.randomUUID().toString(),
-                profileId = "",
-                title = "Big Buck Bunny 4K Cinema",
-                url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                thumbnailUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
-                type = "VIDEO",
-                sourceType = "LINK",
-                category = "Film HD"
-            ),
-            MediaItem(
-                id = UUID.randomUUID().toString(),
-                profileId = "",
-                title = "Elephants Dream Cyber Animation",
-                url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                thumbnailUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-                type = "VIDEO",
-                sourceType = "LINK",
-                category = "Animasi"
-            )
-        )
-    }
+    override fun load(context: Context) { isLoaded = true }
+    override fun beforeUnload() { isLoaded = false }
+    open fun registerVideoClickAction(action: (MediaItem) -> Unit) { onVideoClick = action }
+    open suspend fun searchMedia(query: String): List<MediaItem> = emptyList()
 }
 
 class PluginManager(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("nsio_plugins_prefs", Context.MODE_PRIVATE)
-
     companion object {
         const val PLUGINS_KEY = "installed_online_plugins"
         const val PLUGINS_KEY_LOCAL = "installed_local_plugins"
         const val REPOSITORIES_KEY = "extension_repositories"
     }
-
     private val _installedPlugins = MutableStateFlow<List<Plugin>>(emptyList())
     val installedPlugins: StateFlow<List<Plugin>> = _installedPlugins.asStateFlow()
-
     private val _repositories = MutableStateFlow<List<RepoManifest>>(emptyList())
     val repositories: StateFlow<List<RepoManifest>> = _repositories.asStateFlow()
 
-    init {
-        // Bootstrap sample built-in plugin and repo
-        val sample = SampleStreamPlugin().apply { load(context) }
-        _installedPlugins.value = listOf(sample)
-        _repositories.value = listOf(
-            RepoManifest(
-                name = "CloudStream English / Indo Repo",
-                description = "Repositori resmi penyedia media streaming CloudStream & NSiO",
-                manifestVersion = 1,
-                pluginLists = listOf("https://raw.githubusercontent.com/cloudstream/repo/main/plugins.json")
-            )
-        )
-    }
+    init { loadRepositories() }
 
-    fun getLocalPluginsDirectory(): File {
-        val dir = File(context.filesDir, "Cloudstream3/plugins")
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
-
-    fun getOnlinePluginsDirectory(repoHash: String): File {
-        val dir = File(context.filesDir, "Extensions/$repoHash")
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
+    fun getLocalPluginsDirectory(): File = File(context.filesDir, "Cloudstream3/plugins").also { it.mkdirs() }
+    fun getOnlinePluginsDirectory(repoHash: String): File = File(context.filesDir, "Extensions/$repoHash").also { it.mkdirs() }
 
     suspend fun addRepository(name: String, url: String) = withContext(Dispatchers.IO) {
-        val newRepo = RepoManifest(
-            name = name,
-            description = "Repositori pengguna: $url",
-            manifestVersion = 1,
-            pluginLists = listOf(url)
-        )
-        _repositories.value = _repositories.value + newRepo
-        saveRepositories()
+        val normalized = url.trim()
+        val uri = try { URI(normalized) } catch (_: Exception) { null }
+        require(uri?.scheme in listOf("http", "https") && !uri?.host.isNullOrBlank()) { "URL repository tidak valid" }
+        val newRepo = RepoManifest(name.trim().ifEmpty { "Repositori Eksternal" }, "Repositori pengguna: $normalized", 1, listOf(normalized))
+        if (_repositories.value.none { it.pluginLists == newRepo.pluginLists }) {
+            _repositories.value = _repositories.value + newRepo
+            saveRepositories()
+        }
     }
 
     suspend fun installPluginFromManifest(manifest: PluginManifest) = withContext(Dispatchers.IO) {
-        val dynamicPlugin = object : Plugin() {
-            init {
-                this.manifest = manifest
-            }
-        }.apply { load(context) }
-
-        _installedPlugins.value = _installedPlugins.value + dynamicPlugin
+        require(manifest.name.isNotBlank()) { "Manifest plugin tidak memiliki nama" }
+        if (_installedPlugins.value.none { it.manifest?.name == manifest.name && it.manifest?.url == manifest.url }) {
+            val plugin = object : Plugin() { init { this.manifest = manifest } }.apply { load(context) }
+            _installedPlugins.value = _installedPlugins.value + plugin
+            savePlugins()
+        }
     }
 
     fun unloadPlugin(plugin: Plugin) {
         plugin.beforeUnload()
-        _installedPlugins.value = _installedPlugins.value.filter { it != plugin }
+        _installedPlugins.value = _installedPlugins.value.filter { it !== plugin }
+        savePlugins()
+    }
+
+    private fun loadRepositories() {
+        val raw = prefs.getString(REPOSITORIES_KEY, null) ?: return
+        runCatching {
+            val arr = JSONArray(raw)
+            _repositories.value = (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                val urls = obj.optJSONArray("pluginLists") ?: JSONArray()
+                RepoManifest(obj.optString("name", "Repositori"), obj.optString("description"), obj.optInt("manifestVersion", 1), (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() })
+            }
+        }
     }
 
     private fun saveRepositories() {
         val array = JSONArray()
         _repositories.value.forEach { repo ->
-            val obj = JSONObject()
-            obj.put("name", repo.name)
-            obj.put("description", repo.description)
-            val listArr = JSONArray()
-            repo.pluginLists.forEach { listArr.put(it) }
-            obj.put("pluginLists", listArr)
-            array.put(obj)
+            array.put(JSONObject().apply {
+                put("name", repo.name); put("description", repo.description); put("manifestVersion", repo.manifestVersion)
+                put("pluginLists", JSONArray(repo.pluginLists))
+            })
         }
         prefs.edit().putString(REPOSITORIES_KEY, array.toString()).apply()
+    }
+
+    private fun savePlugins() {
+        val array = JSONArray()
+        _installedPlugins.value.mapNotNull { it.manifest }.forEach { manifest ->
+            array.put(JSONObject().apply {
+                put("name", manifest.name); put("pluginClassName", manifest.pluginClassName); put("version", manifest.version)
+                put("description", manifest.description); put("url", manifest.url); put("author", manifest.author); put("iconUrl", manifest.iconUrl)
+            })
+        }
+        prefs.edit().putString(PLUGINS_KEY, array.toString()).apply()
     }
 }

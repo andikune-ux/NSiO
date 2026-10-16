@@ -8,6 +8,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.StringReader
 import java.net.URL
+import java.net.URI
 import java.util.UUID
 
 sealed class ParseResult {
@@ -29,6 +30,10 @@ object LinkExtractor {
         val trimmed = inputUrl.trim()
         if (trimmed.isEmpty()) {
             return@withContext ParseResult.Error("URL tidak boleh kosong")
+        }
+        val parsedUri = try { URI(trimmed) } catch (_: Exception) { null }
+        if (parsedUri?.scheme !in listOf("http", "https")) {
+            return@withContext ParseResult.Error("URL harus diawali http:// atau https://")
         }
 
         try {
@@ -145,7 +150,7 @@ object LinkExtractor {
 
     private fun parseGoogleDrive(url: String, profileId: String): ParseResult {
         // Check for file ID
-        val fileId = when {
+            val fileId = when {
             url.contains("/file/d/") -> {
                 url.substringAfter("/file/d/").substringBefore("/")
             }
@@ -153,46 +158,18 @@ object LinkExtractor {
                 url.substringAfter("id=").substringBefore("&")
             }
             url.contains("/folders/") -> {
-                // Folder with multiple items simulation
                 val folderId = url.substringAfter("/folders/").substringBefore("?")
-                val items = listOf(
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = profileId,
-                        title = "G-Drive Folder Video Part 1",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
-                        type = "VIDEO",
-                        sourceType = "LINK",
-                        category = "Google Drive"
-                    ),
-                    MediaItem(
-                        id = UUID.randomUUID().toString(),
-                        profileId = profileId,
-                        title = "G-Drive Folder Video Part 2",
-                        url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                        thumbnailUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-                        type = "VIDEO",
-                        sourceType = "LINK",
-                        category = "Google Drive"
-                    )
-                )
-                return ParseResult.Multiple(items, "Google Drive Folder ($folderId)")
+                return ParseResult.Error("Folder Google Drive membutuhkan autentikasi API dan belum dapat diimpor tanpa izin pemilik (ID: $folderId)")
             }
             else -> ""
         }
 
         if (fileId.isNotEmpty()) {
-            val isDemoPreset = fileId == "1A2B3C4D5E6F7G8H9I0"
-            val streamUrl = if (isDemoPreset) {
-                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
-            } else {
-                "https://drive.google.com/uc?export=download&id=$fileId"
-            }
+            val streamUrl = "https://drive.google.com/uc?export=download&id=$fileId"
             val item = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = profileId,
-                title = if (isDemoPreset) "Google Drive Sample (Sintel 1080p)" else "Google Drive ($fileId)",
+                title = "Google Drive ($fileId)",
                 url = streamUrl,
                 thumbnailUrl = "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500",
                 type = "VIDEO",

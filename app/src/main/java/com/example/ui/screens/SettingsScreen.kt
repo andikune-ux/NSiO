@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -518,7 +519,7 @@ fun SettingsScreen(
                         onClick = {
                             isCheckingUpdate = true
                             updateStatus = null
-                            context.mainExecutor.execute {
+                            ContextCompat.getMainExecutor(context).execute {
                                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                     isCheckingUpdate = false
                                     updateStatus = "Net Stream iO versi 1.0.0 adalah versi terbaru."

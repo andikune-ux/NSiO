@@ -20,6 +20,16 @@ interface DownloadDao {
     @Update
     suspend fun updateDownload(item: DownloadItem)
 
+    @Query("UPDATE downloads SET status = :status, progressPercent = :progressPercent, downloadedBytes = :downloadedBytes, totalBytes = :totalBytes, localPath = :localPath WHERE id = :id")
+    suspend fun updateProgress(
+        id: String,
+        status: String,
+        progressPercent: Int,
+        downloadedBytes: Long,
+        totalBytes: Long,
+        localPath: String
+    )
+
     @Delete
     suspend fun deleteDownload(item: DownloadItem)
 
