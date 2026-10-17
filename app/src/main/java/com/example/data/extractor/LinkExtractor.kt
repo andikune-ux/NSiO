@@ -102,14 +102,14 @@ object LinkExtractor {
                     title = extractFilename(trimmed, "Media Stream"),
                     url = trimmed,
                     thumbnailUrl = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=500",
-                    type = "VIDEO",
+                    type = if (lower.contains(".m3u8")) "STREAM" else "VIDEO",
                     sourceType = "LINK"
                 )
                 return@withContext ParseResult.Single(fallbackItem)
             }
 
             // Case 4: M3U playlist (contains #EXTM3U)
-            if (content.contains("#EXTM3U") || trimmed.endsWith(".m3u", ignoreCase = true)) {
+            if (Regex("#EXTM3U", RegexOption.IGNORE_CASE).containsMatchIn(content) || trimmed.substringBefore('?').endsWith(".m3u", ignoreCase = true) || trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
                 if (trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true) && content.contains("#EXT-X-")) {
                     return@withContext ParseResult.Single(
                         MediaItem(
@@ -247,21 +247,29 @@ object LinkExtractor {
             val l = line?.trim() ?: continue
             if (l.startsWith("#EXTINF:", ignoreCase = true)) {
                 // Parse tvg-name, tvg-logo, group-title, and display name
-                currentLogo = Regex("tvg-logo\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
-                    .find(l)?.groupValues?.get(1).orEmpty()
+                currentLogo = listOf("tvg-logo", "logo", "channel-logo").firstNotNullOfOrNull { attribute ->
+                    Regex("$attribute\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
+                        .find(l)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                }.orEmpty()
                 currentGroup = Regex("group-title\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
                     .find(l)?.groupValues?.get(1)?.ifBlank { "IPTV" } ?: "IPTV"
                 currentTitle = l.substringAfterLast(",").trim()
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
             } else if (!l.startsWith("#") && l.isNotBlank() && !l.contains("=")) {
-                val resolvedUrl = try { URI(playlistUrl).resolve(l).toString() } catch (_: Exception) { l }
+                val rawUrl = l.substringBefore('|').trim()
+                val resolvedUrl = try { URI(playlistUrl).resolve(rawUrl).toString() } catch (_: Exception) { rawUrl }
+                val resolvedLogo = if (currentLogo.startsWith("http://") || currentLogo.startsWith("https://")) {
+                    currentLogo
+                } else {
+                    try { URI(playlistUrl).resolve(currentLogo).toString() } catch (_: Exception) { currentLogo }
+                }
                 items.add(
                     MediaItem(
                         id = UUID.randomUUID().toString(),
                         profileId = profileId,
                         title = currentTitle,
                         url = resolvedUrl,
-                        thumbnailUrl = currentLogo.ifEmpty { "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500" },
+                        thumbnailUrl = resolvedLogo.ifEmpty { "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500" },
                         type = if (resolvedUrl.substringBefore('?').contains(".m3u8", ignoreCase = true)) "STREAM" else "VIDEO",
                         sourceType = "LINK",
                         category = currentGroup

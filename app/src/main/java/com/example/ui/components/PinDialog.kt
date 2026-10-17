@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -60,7 +61,8 @@ fun PinDialog(
     Dialog(onDismissRequest = onDismiss) {
         Box(
             modifier = modifier
-                .width(340.dp)
+                .fillMaxWidth(0.92f)
+                .widthIn(min = 280.dp, max = 340.dp)
                 .liquidGlass(
                     shape = RoundedCornerShape(24.dp),
                     alpha = 0.16f,
