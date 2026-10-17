@@ -481,8 +481,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     category = "Media Server", playlistId = playlist.id, sourceUrl = remoteUri.toString()
                 )
                 mediaDao.insertMedia(item)
-                cloudRepository.saveMediaItem(user.uid, item)
-                showStatus("File berhasil di-upload ke server dan ditambahkan ke beranda")
+                if (!user.isAnonymous) {
+                    runCatching { cloudRepository.saveMediaItem(user.uid, item) }
+                        .onFailure { showStatus("File sudah tersimpan di server dan beranda; sinkronisasi cloud dilewati: ${it.localizedMessage ?: "izin metadata"}") }
+                }
+                if (user.isAnonymous) {
+                    showStatus("File berhasil di-upload ke server privat dan ditambahkan ke beranda")
+                } else {
+                    showStatus("File berhasil di-upload ke server dan ditambahkan ke beranda")
+                }
             } catch (e: Exception) {
                 showStatus("Upload server gagal: ${e.localizedMessage ?: "periksa koneksi dan izin Firebase Storage"}")
             }

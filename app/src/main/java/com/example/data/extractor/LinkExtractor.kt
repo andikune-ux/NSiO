@@ -93,7 +93,7 @@ object LinkExtractor {
 
             // Case 3: Fetch payload (could be M3U playlist, JSON CloudStream, or raw content)
             val content = try {
-                URL(trimmed).readText()
+                fetchText(trimmed)
             } catch (e: Exception) {
                 // If fetch fails but looks like a direct link, treat as Single Stream
                 val fallbackItem = MediaItem(
@@ -109,7 +109,7 @@ object LinkExtractor {
             }
 
             // Case 4: M3U playlist (contains #EXTM3U)
-            if (Regex("#EXTM3U", RegexOption.IGNORE_CASE).containsMatchIn(content) || trimmed.substringBefore('?').endsWith(".m3u", ignoreCase = true) || trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
+            if (Regex("#EXTM3U|#EXTINF:", RegexOption.IGNORE_CASE).containsMatchIn(content) || trimmed.substringBefore('?').endsWith(".m3u", ignoreCase = true) || trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
                 if (trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true) && content.contains("#EXT-X-")) {
                     return@withContext ParseResult.Single(
                         MediaItem(
@@ -229,9 +229,11 @@ object LinkExtractor {
 
     private fun fetchText(address: String): String {
         val connection = URL(address).openConnection() as HttpURLConnection
+        connection.instanceFollowRedirects = true
         connection.connectTimeout = 15_000
         connection.readTimeout = 20_000
         connection.setRequestProperty("User-Agent", "Mozilla/5.0 NSiO/2.0")
+        connection.setRequestProperty("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*")
         return connection.inputStream.bufferedReader().use { it.readText() }
     }
 
@@ -255,7 +257,7 @@ object LinkExtractor {
                     .find(l)?.groupValues?.get(1)?.ifBlank { "IPTV" } ?: "IPTV"
                 currentTitle = l.substringAfterLast(",").trim()
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
-            } else if (!l.startsWith("#") && l.isNotBlank() && !l.contains("=")) {
+            } else if (!l.startsWith("#") && l.isNotBlank()) {
                 val rawUrl = l.substringBefore('|').trim()
                 val resolvedUrl = try { URI(playlistUrl).resolve(rawUrl).toString() } catch (_: Exception) { rawUrl }
                 val resolvedLogo = if (currentLogo.startsWith("http://") || currentLogo.startsWith("https://")) {
