@@ -90,6 +90,7 @@ fun HomeScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
+    val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
 
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
     var isSearchExpanded by remember { mutableStateOf(false) }
@@ -112,6 +113,7 @@ fun HomeScreen(
     val accentColor = if (isDark) CyanPrimary else Color(0xFF0284C7)
 
     val filteredList = mediaList.filter { item ->
+        val matchesServerAccess = item.sourceType != "SERVER" || isServerUnlocked
         val matchesSearch = searchQuery.isEmpty() ||
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
@@ -130,7 +132,7 @@ fun HomeScreen(
                 item.playlistId == selectedFilter.removePrefix("PLAYLIST:")
             } else true
         }
-        matchesSearch && matchesFilter
+        matchesServerAccess && matchesSearch && matchesFilter
     }
 
     BoxWithConstraints(
@@ -603,7 +605,7 @@ fun HomeScreen(
                                     "FILE" to "File Lokal",
                                     "SERVER" to "Server Upload",
                                     "FAV" to "Favorit"
-                                )
+                                ).filter { isServerUnlocked || it.first != "SERVER" }
                                 val categoryFilters = mediaList
                                     .flatMap { item -> item.category.split("•", ",", "|", ";") }
                                     .map { it.trim() }

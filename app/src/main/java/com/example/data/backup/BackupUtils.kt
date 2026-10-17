@@ -5,6 +5,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
+import com.example.data.model.SourcePlaylist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -197,6 +198,7 @@ object BackupUtils {
                         )
                     }
                     mediaDao.insertAll(restoredItems)
+                    restoreSourcePlaylists(database, restoredItems)
                 }
 
                 return@withContext BackupResult(
@@ -255,6 +257,7 @@ object BackupUtils {
                         )
                     }
                     mediaDao.insertAll(items)
+                    restoreSourcePlaylists(database, items)
                 }
 
                 return@withContext BackupResult(
@@ -267,5 +270,23 @@ object BackupUtils {
         } catch (e: Exception) {
             BackupResult(isSuccess = false, message = "Gagal memulihkan backup: ${e.localizedMessage}")
         }
+    }
+
+    private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>) {
+        val playlistDao = database.sourcePlaylistDao()
+        media.filter { it.sourceUrl.isNotBlank() }.groupBy { it.playlistId.ifBlank { it.sourceUrl } }
+            .forEach { (key, items) ->
+                val first = items.first()
+                playlistDao.insert(
+                    SourcePlaylist(
+                        id = if (first.playlistId.isNotBlank()) first.playlistId else key,
+                        profileId = first.profileId,
+                        name = first.sourceUrl.substringAfter("//").substringBefore("/").ifBlank { first.title },
+                        url = first.sourceUrl,
+                        sourceType = first.sourceType,
+                        itemCount = items.size
+                    )
+                )
+            }
     }
 }

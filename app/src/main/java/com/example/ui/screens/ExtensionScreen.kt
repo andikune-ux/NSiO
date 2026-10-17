@@ -191,6 +191,7 @@ fun ExtensionScreen(
             subtitle = "Masukkan PIN untuk mengakses menu manajemen server",
             expectedPin = settings.serverPin,
             onSuccess = {
+                viewModel.unlockServerAccess()
                 isServerUnlocked = true
                 showServerPinDialog = false
                 selectedTabIndex = 2
@@ -749,7 +750,8 @@ private fun PluginRepoTab(
                 Row(
                     modifier = Modifier.fillMaxWidth().liquidGlass(
                         shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
-                    ).padding(horizontal = 12.dp, vertical = 8.dp),
+                    ).clickable { viewModel.selectFilter("PLAYLIST:${playlist.id}") }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {

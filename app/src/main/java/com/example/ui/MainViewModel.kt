@@ -61,6 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _sourcePlaylists = MutableStateFlow<List<SourcePlaylist>>(emptyList())
     val sourcePlaylists: StateFlow<List<SourcePlaylist>> = _sourcePlaylists.asStateFlow()
 
+    private val _isServerUnlocked = MutableStateFlow(false)
+    val isServerUnlocked: StateFlow<Boolean> = _isServerUnlocked.asStateFlow()
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -201,6 +204,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectFilter(filter: String) {
         _selectedFilter.value = filter
+    }
+
+    fun unlockServerAccess() {
+        _isServerUnlocked.value = true
     }
 
     // --- Firebase Auth & Cloud Firestore Operations ---
