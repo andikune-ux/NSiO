@@ -43,4 +43,7 @@ interface MediaDao {
 
     @Query("DELETE FROM media_items WHERE profileId = :profileId")
     suspend fun clearProfileMedia(profileId: String)
+
+    @Query("DELETE FROM media_items WHERE playlistId = :playlistId")
+    suspend fun clearPlaylist(playlistId: String)
 }

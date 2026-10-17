@@ -135,6 +135,8 @@ object BackupAmanManager {
                 put("type", m.type)
                 put("sourceType", m.sourceType)
                 put("category", m.category)
+                put("playlistId", m.playlistId)
+                put("sourceUrl", m.sourceUrl)
                 put("durationMs", m.durationMs)
                 put("progressMs", m.progressMs)
                 put("isFavorite", m.isFavorite)

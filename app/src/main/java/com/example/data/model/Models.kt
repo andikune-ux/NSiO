@@ -13,11 +13,25 @@ data class MediaItem(
     val type: String = "VIDEO", // "VIDEO", "PHOTO", "STREAM"
     val sourceType: String = "LINK", // "LINK", "FILE", "SERVER"
     val category: String = "Umum",
+    val playlistId: String = "",
+    val sourceUrl: String = "",
     val durationMs: Long = 0L,
     val progressMs: Long = 0L,
     val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val extraInfo: String = ""
+)
+
+@Entity(tableName = "source_playlists")
+data class SourcePlaylist(
+    @PrimaryKey val id: String,
+    val profileId: String,
+    val name: String,
+    val url: String,
+    val sourceType: String = "LINK",
+    val itemCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "profiles")

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Button
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.example.data.model.MediaItem
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
@@ -80,7 +82,9 @@ fun PlayerScreen(
     onClose: () -> Unit
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
+    val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
+    var showQueue by remember { mutableStateOf(false) }
 
     // Handle Android system back
     BackHandler {
@@ -102,27 +106,23 @@ fun PlayerScreen(
             .background(Color.Black)
             .testTag("player_screen")
     ) {
-        // ExoPlayer Surface View
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = viewModel.player.exoPlayer
-                    useController = false
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    showControls = !showControls
-                }
-        )
+        // ExoPlayer Surface View atau gambar lokal/remote
+        if (media.type == "PHOTO") {
+            AsyncImage(model = media.url, contentDescription = media.title, modifier = Modifier.fillMaxSize())
+        } else {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = viewModel.player.exoPlayer
+                        useController = false
+                        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    }
+                },
+                modifier = Modifier.fillMaxSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null
+                ) { showControls = !showControls }
+            )
+        }
 
         // Buffering Liquid Glass Indicator
         if (playerState.isBuffering && playerState.error == null) {
@@ -210,6 +210,30 @@ fun PlayerScreen(
                                     color = Color(0xFFCBD5E1)
                                 )
                             }
+                        }
+                        IconButton(onClick = { showQueue = !showQueue }) {
+                            Icon(Icons.Default.List, contentDescription = "Daftar video", tint = Color.White)
+                        }
+                    }
+                }
+
+                if (showQueue) {
+                    Column(
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 58.dp).width(280.dp)
+                            .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.28f, borderAlpha = 0.5f, elevation = 16.dp)
+                            .padding(8.dp)
+                    ) {
+                        mediaList.filter { it.type != "PHOTO" }.take(20).forEach { next ->
+                            Text(
+                                text = next.title,
+                                color = if (next.id == media.id) CyanPrimary else Color.White,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    showQueue = false
+                                    viewModel.playMedia(next)
+                                }.padding(horizontal = 8.dp, vertical = 8.dp)
+                            )
                         }
                     }
                 }

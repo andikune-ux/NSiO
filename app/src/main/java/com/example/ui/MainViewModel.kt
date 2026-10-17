@@ -15,6 +15,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
+import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
 import com.example.player.CS3IPlayer
 import com.google.firebase.auth.FirebaseUser
@@ -29,6 +30,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getInstance(application)
     private val mediaDao = database.mediaDao()
     private val profileDao = database.profileDao()
+    private val sourcePlaylistDao = database.sourcePlaylistDao()
 
     val pluginManager = PluginManager(application)
     val downloadManager = VideoDownloadManager.getInstance(application)
@@ -55,6 +57,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Content state
     private val _mediaList = MutableStateFlow<List<MediaItem>>(emptyList())
     val mediaList: StateFlow<List<MediaItem>> = _mediaList.asStateFlow()
+
+    private val _sourcePlaylists = MutableStateFlow<List<SourcePlaylist>>(emptyList())
+    val sourcePlaylists: StateFlow<List<SourcePlaylist>> = _sourcePlaylists.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -120,6 +125,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             observeActiveProfileMedia()
+            observeSourcePlaylists()
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(1_000)
+                refreshAllSourcePlaylists()
+            }
         }
     }
 
@@ -132,11 +142,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun observeSourcePlaylists() {
+        val current = _activeProfile.value ?: return
+        viewModelScope.launch {
+            sourcePlaylistDao.observeForProfile(current.id).collect { _sourcePlaylists.value = it }
+        }
+    }
+
     fun switchProfile(profile: Profile) {
         viewModelScope.launch {
             _activeProfile.value = profile
             _settings.value = profileDao.getSettings(profile.id) ?: ProfileSettings(profileId = profile.id)
             observeActiveProfileMedia()
+            observeSourcePlaylists()
             showStatus("Beralih ke profil '${profile.name}'")
         }
     }
@@ -261,21 +279,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             when (val result = LinkExtractor.parseUrl(url, currentProfileId)) {
                 is ParseResult.Single -> {
-                    mediaDao.insertMedia(result.item)
+                    val sourceKind = if (result.item.type == "STREAM") "STREAM" else if (url.lowercase().contains(".json")) "REPO" else "LINK"
+                    val playlist = ensureSourcePlaylist(url, result.item.title, sourceKind, currentProfileId)
+                    val item = result.item.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
+                    mediaDao.clearPlaylist(playlist.id)
+                    mediaDao.insertMedia(item)
+                    sourcePlaylistDao.updateCount(playlist.id, _mediaList.value.count { it.playlistId == playlist.id } + 1)
                     // If user is authenticated, sync to cloud
                     authManager.currentUser?.let { user ->
-                        try { cloudRepository.saveMediaItem(user.uid, result.item) } catch (_: Exception) {}
+                        try { cloudRepository.saveMediaItem(user.uid, item) } catch (_: Exception) {}
                     }
                     showStatus("1 Media berhasil ditambahkan: ${result.item.title}")
                     onFinished("Berhasil menambahkan: ${result.item.title}")
                 }
                 is ParseResult.Multiple -> {
-                    mediaDao.insertAll(result.items)
+                    val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
+                    val playlist = ensureSourcePlaylist(url, playlistNameFromUrl(url, result.title), sourceKind, currentProfileId)
+                    val items = result.items.map { it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url) }
+                    mediaDao.clearPlaylist(playlist.id)
+                    mediaDao.insertAll(items)
+                    sourcePlaylistDao.updateCount(playlist.id, _mediaList.value.count { it.playlistId == playlist.id } + items.size)
                     authManager.currentUser?.let { user ->
-                        try { cloudRepository.syncLocalListToCloud(user.uid, result.items) } catch (_: Exception) {}
+                        try { cloudRepository.syncLocalListToCloud(user.uid, items) } catch (_: Exception) {}
                     }
-                    showStatus("${result.items.size} item berhasil ditambahkan ke beranda!")
-                    onFinished("${result.items.size} item berhasil ditambahkan (${result.title})")
+                    showStatus("${items.size} item berhasil ditambahkan ke beranda!")
+                    onFinished("${items.size} item berhasil ditambahkan (${result.title})")
                 }
                 is ParseResult.Error -> {
                     showStatus("Error: ${result.message}")
@@ -285,10 +313,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private suspend fun ensureSourcePlaylist(url: String, name: String, sourceType: String, profileId: String): SourcePlaylist {
+        val existing = sourcePlaylistDao.findByUrl(profileId, url)
+        if (existing != null) return existing
+        return SourcePlaylist(
+            id = UUID.randomUUID().toString(), profileId = profileId,
+            name = name.ifBlank { playlistNameFromUrl(url, "Playlist") }, url = url,
+            sourceType = sourceType
+        ).also { sourcePlaylistDao.insert(it) }
+    }
+
+    private fun playlistNameFromUrl(url: String, fallback: String): String = runCatching {
+        java.net.URI(url).host?.removePrefix("www.")?.ifBlank { null } ?: fallback
+    }.getOrDefault(fallback)
+
+    fun renameSourcePlaylist(playlist: SourcePlaylist, newName: String) {
+        viewModelScope.launch {
+            val cleanName = newName.trim()
+            if (cleanName.isNotEmpty()) sourcePlaylistDao.update(playlist.copy(name = cleanName, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun deleteSourcePlaylist(playlist: SourcePlaylist) {
+        viewModelScope.launch {
+            mediaDao.clearPlaylist(playlist.id)
+            sourcePlaylistDao.delete(playlist)
+            if (_selectedFilter.value == "PLAYLIST:${playlist.id}") _selectedFilter.value = "ALL"
+            showStatus("Playlist '${playlist.name}' dihapus")
+        }
+    }
+
+    fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
+        repo.pluginLists.forEach { url ->
+            parseAndAddLink(url) { message -> showStatus("Refresh repo: $message") }
+        }
+    }
+
+    fun refreshAllSourcePlaylists() {
+        val profileId = _activeProfile.value?.id ?: return
+        viewModelScope.launch {
+            sourcePlaylistDao.getForProfile(profileId)
+                .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" }
+                .forEach { playlist -> parseAndAddLink(playlist.url) { } }
+            showStatus("Semua playlist sumber diperbarui")
+        }
+    }
+
     // --- File Source (B2) ---
     fun addLocalFileMedia(title: String, fileUri: String, isPhoto: Boolean) {
         val currentProfileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
+            val playlist = ensureSourcePlaylist(fileUri, title.ifEmpty { "File Lokal" }, "FILE", currentProfileId)
             val newItem = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = currentProfileId,
@@ -297,7 +372,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 thumbnailUrl = if (isPhoto) fileUri else "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
                 type = if (isPhoto) "PHOTO" else "VIDEO",
                 sourceType = "FILE",
-                category = "Penyimpanan Lokal"
+                category = "Penyimpanan Lokal", playlistId = playlist.id, sourceUrl = fileUri
             )
             mediaDao.insertMedia(newItem)
             authManager.currentUser?.let { user ->
@@ -311,6 +386,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun uploadMediaToServer(title: String, url: String, isPhoto: Boolean) {
         val currentProfileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
+            val playlist = ensureSourcePlaylist(url, title.ifEmpty { "Media Server" }, "SERVER", currentProfileId)
             val newItem = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = currentProfileId,
@@ -319,7 +395,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 thumbnailUrl = if (isPhoto) url else "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500",
                 type = if (isPhoto) "PHOTO" else "VIDEO",
                 sourceType = "SERVER",
-                category = "Media Server"
+                category = "Media Server", playlistId = playlist.id, sourceUrl = url
             )
             mediaDao.insertMedia(newItem)
             authManager.currentUser?.let { user ->
@@ -353,7 +429,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- Player Management ---
     fun playMedia(item: MediaItem) {
         _currentlyPlaying.value = item
-        player.play(item.url, item.title, item.progressMs)
+        if (item.type != "PHOTO") player.play(item.url, item.title, item.progressMs)
     }
 
     fun closePlayer() {

@@ -9,6 +9,7 @@ import java.io.BufferedReader
 import java.io.StringReader
 import java.net.URL
 import java.net.URI
+import java.net.HttpURLConnection
 import java.util.UUID
 
 sealed class ParseResult {
@@ -159,20 +160,23 @@ object LinkExtractor {
             }
             url.contains("/folders/") -> {
                 val folderId = url.substringAfter("/folders/").substringBefore("?")
-                return ParseResult.Error("Folder Google Drive membutuhkan autentikasi API dan belum dapat diimpor tanpa izin pemilik (ID: $folderId)")
+                return parsePublicDriveFolder(folderId, profileId)
             }
             else -> ""
         }
 
         if (fileId.isNotEmpty()) {
+            val metadata = fetchDriveMetadata(fileId)
             val streamUrl = "https://drive.google.com/uc?export=download&id=$fileId"
+            val mime = metadata.first
+            val title = metadata.second.ifBlank { "Google Drive ($fileId)" }
             val item = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = profileId,
-                title = "Google Drive ($fileId)",
+                title = title,
                 url = streamUrl,
                 thumbnailUrl = "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500",
-                type = "VIDEO",
+                type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
                 sourceType = "LINK",
                 category = "Google Drive"
             )
@@ -180,6 +184,45 @@ object LinkExtractor {
         }
 
         return ParseResult.Error("URL Google Drive tidak dikenali")
+    }
+
+    private fun parsePublicDriveFolder(folderId: String, profileId: String): ParseResult {
+        return try {
+            val html = fetchText("https://drive.google.com/drive/folders/$folderId?usp=sharing")
+            val regex = Regex("\\\"id\\\":\\\"([^\\\"]+)\\\".*?\\\"name\\\":\\\"([^\\\"]+)\\\".*?\\\"mimeType\\\":\\\"([^\\\"]+)\\\"", setOf(RegexOption.DOT_MATCHES_ALL))
+            val items = regex.findAll(html).mapNotNull { match ->
+                val id = match.groupValues[1]
+                val name = match.groupValues[2].replace("\\u0026", "&")
+                val mime = match.groupValues[3]
+                if (id == folderId || mime == "application/vnd.google-apps.folder") return@mapNotNull null
+                MediaItem(
+                    id = UUID.randomUUID().toString(), profileId = profileId, title = name,
+                    url = "https://drive.google.com/uc?export=download&id=$id",
+                    thumbnailUrl = if (mime.startsWith("image/")) "https://drive.google.com/thumbnail?id=$id&sz=w800" else "",
+                    type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
+                    sourceType = "LINK", category = "Google Drive"
+                )
+            }.distinctBy { it.title to it.url }.toList()
+            if (items.isEmpty()) ParseResult.Error("Folder Google Drive kosong, privat, atau tidak dapat dibaca. Pastikan aksesnya 'Siapa saja yang memiliki link'.")
+            else ParseResult.Multiple(items, "Google Drive Folder")
+        } catch (e: Exception) {
+            ParseResult.Error("Gagal membaca folder Google Drive publik: ${e.localizedMessage ?: "akses ditolak"}")
+        }
+    }
+
+    private fun fetchDriveMetadata(fileId: String): Pair<String, String> = runCatching {
+        val html = fetchText("https://drive.google.com/file/d/$fileId/view?usp=sharing")
+        val mime = Regex("\\\"mimeType\\\":\\\"([^\\\"]+)\\\"").find(html)?.groupValues?.get(1).orEmpty()
+        val name = Regex("\\\"name\\\":\\\"([^\\\"]+)\\\"").find(html)?.groupValues?.get(1).orEmpty()
+        mime to name.replace("\\u0026", "&")
+    }.getOrDefault("" to "")
+
+    private fun fetchText(address: String): String {
+        val connection = URL(address).openConnection() as HttpURLConnection
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 20_000
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 NSiO/2.0")
+        return connection.inputStream.bufferedReader().use { it.readText() }
     }
 
     private fun parseM3uContent(content: String, profileId: String): List<MediaItem> {

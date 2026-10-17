@@ -7,6 +7,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +46,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.MainViewModel
+import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentRed
@@ -74,6 +79,7 @@ fun ExtensionScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     val plugins by viewModel.pluginManager.installedPlugins.collectAsState()
     val repos by viewModel.pluginManager.repositories.collectAsState()
+    val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var isServerUnlocked by remember { mutableStateOf(false) }
@@ -174,7 +180,7 @@ fun ExtensionScreen(
                 0 -> LinkSourceTab(viewModel, onNavigateToHome)
                 1 -> FileSourceTab(viewModel, onNavigateToHome)
                 2 -> ServerSourceTab(viewModel, onNavigateToHome, mediaList.filter { it.sourceType == "SERVER" })
-                3 -> PluginRepoTab(viewModel, plugins, repos)
+                3 -> PluginRepoTab(viewModel, plugins, repos, sourcePlaylists)
             }
         }
     }
@@ -716,15 +722,49 @@ private fun ServerSourceTab(
 private fun PluginRepoTab(
     viewModel: MainViewModel,
     plugins: List<com.example.data.plugin.Plugin>,
-    repos: List<com.example.data.plugin.RepoManifest>
+    repos: List<com.example.data.plugin.RepoManifest>,
+    sourcePlaylists: List<SourcePlaylist>
 ) {
     var repoUrlInput by remember { mutableStateOf("") }
+    var editingPlaylist by remember { mutableStateOf<SourcePlaylist?>(null) }
+    var editedName by remember { mutableStateOf("") }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
+        item {
+            Text(
+                text = "Riwayat Playlist Sumber (${sourcePlaylists.size})",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (sourcePlaylists.isEmpty()) {
+            item { Text("Belum ada link sumber yang dimasukkan.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        } else {
+            items(sourcePlaylists, key = { it.id }) { playlist ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().liquidGlass(
+                        shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
+                    ).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(playlist.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+                        Text("${playlist.itemCount} item • ${playlist.url}", fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { editingPlaylist = playlist; editedName = playlist.name }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Rename playlist", tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = { viewModel.deleteSourcePlaylist(playlist) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Hapus playlist", tint = AccentRed, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
         item {
             Box(
                 modifier = Modifier
@@ -800,6 +840,32 @@ private fun PluginRepoTab(
 
         item {
             Text(
+                text = "Repository Aktif (${repos.size}):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        items(repos, key = { it.pluginLists.joinToString("|") }) { repo ->
+            Row(
+                modifier = Modifier.fillMaxWidth().liquidGlass(
+                    shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
+                ).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+                    Text(repo.pluginLists.firstOrNull().orEmpty(), fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Button(onClick = { viewModel.refreshRepository(repo) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)) {
+                    Text("Refresh", fontSize = 11.sp)
+                }
+            }
+        }
+
+        item {
+            Text(
                 text = "Plugin Terpasang (${plugins.size}):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
@@ -859,5 +925,18 @@ private fun PluginRepoTab(
                 }
             }
         }
+    }
+    editingPlaylist?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { editingPlaylist = null },
+            title = { Text("Rename Playlist") },
+            text = {
+                OutlinedTextField(value = editedName, onValueChange = { editedName = it }, singleLine = true, label = { Text("Nama playlist") })
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.renameSourcePlaylist(playlist, editedName); editingPlaylist = null }) { Text("Simpan") }
+            },
+            dismissButton = { TextButton(onClick = { editingPlaylist = null }) { Text("Batal") } }
+        )
     }
 }

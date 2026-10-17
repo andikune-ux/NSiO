@@ -89,6 +89,7 @@ fun HomeScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
+    val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
     var isSearchExpanded by remember { mutableStateOf(false) }
@@ -116,6 +117,8 @@ fun HomeScreen(
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesFilter = when (selectedFilter) {
             "LINK" -> item.sourceType == "LINK"
+            "STREAM" -> item.sourceType == "STREAM"
+            "REPO" -> item.sourceType == "REPO"
             "FILE" -> item.sourceType == "FILE"
             "SERVER" -> item.sourceType == "SERVER"
             "FAV" -> item.isFavorite
@@ -123,6 +126,8 @@ fun HomeScreen(
                 val selectedCategory = selectedFilter.removePrefix("CATEGORY:")
                 item.category.split("•", ",", "|", ";")
                     .any { it.trim().equals(selectedCategory, ignoreCase = true) }
+            } else if (selectedFilter.startsWith("PLAYLIST:")) {
+                item.playlistId == selectedFilter.removePrefix("PLAYLIST:")
             } else true
         }
         matchesSearch && matchesFilter
@@ -593,6 +598,8 @@ fun HomeScreen(
                                 val sourceFilters = listOf(
                                     "ALL" to "Semua",
                                     "LINK" to "Link Ekstensi",
+                                    "STREAM" to "Streaming M3U/M3U8",
+                                    "REPO" to "Repo CloudStream",
                                     "FILE" to "File Lokal",
                                     "SERVER" to "Server Upload",
                                     "FAV" to "Favorit"
@@ -604,7 +611,10 @@ fun HomeScreen(
                                     .distinctBy { it.lowercase() }
                                     .sortedWith(String.CASE_INSENSITIVE_ORDER)
                                     .map { "CATEGORY:$it" to it }
-                                val filters = sourceFilters + categoryFilters
+                                val playlistFilters = sourcePlaylists.map { playlist ->
+                                    "PLAYLIST:${playlist.id}" to "Playlist: ${playlist.name}"
+                                }
+                                val filters = sourceFilters + playlistFilters + categoryFilters
 
                                 filters.forEach { (key, label) ->
                                     val isSelected = selectedFilter == key

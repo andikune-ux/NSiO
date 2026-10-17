@@ -87,6 +87,8 @@ object BackupUtils {
                     put("type", m.type)
                     put("sourceType", m.sourceType)
                     put("category", m.category)
+                    put("playlistId", m.playlistId)
+                    put("sourceUrl", m.sourceUrl)
                     put("durationMs", m.durationMs)
                     put("progressMs", m.progressMs)
                 }
@@ -185,6 +187,8 @@ object BackupUtils {
                                 type = m.optString("type", "VIDEO"),
                                 sourceType = m.optString("sourceType", "LINK"),
                                 category = m.optString("category", "Umum"),
+                                playlistId = m.optString("playlistId", ""),
+                                sourceUrl = m.optString("sourceUrl", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
@@ -243,6 +247,8 @@ object BackupUtils {
                                 type = m.optString("type", "VIDEO"),
                                 sourceType = m.optString("sourceType", "LINK"),
                                 category = m.optString("category", "Umum"),
+                                playlistId = m.optString("playlistId", ""),
+                                sourceUrl = m.optString("sourceUrl", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L)
                             )
