@@ -110,7 +110,17 @@ object LinkExtractor {
 
             // Case 4: M3U playlist (contains #EXTM3U)
             if (content.contains("#EXTM3U") || trimmed.endsWith(".m3u", ignoreCase = true)) {
-                val m3uItems = parseM3uContent(content, profileId)
+                if (trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true) && content.contains("#EXT-X-")) {
+                    return@withContext ParseResult.Single(
+                        MediaItem(
+                            id = UUID.randomUUID().toString(), profileId = profileId,
+                            title = extractFilename(trimmed, "HLS Live Stream"), url = trimmed,
+                            thumbnailUrl = "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500",
+                            type = "STREAM", sourceType = "LINK", category = "Live Stream"
+                        )
+                    )
+                }
+                val m3uItems = parseM3uContent(content, profileId, trimmed)
                 return@withContext if (m3uItems.size == 1) {
                     ParseResult.Single(m3uItems.first())
                 } else if (m3uItems.isNotEmpty()) {
@@ -225,7 +235,7 @@ object LinkExtractor {
         return connection.inputStream.bufferedReader().use { it.readText() }
     }
 
-    private fun parseM3uContent(content: String, profileId: String): List<MediaItem> {
+    private fun parseM3uContent(content: String, profileId: String, playlistUrl: String): List<MediaItem> {
         val items = mutableListOf<MediaItem>()
         val reader = BufferedReader(StringReader(content))
         var line: String?
@@ -235,25 +245,24 @@ object LinkExtractor {
 
         while (reader.readLine().also { line = it } != null) {
             val l = line?.trim() ?: continue
-            if (l.startsWith("#EXTINF:")) {
+            if (l.startsWith("#EXTINF:", ignoreCase = true)) {
                 // Parse tvg-name, tvg-logo, group-title, and display name
-                if (l.contains("tvg-logo=\"")) {
-                    currentLogo = l.substringAfter("tvg-logo=\"").substringBefore("\"")
-                }
-                if (l.contains("group-title=\"")) {
-                    currentGroup = l.substringAfter("group-title=\"").substringBefore("\"")
-                }
+                currentLogo = Regex("tvg-logo\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
+                    .find(l)?.groupValues?.get(1).orEmpty()
+                currentGroup = Regex("group-title\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
+                    .find(l)?.groupValues?.get(1)?.ifBlank { "IPTV" } ?: "IPTV"
                 currentTitle = l.substringAfterLast(",").trim()
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
-            } else if (l.startsWith("http://") || l.startsWith("https://")) {
+            } else if (!l.startsWith("#") && l.isNotBlank() && !l.contains("=")) {
+                val resolvedUrl = try { URI(playlistUrl).resolve(l).toString() } catch (_: Exception) { l }
                 items.add(
                     MediaItem(
                         id = UUID.randomUUID().toString(),
                         profileId = profileId,
                         title = currentTitle,
-                        url = l,
+                        url = resolvedUrl,
                         thumbnailUrl = currentLogo.ifEmpty { "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500" },
-                        type = if (l.contains(".m3u8")) "STREAM" else "VIDEO",
+                        type = if (resolvedUrl.substringBefore('?').contains(".m3u8", ignoreCase = true)) "STREAM" else "VIDEO",
                         sourceType = "LINK",
                         category = currentGroup
                     )

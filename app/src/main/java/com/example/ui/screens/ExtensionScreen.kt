@@ -59,6 +59,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -519,6 +522,13 @@ private fun ServerSourceTab(
 ) {
     var titleInput by remember { mutableStateOf("") }
     var urlInput by remember { mutableStateOf("") }
+    var selectedFileUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var selectedFileIsPhoto by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedFileUri = uri
+        selectedFileIsPhoto = uri?.let { context.contentResolver.getType(it)?.startsWith("image/") == true } == true
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -580,6 +590,41 @@ private fun ServerSourceTab(
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { filePicker.launch("video/*") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(selectedFileUri?.lastPathSegment ?: "Pilih file video dari perangkat", color = CyanPrimary, fontSize = 12.sp, maxLines = 1)
+                    }
+
+                    Button(
+                        onClick = { filePicker.launch("image/*") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Pilih file foto dari perangkat", color = CyanPrimary, fontSize = 12.sp)
+                    }
+
+                    if (selectedFileUri != null) {
+                        Button(
+                            onClick = {
+                                viewModel.uploadMediaFileToServer(titleInput, selectedFileUri.toString(), selectedFileIsPhoto)
+                                titleInput = ""
+                                selectedFileUri = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) { Text("Upload File ke Server", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                    }
 
                     OutlinedTextField(
                         value = urlInput,

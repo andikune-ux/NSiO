@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.backup.BackupResult
@@ -11,6 +12,7 @@ import com.example.data.extractor.ParseResult
 import com.example.data.firebase.AuthState
 import com.example.data.firebase.CloudMediaRepository
 import com.example.data.firebase.FirebaseAuthManager
+import com.example.data.firebase.FirebaseStorageRepository
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
@@ -40,6 +42,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val authManager = FirebaseAuthManager(application)
     val authState: StateFlow<AuthState> = authManager.authState
     val cloudRepository = CloudMediaRepository(application)
+    private val storageRepository = FirebaseStorageRepository()
 
     private val _isCloudSyncing = MutableStateFlow(false)
     val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
@@ -459,6 +462,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             downloadManager.enqueueDownload(item.id, item.title, item.url)
             showStatus("Unduhan '${item.title}' dimulai")
+        }
+    }
+
+    fun uploadMediaFileToServer(title: String, localUri: String, isPhoto: Boolean) {
+        val currentProfileId = _activeProfile.value?.id ?: return
+        val user = authManager.currentUser ?: run {
+            showStatus("Login Google diperlukan untuk menyimpan file ke server")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                showStatus("Mengunggah file ke server...")
+                val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
+                val playlist = ensureSourcePlaylist(remoteUri.toString(), title.ifEmpty { "Media Server" }, "SERVER", currentProfileId)
+                val item = MediaItem(
+                    id = UUID.randomUUID().toString(), profileId = currentProfileId,
+                    title = title.ifEmpty { "Media Server" }, url = remoteUri.toString(),
+                    thumbnailUrl = if (isPhoto) remoteUri.toString() else "",
+                    type = if (isPhoto) "PHOTO" else "VIDEO", sourceType = "SERVER",
+                    category = "Media Server", playlistId = playlist.id, sourceUrl = remoteUri.toString()
+                )
+                mediaDao.insertMedia(item)
+                cloudRepository.saveMediaItem(user.uid, item)
+                showStatus("File berhasil di-upload ke server dan ditambahkan ke beranda")
+            } catch (e: Exception) {
+                showStatus("Upload server gagal: ${e.localizedMessage ?: "periksa koneksi dan izin Firebase Storage"}")
+            }
         }
     }
 
