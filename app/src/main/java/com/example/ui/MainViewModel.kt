@@ -467,13 +467,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun uploadMediaFileToServer(title: String, localUri: String, isPhoto: Boolean) {
         val currentProfileId = _activeProfile.value?.id ?: return
-        val user = authManager.currentUser ?: run {
-            showStatus("Login Google diperlukan untuk menyimpan file ke server")
-            return
-        }
         viewModelScope.launch {
             try {
                 showStatus("Mengunggah file ke server...")
+                val user = authManager.ensureStorageUser()
                 val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
                 val playlist = ensureSourcePlaylist(remoteUri.toString(), title.ifEmpty { "Media Server" }, "SERVER", currentProfileId)
                 val item = MediaItem(

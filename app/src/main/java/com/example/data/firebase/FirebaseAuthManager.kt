@@ -41,6 +41,12 @@ class FirebaseAuthManager(private val context: Context) {
     val currentUser: FirebaseUser?
         get() = auth.currentUser
 
+    suspend fun ensureStorageUser(): FirebaseUser {
+        auth.currentUser?.let { return it }
+        val result = auth.signInAnonymously().await()
+        return result.user ?: throw IllegalStateException("Sesi penyimpanan anonim tidak tersedia")
+    }
+
     init {
         auth.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser

@@ -521,7 +521,6 @@ private fun ServerSourceTab(
     serverMediaList: List<com.example.data.model.MediaItem>
 ) {
     var titleInput by remember { mutableStateOf("") }
-    var urlInput by remember { mutableStateOf("") }
     var selectedFileUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var selectedFileIsPhoto by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -571,6 +570,13 @@ private fun ServerSourceTab(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    Text(
+                        text = "Pilih file dari perangkat. File disimpan privat ke Firebase Storage milik aplikasi dan otomatis dicatat di beranda. Login Google tidak diperlukan; aplikasi memakai sesi anonim khusus perangkat.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -626,68 +632,12 @@ private fun ServerSourceTab(
                         ) { Text("Upload File ke Server", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                     }
 
-                    OutlinedTextField(
-                        value = urlInput,
-                        onValueChange = { urlInput = it },
-                        placeholder = { Text("URL konten server...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
-                        singleLine = true,
+                    Button(
+                        onClick = onNavigateToHome,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
                         shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(
-                            onClick = {
-                                val finalTitle = titleInput.ifBlank { "Server Video ${System.currentTimeMillis() % 1000}" }
-                                viewModel.uploadMediaToServer(finalTitle, urlInput, false)
-                                titleInput = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = CyanPrimary,
-                                contentColor = Color.Black
-                            ),
-                            shape = RoundedCornerShape(18.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.CloudUpload,
-                                contentDescription = null,
-                                tint = Color.Black,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Tambahkan URL Server",
-                                color = Color.Black,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        Button(
-                            onClick = onNavigateToHome,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.15f)
-                            ),
-                            shape = RoundedCornerShape(18.dp),
-                            modifier = Modifier.height(48.dp)
-                        ) {
-                            Text("Buka Beranda", color = CyanPrimary, fontSize = 13.sp)
-                        }
-                    }
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) { Text("Buka Beranda", color = CyanPrimary, fontSize = 13.sp) }
                 }
             }
         }
