@@ -468,10 +468,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun uploadMediaFileToServer(title: String, localUri: String, isPhoto: Boolean) {
         val currentProfileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
+            showStatus("Mengunggah file ke server...")
+            val user = try {
+                authManager.ensureStorageUser()
+            } catch (e: Exception) {
+                showStatus("Sesi penyimpanan gagal: ${e.localizedMessage ?: "Firebase Anonymous Authentication belum diaktifkan"}")
+                return@launch
+            }
+            val remoteUri = try {
+                storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
+            } catch (e: Exception) {
+                showStatus("Upload Storage gagal: ${e.localizedMessage ?: "aturan Firebase Storage menolak akses"}")
+                return@launch
+            }
             try {
-                showStatus("Mengunggah file ke server...")
-                val user = authManager.ensureStorageUser()
-                val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
                 val playlist = ensureSourcePlaylist(remoteUri.toString(), title.ifEmpty { "Media Server" }, "SERVER", currentProfileId)
                 val item = MediaItem(
                     id = UUID.randomUUID().toString(), profileId = currentProfileId,
@@ -491,7 +501,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     showStatus("File berhasil di-upload ke server dan ditambahkan ke beranda")
                 }
             } catch (e: Exception) {
-                showStatus("Upload server gagal: ${e.localizedMessage ?: "periksa koneksi dan izin Firebase Storage"}")
+                showStatus("File sudah masuk Storage, tetapi pencatatan lokal gagal: ${e.localizedMessage ?: "database lokal"}")
             }
         }
     }

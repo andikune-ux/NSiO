@@ -48,21 +48,6 @@ object LinkExtractor {
             val hasVideoExt = directVideoExtensions.any { lower.contains(it) }
             val hasPhotoExt = directPhotoExtensions.any { lower.contains(it) }
 
-            if (lower.contains(".m3u8") && !lower.contains(".m3u")) {
-                // Direct HLS stream
-                val item = MediaItem(
-                    id = UUID.randomUUID().toString(),
-                    profileId = profileId,
-                    title = extractFilename(trimmed, "HLS Live Stream"),
-                    url = trimmed,
-                    thumbnailUrl = "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500",
-                    type = "STREAM",
-                    sourceType = "LINK",
-                    category = "Live Stream"
-                )
-                return@withContext ParseResult.Single(item)
-            }
-
             if (hasPhotoExt) {
                 val item = MediaItem(
                     id = UUID.randomUUID().toString(),
@@ -110,7 +95,10 @@ object LinkExtractor {
 
             // Case 4: M3U playlist (contains #EXTM3U)
             if (Regex("#EXTM3U|#EXTINF:", RegexOption.IGNORE_CASE).containsMatchIn(content) || trimmed.substringBefore('?').endsWith(".m3u", ignoreCase = true) || trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
-                if (trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true) && content.contains("#EXT-X-")) {
+                val isHlsSegmentPlaylist = trimmed.substringBefore('?').endsWith(".m3u8", ignoreCase = true) &&
+                    listOf("#EXT-X-TARGETDURATION", "#EXT-X-MEDIA-SEQUENCE", "#EXT-X-STREAM-INF")
+                        .any { content.contains(it, ignoreCase = true) }
+                if (isHlsSegmentPlaylist) {
                     return@withContext ParseResult.Single(
                         MediaItem(
                             id = UUID.randomUUID().toString(), profileId = profileId,
