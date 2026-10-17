@@ -119,7 +119,11 @@ fun HomeScreen(
             "FILE" -> item.sourceType == "FILE"
             "SERVER" -> item.sourceType == "SERVER"
             "FAV" -> item.isFavorite
-            else -> true
+            else -> if (selectedFilter.startsWith("CATEGORY:")) {
+                val selectedCategory = selectedFilter.removePrefix("CATEGORY:")
+                item.category.split("•", ",", "|", ";")
+                    .any { it.trim().equals(selectedCategory, ignoreCase = true) }
+            } else true
         }
         matchesSearch && matchesFilter
     }
@@ -586,13 +590,21 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val filters = listOf(
+                                val sourceFilters = listOf(
                                     "ALL" to "Semua",
                                     "LINK" to "Link Ekstensi",
                                     "FILE" to "File Lokal",
                                     "SERVER" to "Server Upload",
                                     "FAV" to "Favorit"
                                 )
+                                val categoryFilters = mediaList
+                                    .flatMap { item -> item.category.split("•", ",", "|", ";") }
+                                    .map { it.trim() }
+                                    .filter { it.isNotBlank() && !it.equals("Tanpa Kategori", ignoreCase = true) }
+                                    .distinctBy { it.lowercase() }
+                                    .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                                    .map { "CATEGORY:$it" to it }
+                                val filters = sourceFilters + categoryFilters
 
                                 filters.forEach { (key, label) ->
                                     val isSelected = selectedFilter == key

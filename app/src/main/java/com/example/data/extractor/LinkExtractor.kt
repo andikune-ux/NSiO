@@ -229,30 +229,33 @@ object LinkExtractor {
             if (jsonStr.startsWith("[")) {
                 val array = JSONArray(jsonStr)
                 for (i in 0 until array.length()) {
-                    val obj = array.optJSONObject(i) ?: continue
-                    parseMediaFromJsonObj(obj, profileId)?.let { items.add(it) }
+                    collectJsonMedia(array.opt(i), profileId, items, 0)
                 }
             } else {
                 val obj = JSONObject(jsonStr)
-                // CloudStream Repo could have "pluginLists" or "items" or "data"
-                val listKeys = listOf("items", "videos", "media", "data", "plugins", "sources")
-                for (key in listKeys) {
-                    if (obj.has(key)) {
-                        val arr = obj.optJSONArray(key)
-                        if (arr != null) {
-                            for (i in 0 until arr.length()) {
-                                val itemObj = arr.optJSONObject(i) ?: continue
-                                parseMediaFromJsonObj(itemObj, profileId)?.let { items.add(it) }
-                            }
-                            if (items.isNotEmpty()) return items
-                        }
-                    }
-                }
-                // Try as single item
-                parseMediaFromJsonObj(obj, profileId)?.let { items.add(it) }
+                collectJsonMedia(obj, profileId, items, 0)
             }
         } catch (_: Exception) {}
-        return items
+        return items.distinctBy { it.url to it.title }
+    }
+
+    private fun collectJsonMedia(value: Any?, profileId: String, output: MutableList<MediaItem>, depth: Int) {
+        if (value == null || depth > 5) return
+        when (value) {
+            is JSONObject -> {
+                parseMediaFromJsonObj(value, profileId)?.let { output.add(it) }
+                    ?: run {
+                        val keys = value.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            collectJsonMedia(value.opt(key), profileId, output, depth + 1)
+                        }
+                    }
+            }
+            is JSONArray -> for (i in 0 until value.length()) {
+                collectJsonMedia(value.opt(i), profileId, output, depth + 1)
+            }
+        }
     }
 
     private fun parseMediaFromJsonObj(obj: JSONObject, profileId: String): MediaItem? {
@@ -261,6 +264,7 @@ object LinkExtractor {
         if (url.isEmpty()) return null
         val thumb = obj.optString("poster", obj.optString("thumbnail", obj.optString("icon", "")))
         val type = obj.optString("type", if (url.contains(".m3u8")) "STREAM" else "VIDEO")
+        val category = extractCategory(obj)
 
         return MediaItem(
             id = UUID.randomUUID().toString(),
@@ -270,8 +274,40 @@ object LinkExtractor {
             thumbnailUrl = thumb.ifEmpty { "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500" },
             type = type,
             sourceType = "LINK",
-            category = obj.optString("category", "Ekstensi")
+            category = category
         )
+    }
+
+    /**
+     * Repository media tidak memiliki satu standar nama kategori. CloudStream,
+     * IPTV dan katalog JSON umum memakai category/categories, genre/genres,
+     * tags, group atau group-title. Semua bentuk tersebut dinormalisasi agar
+     * dapat dipakai oleh filter kategori di beranda.
+     */
+    private fun extractCategory(obj: JSONObject): String {
+        val values = mutableListOf<String>()
+        val keys = listOf("category", "categories", "genre", "genres", "tags", "group", "group-title", "collection", "folder")
+        keys.forEach { key ->
+            val value = obj.opt(key) ?: return@forEach
+            appendCategoryValue(value, values)
+        }
+        return values.map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
+            .joinToString(" • ")
+            .ifEmpty { "Tanpa Kategori" }
+    }
+
+    private fun appendCategoryValue(value: Any?, output: MutableList<String>) {
+        when (value) {
+            is JSONArray -> for (i in 0 until value.length()) appendCategoryValue(value.opt(i), output)
+            is JSONObject -> {
+                listOf("name", "title", "label", "value").firstNotNullOfOrNull { key ->
+                    value.optString(key).takeIf { it.isNotBlank() }
+                }?.let(output::add)
+            }
+            else -> value?.toString()?.split(",", "|", ";")?.forEach(output::add)
+        }
     }
 
     private fun extractFilename(url: String, defaultName: String): String {
