@@ -50,6 +50,14 @@ object LinkExtractor {
                 return@withContext parseGoogleDrive(trimmed, profileId)
             }
 
+            // Case 1b: Public GitHub repositories containing M3U/JSON catalogs.
+            if (parsedUri?.host.equals("github.com", ignoreCase = true)) {
+                val parts = parsedUri?.path.orEmpty().trim('/').split('/').filter { it.isNotBlank() }
+                if (parts.size >= 2 && parts[0] !in setOf("login", "settings", "topics")) {
+                    return@withContext parseGithubRepository(parts[0], parts[1], profileId)
+                }
+            }
+
             // Case 2: Direct Video / Stream / Photo Extensions
             val lower = trimmed.lowercase()
             val hasVideoExt = directVideoExtensions.any { lower.contains(it) }
@@ -175,7 +183,8 @@ object LinkExtractor {
 
         if (fileId.isNotEmpty()) {
             val metadata = fetchDriveMetadata(fileId)
-            val streamUrl = "https://drive.google.com/uc?export=download&id=$fileId"
+            val streamUrl = "https://drive.usercontent.google.com/download?id=$fileId&export=download"
+            val thumbnailUrl = "https://lh3.googleusercontent.com/d/$fileId=w1200"
             val mime = metadata.first
             val title = metadata.second.ifBlank { "Google Drive ($fileId)" }
             val item = MediaItem(
@@ -183,7 +192,7 @@ object LinkExtractor {
                 profileId = profileId,
                 title = title,
                 url = streamUrl,
-                thumbnailUrl = "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500",
+                    thumbnailUrl = thumbnailUrl,
                 type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
                 sourceType = "LINK",
                 category = "Google Drive"
@@ -194,19 +203,59 @@ object LinkExtractor {
         return ParseResult.Error("URL Google Drive tidak dikenali")
     }
 
+    private fun parseGithubRepository(owner: String, repository: String, profileId: String): ParseResult {
+        return try {
+            val repoJson = JSONObject(fetchText("https://api.github.com/repos/$owner/$repository"))
+            val branch = repoJson.optString("default_branch", "main")
+            val tree = JSONObject(fetchText("https://api.github.com/repos/$owner/$repository/git/trees/$branch?recursive=1"))
+                .optJSONArray("tree") ?: JSONArray()
+            val paths = (0 until tree.length()).mapNotNull { index ->
+                tree.optJSONObject(index)?.takeIf { it.optString("type") == "blob" }?.optString("path")
+            }.filter { path ->
+                val lower = path.lowercase()
+                lower.endsWith(".m3u") || lower.endsWith(".m3u8") || lower.endsWith(".json") || lower.contains("playlist")
+            }.take(32)
+
+            val items = paths.flatMap { path ->
+                val encodedPath = path.split('/').joinToString("/") { it.replace(" ", "%20") }
+                val rawUrl = "https://raw.githubusercontent.com/$owner/$repository/$branch/$encodedPath"
+                val payload = runCatching { fetchText(rawUrl) }.getOrDefault("")
+                if (payload.contains("#EXTM3U", ignoreCase = true) || payload.contains("#EXTINF:", ignoreCase = true)) {
+                    parseM3uContent(payload, profileId, rawUrl)
+                } else emptyList()
+            }.distinctBy { it.url to it.title }
+
+            if (items.isNotEmpty()) {
+                ParseResult.Multiple(items, "GitHub Playlist ($owner/$repository)")
+            } else {
+                val hasCloudStreamManifest = paths.any { it.substringAfterLast('/').equals("repo.json", ignoreCase = true) }
+                if (hasCloudStreamManifest) {
+                    ParseResult.Error("Repository CloudStream terdeteksi. Tambahkan URL repo.json pada tab Extension Repository; plugin CloudStream membutuhkan runtime plugin dan bukan daftar video M3U langsung.")
+                } else {
+                    ParseResult.Error("Repository GitHub tidak berisi playlist M3U yang dapat diurai")
+                }
+            }
+        } catch (e: Exception) {
+            ParseResult.Error("Gagal membaca repository GitHub: ${e.localizedMessage ?: "akses API GitHub gagal"}")
+        }
+    }
+
     private fun parsePublicDriveFolder(folderId: String, profileId: String): ParseResult {
         return try {
-            val html = fetchText("https://drive.google.com/drive/folders/$folderId?usp=sharing")
-            val regex = Regex("\\\"id\\\":\\\"([^\\\"]+)\\\".*?\\\"name\\\":\\\"([^\\\"]+)\\\".*?\\\"mimeType\\\":\\\"([^\\\"]+)\\\"", setOf(RegexOption.DOT_MATCHES_ALL))
+            val html = fetchText("https://drive.google.com/embeddedfolderview?id=$folderId")
+            val regex = Regex("id=\\\"entry-([^\\\"]+)\\\".*?href=\\\"https://drive.google.com/file/d/([^/]+)/view[^\\\"]*\\\".*?flip-entry-title\\\">(.*?)</div>", setOf(RegexOption.DOT_MATCHES_ALL))
             val items = regex.findAll(html).mapNotNull { match ->
-                val id = match.groupValues[1]
-                val name = match.groupValues[2].replace("\\u0026", "&")
-                val mime = match.groupValues[3]
-                if (id == folderId || mime == "application/vnd.google-apps.folder") return@mapNotNull null
+                val id = match.groupValues[2]
+                val name = match.groupValues[3].replace(Regex("<[^>]+>"), "").trim()
+                val mime = when {
+                    name.matches(Regex(".*\\.(jpg|jpeg|png|gif|webp)$", RegexOption.IGNORE_CASE)) -> "image/*"
+                    name.matches(Regex(".*\\.(mp4|mkv|webm|mov|avi|m4v)$", RegexOption.IGNORE_CASE)) -> "video/*"
+                    else -> "application/octet-stream"
+                }
                 MediaItem(
                     id = UUID.randomUUID().toString(), profileId = profileId, title = name,
-                    url = "https://drive.google.com/uc?export=download&id=$id",
-                    thumbnailUrl = if (mime.startsWith("image/")) "https://drive.google.com/thumbnail?id=$id&sz=w800" else "",
+                    url = "https://drive.usercontent.google.com/download?id=$id&export=download",
+                    thumbnailUrl = "https://lh3.googleusercontent.com/d/$id=w800",
                     type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
                     sourceType = "LINK", category = "Google Drive"
                 )
@@ -220,8 +269,13 @@ object LinkExtractor {
 
     private fun fetchDriveMetadata(fileId: String): Pair<String, String> = runCatching {
         val html = fetchText("https://drive.google.com/file/d/$fileId/view?usp=sharing")
-        val mime = Regex("\\\"mimeType\\\":\\\"([^\\\"]+)\\\"").find(html)?.groupValues?.get(1).orEmpty()
-        val name = Regex("\\\"name\\\":\\\"([^\\\"]+)\\\"").find(html)?.groupValues?.get(1).orEmpty()
+        val mime = when {
+            html.contains("video/", ignoreCase = true) -> "video/*"
+            html.contains("image/", ignoreCase = true) -> "image/*"
+            else -> ""
+        }
+        val name = Regex("property=\\\"og:title\\\" content=\\\"([^\\\"]+)", RegexOption.IGNORE_CASE)
+            .find(html)?.groupValues?.get(1).orEmpty()
         mime to name.replace("\\u0026", "&")
     }.getOrDefault("" to "")
 
@@ -257,6 +311,10 @@ object LinkExtractor {
                 }.orEmpty()
                 currentGroup = Regex("group-title\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
                     .find(l)?.groupValues?.get(1)?.ifBlank { "IPTV" } ?: "IPTV"
+                Regex("http-referrer\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
+                    .find(l)?.groupValues?.get(1)?.let { currentHeaders["Referer"] = it }
+                Regex("http-user-agent\\s*=\\s*['\"]([^'\"]+)['\"]", RegexOption.IGNORE_CASE)
+                    .find(l)?.groupValues?.get(1)?.let { currentHeaders["User-Agent"] = it }
                 currentTitle = l.substringAfterLast(",").trim()
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
             } else if (l.startsWith("#EXTVLCOPT:", ignoreCase = true)) {
