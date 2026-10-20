@@ -8,6 +8,8 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.StringReader
 import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -271,12 +273,23 @@ object LinkExtractor {
                         if (separator > 0) currentHeaders[header.substring(0, separator)] = header.substring(separator + 1)
                     }
                 }
+            } else if (l.startsWith("#EXTHTTP:", ignoreCase = true)) {
+                val json = l.substringAfter(':').trim()
+                runCatching {
+                    val headers = JSONObject(json)
+                    headers.keys().forEach { key ->
+                        val value = headers.optString(key).trim()
+                        if (value.isNotBlank()) currentHeaders[key] = value
+                    }
+                }
             } else if (!l.startsWith("#") && l.isNotBlank()) {
                 val rawUrl = l.substringBefore('|').trim()
                 val pipeHeaders = l.substringAfter('|', "").trim()
                 pipeHeaders.split('&').forEach { header ->
                     val separator = header.indexOf('=')
-                    if (separator > 0) currentHeaders[header.substring(0, separator).trim()] = header.substring(separator + 1).trim()
+                    if (separator > 0) currentHeaders[header.substring(0, separator).trim()] =
+                        runCatching { URLDecoder.decode(header.substring(separator + 1).trim(), StandardCharsets.UTF_8.name()) }
+                            .getOrDefault(header.substring(separator + 1).trim())
                 }
                 val resolvedUrl = try { URI(playlistUrl).resolve(rawUrl).toString() } catch (_: Exception) { rawUrl }
                 val resolvedLogo = if (currentLogo.startsWith("http://") || currentLogo.startsWith("https://")) {
