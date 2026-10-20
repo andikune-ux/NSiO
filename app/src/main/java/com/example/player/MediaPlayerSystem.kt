@@ -180,18 +180,27 @@ class CS3IPlayer(
         lastPositionMs = startPositionMs
 
         exoPlayer?.let { player ->
-            _playerState.value = _playerState.value.copy(
-                title = title,
-                error = null,
-                isBuffering = true
-            )
-            val mediaItem = ExoMediaItem.fromUri(url)
-            player.setMediaItem(mediaItem)
-            if (startPositionMs > 0) {
-                player.seekTo(startPositionMs)
+            try {
+                require(url.isNotBlank()) { "URL media kosong" }
+                _playerState.value = _playerState.value.copy(
+                    title = title,
+                    error = null,
+                    isBuffering = true
+                )
+                val mediaItem = ExoMediaItem.fromUri(url.trim())
+                player.setMediaItem(mediaItem)
+                if (startPositionMs > 0) {
+                    player.seekTo(startPositionMs)
+                }
+                player.prepare()
+                player.playWhenReady = true
+            } catch (e: RuntimeException) {
+                _playerState.value = _playerState.value.copy(
+                    isBuffering = false,
+                    isPlaying = false,
+                    error = "URL media tidak valid atau tidak didukung: ${e.localizedMessage ?: "periksa sumber video"}"
+                )
             }
-            player.prepare()
-            player.playWhenReady = true
         }
     }
 

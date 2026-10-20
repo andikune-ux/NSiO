@@ -25,6 +25,7 @@
         android:required="false" />
 
     <application
+        android:name=".NSiOApplication"
         android:allowBackup="true"
         android:requestLegacyExternalStorage="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

@@ -1,6 +1,8 @@
 package com.example
 
 import android.content.pm.ActivityInfo
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +20,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -27,6 +32,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -56,6 +64,8 @@ class MainActivity : ComponentActivity() {
         hideSystemNotificationBar()
 
         setContent {
+            val context = LocalContext.current
+            var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
             val settings by viewModel.settings.collectAsState()
             val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
             val activeProfile by viewModel.activeProfile.collectAsState()
@@ -153,6 +163,34 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+
+                crashLog?.let { log ->
+                    AlertDialog(
+                        onDismissRequest = { crashLog = null },
+                        title = { Text("Aplikasi mengalami crash") },
+                        text = {
+                            Text(
+                                text = log,
+                                modifier = Modifier.verticalScroll(rememberScrollState()),
+                                maxLines = 18
+                            )
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                                clipboard?.setPrimaryClip(ClipData.newPlainText("NSiO crash log", log))
+                                CrashLogStore.clear(context)
+                                crashLog = null
+                            }) { Text("Salin Log") }
+                        },
+                        dismissButton = {
+                            Button(onClick = {
+                                CrashLogStore.clear(context)
+                                crashLog = null
+                            }) { Text("Hapus") }
+                        }
+                    )
                 }
             }
         }
