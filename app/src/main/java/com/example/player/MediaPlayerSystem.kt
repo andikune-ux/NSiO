@@ -33,7 +33,7 @@ data class PlayerState(
 
 interface IPlayer {
     val playerState: StateFlow<PlayerState>
-    fun play(url: String, title: String, startPositionMs: Long = 0L)
+    fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap())
     fun togglePlayPause()
     fun pause()
     fun seekTo(positionMs: Long)
@@ -61,6 +61,8 @@ class CS3IPlayer(
     private var lastUrl: String = ""
     private var lastTitle: String = ""
     private var lastPositionMs: Long = 0L
+    private var lastHeaders: Map<String, String> = emptyMap()
+    private lateinit var httpDataSourceFactory: DefaultHttpDataSource.Factory
 
     companion object {
         const val DEFAULT_FALLBACK_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -72,7 +74,7 @@ class CS3IPlayer(
     }
 
     private fun initExoPlayer() {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(STANDARD_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
@@ -174,14 +176,18 @@ class CS3IPlayer(
         }
     }
 
-    override fun play(url: String, title: String, startPositionMs: Long) {
+    override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
         lastUrl = url
         lastTitle = title
         lastPositionMs = startPositionMs
+        lastHeaders = requestHeaders
 
         exoPlayer?.let { player ->
             try {
                 require(url.isNotBlank()) { "URL media kosong" }
+                httpDataSourceFactory.setDefaultRequestProperties(
+                    mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders
+                )
                 _playerState.value = _playerState.value.copy(
                     title = title,
                     error = null,
@@ -206,7 +212,7 @@ class CS3IPlayer(
 
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
-            play(lastUrl, lastTitle, lastPositionMs)
+            play(lastUrl, lastTitle, lastPositionMs, lastHeaders)
         }
     }
 

@@ -258,6 +258,7 @@ object LinkExtractor {
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
             } else if (!l.startsWith("#") && l.isNotBlank()) {
                 val rawUrl = l.substringBefore('|').trim()
+                val pipeHeaders = l.substringAfter('|', "").trim()
                 val resolvedUrl = try { URI(playlistUrl).resolve(rawUrl).toString() } catch (_: Exception) { rawUrl }
                 val resolvedLogo = if (currentLogo.startsWith("http://") || currentLogo.startsWith("https://")) {
                     currentLogo
@@ -273,7 +274,8 @@ object LinkExtractor {
                         thumbnailUrl = resolvedLogo.ifEmpty { "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500" },
                         type = if (resolvedUrl.substringBefore('?').contains(".m3u8", ignoreCase = true)) "STREAM" else "VIDEO",
                         sourceType = "LINK",
-                        category = currentGroup
+                        category = currentGroup,
+                        extraInfo = pipeHeaders
                     )
                 )
                 // reset

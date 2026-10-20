@@ -439,7 +439,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- Player Management ---
     fun playMedia(item: MediaItem) {
         _currentlyPlaying.value = item
-        if (item.type != "PHOTO") player.play(item.url, item.title, item.progressMs)
+        if (item.type != "PHOTO") {
+            val headers = item.extraInfo.split('&')
+                .mapNotNull { entry ->
+                    val separator = entry.indexOf('=')
+                    if (separator <= 0) null else entry.substring(0, separator).trim() to entry.substring(separator + 1).trim()
+                }
+                .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+                .toMap()
+            player.play(item.url, item.title, item.progressMs, headers)
+        }
     }
 
     fun closePlayer() {
