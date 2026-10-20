@@ -447,6 +447,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .filter { it.first.isNotBlank() && it.second.isNotBlank() }
                 .toMap()
+                .toMutableMap()
+            if (item.sourceUrl.startsWith("http", ignoreCase = true)) {
+                headers.putIfAbsent("Referer", item.sourceUrl)
+                runCatching {
+                    val source = java.net.URI(item.sourceUrl)
+                    if (!headers.containsKey("Origin") && !source.host.isNullOrBlank()) {
+                        headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":${source.port}" else ""}"
+                    }
+                }
+            }
             player.play(item.url, item.title, item.progressMs, headers)
         }
     }

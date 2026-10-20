@@ -243,6 +243,7 @@ object LinkExtractor {
         var currentTitle = "Saluran Live"
         var currentLogo = ""
         var currentGroup = "IPTV"
+        val currentHeaders = linkedMapOf<String, String>()
 
         while (reader.readLine().also { line = it } != null) {
             val l = line?.trim() ?: continue
@@ -256,9 +257,27 @@ object LinkExtractor {
                     .find(l)?.groupValues?.get(1)?.ifBlank { "IPTV" } ?: "IPTV"
                 currentTitle = l.substringAfterLast(",").trim()
                 if (currentTitle.isEmpty()) currentTitle = "Saluran Live"
+            } else if (l.startsWith("#EXTVLCOPT:", ignoreCase = true)) {
+                val option = l.substringAfter(':')
+                when {
+                    option.startsWith("http-referrer=", ignoreCase = true) -> currentHeaders["Referer"] = option.substringAfter('=')
+                    option.startsWith("http-user-agent=", ignoreCase = true) -> currentHeaders["User-Agent"] = option.substringAfter('=')
+                }
+            } else if (l.startsWith("#KODIPROP:", ignoreCase = true)) {
+                val prop = l.substringAfter(':')
+                if (prop.startsWith("inputstream.adaptive.stream_headers=", ignoreCase = true)) {
+                    prop.substringAfter('=').split('&').forEach { header ->
+                        val separator = header.indexOf('=')
+                        if (separator > 0) currentHeaders[header.substring(0, separator)] = header.substring(separator + 1)
+                    }
+                }
             } else if (!l.startsWith("#") && l.isNotBlank()) {
                 val rawUrl = l.substringBefore('|').trim()
                 val pipeHeaders = l.substringAfter('|', "").trim()
+                pipeHeaders.split('&').forEach { header ->
+                    val separator = header.indexOf('=')
+                    if (separator > 0) currentHeaders[header.substring(0, separator).trim()] = header.substring(separator + 1).trim()
+                }
                 val resolvedUrl = try { URI(playlistUrl).resolve(rawUrl).toString() } catch (_: Exception) { rawUrl }
                 val resolvedLogo = if (currentLogo.startsWith("http://") || currentLogo.startsWith("https://")) {
                     currentLogo
@@ -275,12 +294,13 @@ object LinkExtractor {
                         type = if (resolvedUrl.substringBefore('?').contains(".m3u8", ignoreCase = true)) "STREAM" else "VIDEO",
                         sourceType = "LINK",
                         category = currentGroup,
-                        extraInfo = pipeHeaders
+                        extraInfo = currentHeaders.entries.joinToString("&") { "${it.key}=${it.value}" }
                     )
                 )
                 // reset
                 currentTitle = "Saluran Live"
                 currentLogo = ""
+                currentHeaders.clear()
             }
         }
         return items
