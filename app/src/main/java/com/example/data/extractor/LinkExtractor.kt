@@ -7,10 +7,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.StringReader
-import java.net.URL
 import java.net.URI
-import java.net.HttpURLConnection
 import java.util.UUID
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 sealed class ParseResult {
     data class Single(val item: MediaItem) : ParseResult()
@@ -19,6 +19,11 @@ sealed class ParseResult {
 }
 
 object LinkExtractor {
+
+    private val httpClient = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
 
     private val directVideoExtensions = listOf(".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v")
     private val directPhotoExtensions = listOf(".jpg", ".jpeg", ".png", ".webp", ".gif")
@@ -80,6 +85,9 @@ object LinkExtractor {
             val content = try {
                 fetchText(trimmed)
             } catch (e: Exception) {
+                if (lower.substringBefore('?').contains(".m3u")) {
+                    return@withContext ParseResult.Error("Gagal mengambil playlist dari server: ${e.localizedMessage ?: "respons tidak dapat dibaca"}")
+                }
                 // If fetch fails but looks like a direct link, treat as Single Stream
                 val fallbackItem = MediaItem(
                     id = UUID.randomUUID().toString(),
@@ -216,13 +224,16 @@ object LinkExtractor {
     }.getOrDefault("" to "")
 
     private fun fetchText(address: String): String {
-        val connection = URL(address).openConnection() as HttpURLConnection
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 20_000
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 NSiO/2.0")
-        connection.setRequestProperty("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*")
-        return connection.inputStream.bufferedReader().use { it.readText() }
+        val request = Request.Builder()
+            .url(address)
+            .header("User-Agent", "Mozilla/5.0 (Android) NSiO/2.0")
+            .header("Accept", "application/vnd.apple.mpegurl, audio/x-mpegurl, text/plain, */*")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+            return response.body?.string().orEmpty()
+        }
     }
 
     private fun parseM3uContent(content: String, profileId: String, playlistUrl: String): List<MediaItem> {
