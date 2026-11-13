@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -265,7 +266,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxWidth(0.28f)
-                    .fillMaxSize()
+                    .fillMaxHeight()
                     .pointerInput(media.id) {
                         var currentBrightness = brightnessLevel
                         detectVerticalDragGestures(
@@ -289,7 +290,7 @@ fun PlayerScreen(
                     .align(Alignment.CenterEnd)
                     .fillMaxWidth(0.28f)
                     .fillMaxSize()
-                    .pointerInput(media.id, playerState.volume) {
+                    .pointerInput(media.id) {
                         var currentVolume = playerState.volume
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
