@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.model.MediaItem
 import kotlinx.coroutines.flow.Flow
@@ -46,6 +47,12 @@ interface MediaDao {
 
     @Query("DELETE FROM media_items WHERE playlistId = :playlistId")
     suspend fun clearPlaylist(playlistId: String)
+
+    @Transaction
+    suspend fun replacePlaylist(playlistId: String, items: List<MediaItem>) {
+        clearPlaylist(playlistId)
+        if (items.isNotEmpty()) insertAll(items)
+    }
 
     @Query("SELECT COUNT(*) FROM media_items WHERE playlistId = :playlistId")
     suspend fun countForPlaylist(playlistId: String): Int
