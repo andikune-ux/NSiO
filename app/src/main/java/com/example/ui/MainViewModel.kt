@@ -731,8 +731,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- Download ---
     fun downloadMedia(item: MediaItem) {
         viewModelScope.launch {
-            downloadManager.enqueueDownload(item.id, item.title, item.url)
-            showStatus("Unduhan '${item.title}' dimulai")
+            try {
+                val headers = item.extraInfo.split('&')
+                    .mapNotNull { entry ->
+                        val separator = entry.indexOf('=')
+                        if (separator <= 0) null else entry.substring(0, separator).trim() to entry.substring(separator + 1).trim()
+                    }
+                    .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+                    .toMutableMap()
+                if (item.sourceUrl.startsWith("http", ignoreCase = true)) {
+                    headers.putIfAbsent("Referer", item.sourceUrl)
+                    runCatching {
+                        val source = java.net.URI(item.sourceUrl)
+                        if (!headers.containsKey("Origin") && !source.host.isNullOrBlank()) {
+                            headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ": ${source.port}".replace(" ", "") else ""}"
+                        }
+                    }
+                }
+                downloadManager.enqueueDownload(item.id, item.title, item.url, headers)
+                showStatus("Unduhan '${item.title}' dimulai")
+            } catch (e: Exception) {
+                showStatus("Gagal memulai unduhan: ${e.localizedMessage ?: "URL tidak didukung"}")
+            }
         }
     }
 
