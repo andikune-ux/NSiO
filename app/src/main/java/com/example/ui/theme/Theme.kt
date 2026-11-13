@@ -8,34 +8,40 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = CyanPrimary,
-    onPrimary = Color(0xFF061014),
-    secondary = CyanSecondary,
-    onSecondary = Color(0xFF071116),
-    tertiary = CyanTertiary,
+    primary = BrandPrimarySoft,
+    onPrimary = Color(0xFF17151F),
+    primaryContainer = Color(0xFF39354F),
+    onPrimaryContainer = Color(0xFFE8E4FF),
+    secondary = BrandSecondary,
+    onSecondary = Color(0xFF111820),
+    tertiary = BrandTertiary,
     background = DarkBackground,
-    onBackground = Color(0xFFE5E7EB),
+    onBackground = DarkTextPrimary,
     surface = DarkSurface,
-    onSurface = Color(0xFFE5E7EB),
+    onSurface = DarkTextPrimary,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFADB4BE),
+    onSurfaceVariant = DarkTextSecondary,
     outline = DarkBorder,
+    outlineVariant = DarkBorderSubtle,
     error = AccentRed
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF087F91),
+    primary = BrandPrimary,
     onPrimary = Color.White,
-    secondary = Color(0xFF397F91),
+    primaryContainer = Color(0xFFE8E5FF),
+    onPrimaryContainer = Color(0xFF39336F),
+    secondary = BrandSecondary,
     onSecondary = Color.White,
-    tertiary = Color(0xFF666EAA),
+    tertiary = BrandTertiary,
     background = LightBackground,
-    onBackground = Color(0xFF252B34),
+    onBackground = LightTextPrimary,
     surface = LightSurface,
-    onSurface = Color(0xFF252B34),
+    onSurface = LightTextPrimary,
     surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = Color(0xFF536171),
-    outline = LightBorder,
+    onSurfaceVariant = LightTextSecondary,
+    outline = LightBorderSubtle,
+    outlineVariant = Color(0xFFE2E5EE),
     error = Color(0xFFB42335)
 )
 
@@ -49,6 +55,7 @@ fun MyApplicationTheme(
         "LIGHT" -> false
         else -> isSystemInDarkTheme()
     }
+
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
