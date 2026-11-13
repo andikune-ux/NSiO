@@ -188,6 +188,10 @@ class CloudMediaRepository(
         val mediaCollection = usersCollection.document(userId).collection("media")
         val uniqueItems = items.distinctBy { it.id }
 
+        // An empty local profile may be a fresh install or an incomplete restore.
+        // Never interpret it as an instruction to erase the cloud backup.
+        if (uniqueItems.isEmpty()) return 0
+
         // Firestore batches allow at most 500 operations; keep a safety margin.
         uniqueItems.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
             val batch = firestore.batch()
@@ -199,10 +203,9 @@ class CloudMediaRepository(
         }
 
         val keepIds = uniqueItems.mapTo(mutableSetOf()) { it.id }
-        val existingSnapshot = mediaCollection.get().await()
+        val existingSnapshot = mediaCollection.whereEqualTo("profileId", profileId).get().await()
         val staleDocuments = existingSnapshot.documents.filter { document ->
-            val documentProfileId = document.getString("profileId") ?: DEFAULT_PROFILE_ID
-            documentProfileId == profileId && document.id !in keepIds
+            document.id !in keepIds
         }
 
         staleDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
@@ -252,7 +255,7 @@ class CloudMediaRepository(
         }
     }
 
-    private fun mediaPayload(item: MediaItem): HashMap<String, Any?> = hashMapOf(
+    private fun mediaPayload(item: MediaItem): HashMap<String, Any> = hashMapOf(
         "id" to item.id,
         "profileId" to item.profileId,
         "title" to item.title,
