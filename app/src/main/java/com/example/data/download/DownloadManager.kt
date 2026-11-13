@@ -118,8 +118,20 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     requestBuilder.header(key, value)
                 }
             }
-            val existingBytes = if (partial.exists()) partial.length() else 0L
-            if (existingBytes > 0L) requestBuilder.header("Range", "bytes=$existingBytes-")
+            val downloadItem = db.getDownloadById(id)
+            var existingBytes = if (partial.exists()) partial.length() else 0L
+            val savedEtag = downloadItem?.etag.orEmpty()
+            val savedLastModified = downloadItem?.lastModified.orEmpty()
+
+            // A partial file without a validator cannot safely be joined to a later response.
+            if (existingBytes > 0L && savedEtag.isBlank() && savedLastModified.isBlank()) {
+                partial.delete()
+                existingBytes = 0L
+            }
+            if (existingBytes > 0L) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+                requestBuilder.header("If-Range", savedEtag.ifBlank { savedLastModified })
+            }
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful) {
                 val responseCode = response.code
@@ -146,7 +158,25 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     response.close()
                     throw DownloadPermanentException("Server mengirim rentang byte yang tidak sesuai; unduhan dihentikan agar file tidak rusak.")
                 }
+
+                val responseEtag = response.header("ETag").orEmpty()
+                val responseLastModified = response.header("Last-Modified").orEmpty()
+                val validatorMatches = when {
+                    savedEtag.isNotBlank() -> responseEtag.isNotBlank() && savedEtag == responseEtag
+                    savedLastModified.isNotBlank() -> responseLastModified.isNotBlank() && savedLastModified == responseLastModified
+                    else -> false
+                }
+                if (!validatorMatches) {
+                    response.close()
+                    partial.delete()
+                    db.updateValidators(id, "", "")
+                    throw IOException("Versi file di server berubah atau tidak dapat diverifikasi. Unduhan akan dimulai ulang agar file tidak tercampur.")
+                }
             }
+
+            val responseEtag = response.header("ETag").orEmpty()
+            val responseLastModified = response.header("Last-Modified").orEmpty()
+            db.updateValidators(id, responseEtag, responseLastModified)
             val body = response.body ?: run {
                 response.close()
                 throw IOException("Respons unduhan kosong")
