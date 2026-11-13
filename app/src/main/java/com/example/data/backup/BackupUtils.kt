@@ -67,7 +67,7 @@ object BackupUtils {
             rootObj.put("profile", profileObj)
 
             // Settings
-            settings?.let { s ->
+            profileSettings?.let { s ->
                 val settingsObj = JSONObject().apply {
                     put("profileId", s.profileId)
                     put("language", s.language)
@@ -79,9 +79,14 @@ object BackupUtils {
                 rootObj.put("settings", settingsObj)
             }
 
+            // A profile backup must never contain another profile's media,
+            // even if a caller accidentally passes a mixed list.
+            val profileMedia = mediaList.filter { it.profileId == profile.id }
+            val profileSettings = settings?.takeIf { it.profileId == profile.id }
+
             // Media list
             val mediaArray = JSONArray()
-            mediaList.forEach { m ->
+            profileMedia.forEach { m ->
                 val mObj = JSONObject().apply {
                     put("id", m.id)
                     put("profileId", m.profileId)
@@ -114,7 +119,7 @@ object BackupUtils {
             BackupResult(
                 isSuccess = true,
                 filePath = file.absolutePath,
-                message = "Backup Profil '${profile.name}' berhasil disimpan (${mediaList.size} item)"
+                message = "Backup Profil '${profile.name}' berhasil disimpan (${profileMedia.size} item)"
             )
         } catch (e: Exception) {
             BackupResult(isSuccess = false, message = "Gagal membuat backup profil: ${e.localizedMessage}")
