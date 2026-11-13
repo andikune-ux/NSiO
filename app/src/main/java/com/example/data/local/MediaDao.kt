@@ -46,4 +46,7 @@ interface MediaDao {
 
     @Query("DELETE FROM media_items WHERE playlistId = :playlistId")
     suspend fun clearPlaylist(playlistId: String)
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE playlistId = :playlistId")
+    suspend fun countForPlaylist(playlistId: String): Int
 }
