@@ -23,6 +23,17 @@ private val englishText = mapOf(
     "Salin Log" to "Copy log",
     "Hapus" to "Delete",
     "Batal" to "Cancel",
+    "Otomatis" to "Automatic",
+    "Gelap Glass" to "Dark",
+    "Terang" to "Light",
+    "TV Landscape" to "TV landscape",
+    "HP Portrait" to "Phone portrait",
+    "Pengaturan" to "Settings",
+    "Profil" to "Profile",
+    "Pengguna Google" to "Google user",
+    "Pilih Playlist" to "Choose playlist",
+    "Filter media berdasarkan sumber tersimpan" to "Filter media by saved source",
+    "Tekan kembali atau area luar untuk menutup tirai" to "Press back or tap outside to close the panel",
     "Menu Profil" to "Profile",
     "Multi-User, Proteksi PIN, Cloud Firestore & Backup Terpadu" to "Multi-user, PIN protection, Cloud Firestore & unified backup",
     "Tambah Profil" to "Add profile",
@@ -143,6 +154,7 @@ fun translateAppText(text: String, language: String): String {
     if (language != "EN") return text
     englishText[text]?.let { return it }
     return when {
+        text.startsWith("Tidak ada hasil untuk") -> text.replaceFirst("Tidak ada hasil untuk", "No results for")
         text.startsWith("Menampilkan ") -> text.replaceFirst("Menampilkan ", "Showing ").replace(" media", " items").replace(" untuk ", " for ")
         text.startsWith("Jumlah kolom kartu video di beranda: ") -> text.replaceFirst("Jumlah kolom kartu video di beranda: ", "Home video grid: ").replace(" kolom", " columns")
         text.startsWith("Daftar Konten Server Terupload") -> text.replaceFirst("Daftar Konten Server Terupload", "Uploaded server content").replace(" Item):", " items:")
@@ -153,6 +165,8 @@ fun translateAppText(text: String, language: String): String {
         text.startsWith("Progres unduhan:") -> text.replaceFirst("Progres unduhan:", "Download progress:")
         text.startsWith("NSiO sudah menggunakan versi terbaru") -> text.replaceFirst("NSiO sudah menggunakan versi terbaru", "NSiO is up to date")
         text.startsWith("Pembaruan v") -> text.replaceFirst("Pembaruan", "Update")
+        text.startsWith("Mem-backup ") -> text.replaceFirst("Mem-backup", "Backing up")
+        text.startsWith("Memulihkan ") -> text.replaceFirst("Memulihkan", "Restoring")
         else -> text
     }
 }
@@ -177,11 +191,12 @@ fun AppText(
     onTextLayout: (TextLayoutResult) -> Unit = {},
     style: TextStyle = LocalTextStyle.current
 ) {
+    val readableFontSize = if (fontSize != TextUnit.Unspecified && fontSize.value < 10f) 10.sp else fontSize
     Material3Text(
         text = translateAppText(text, LocalAppLanguage.current),
         modifier = modifier,
         color = color,
-        fontSize = fontSize,
+        fontSize = readableFontSize,
         fontStyle = fontStyle,
         fontWeight = fontWeight,
         fontFamily = fontFamily,
