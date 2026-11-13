@@ -879,10 +879,15 @@ private fun PluginRepoTab(
 
         item {
             Text(
-                text = "Plugin Runtime (${plugins.size}):",
+                text = "Plugin Tercatat (${plugins.size}):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Runtime eksekusi plugin eksternal belum tersedia. Entri di bawah hanya metadata plugin yang tercatat.",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
