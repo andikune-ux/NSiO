@@ -87,11 +87,26 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     val isPhoto = media.type == "PHOTO"
     val isGoogleDriveVideo = !isPhoto &&
         media.url.startsWith("https://drive.google.com/file/d/") &&
         media.url.endsWith("/preview")
     val usesNativePlayer = !isPhoto && !isGoogleDriveVideo
+
+    // Reset transient controls when the queue switches to another media item.
+    LaunchedEffect(media.id) {
+        showControls = true
+        showQueue = false
+        isSeeking = false
+        seekPreviewMs = media.progressMs.coerceAtLeast(0L)
+    }
+
+    // Keep the scrubber in sync with playback, but never overwrite the user's drag preview.
+    LaunchedEffect(playerState.currentPositionMs, isSeeking) {
+        if (!isSeeking) seekPreviewMs = playerState.currentPositionMs.coerceAtLeast(0L)
+    }
 
     // Handle Android system back
     BackHandler {
@@ -385,14 +400,19 @@ fun PlayerScreen(
                         }
 
                         val total = playerState.durationMs.coerceAtLeast(1L)
-                        val currentRatio = (playerState.currentPositionMs.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                        val displayedPosition = if (isSeeking) seekPreviewMs else playerState.currentPositionMs
+                        val currentRatio = (displayedPosition.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 
                         Slider(
                             value = currentRatio,
                             enabled = playerState.durationMs > 0L,
                             onValueChange = { ratio ->
-                                val target = (ratio * total).toLong()
-                                viewModel.player.seekTo(target)
+                                isSeeking = true
+                                seekPreviewMs = (ratio * total).toLong().coerceIn(0L, total)
+                            },
+                            onValueChangeFinished = {
+                                if (isSeeking) viewModel.player.seekTo(seekPreviewMs)
+                                isSeeking = false
                             },
                             colors = SliderDefaults.colors(
                                 thumbColor = CyanPrimary,
