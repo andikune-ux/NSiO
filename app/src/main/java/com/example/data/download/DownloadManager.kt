@@ -46,12 +46,16 @@ class VideoDownloadManager private constructor(private val context: Context) {
         requestHeaders: Map<String, String> = emptyMap()
     ) = withContext(Dispatchers.IO) {
         require(url.startsWith("http://") || url.startsWith("https://")) { "URL unduhan tidak valid" }
+        val parsedUri = Uri.parse(url)
+        val urlExtension = parsedUri.lastPathSegment?.substringAfterLast('.', "")?.lowercase().orEmpty()
+        require(urlExtension != "m3u8" && urlExtension != "m3u") {
+            "Unduhan HLS belum didukung. Tautan ini adalah playlist streaming, bukan file video langsung."
+        }
         val safeTitle = title.trim().replace(Regex("[^a-zA-Z0-9._-]+"), "_").take(80).ifEmpty { "video" }
         val folder = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Downloads")
         folder.mkdirs()
-        val extension = Uri.parse(url).lastPathSegment?.substringAfterLast('.', "")
-            ?.lowercase()
-            ?.takeIf { it.matches(Regex("[a-z0-9]{1,8}")) }
+        val extension = urlExtension
+            .takeIf { it.matches(Regex("[a-z0-9]{1,8}")) }
             ?: "mp4"
         val localFile = File(folder, "$safeTitle-${UUID.randomUUID()}.$extension")
         val id = UUID.randomUUID().toString()
