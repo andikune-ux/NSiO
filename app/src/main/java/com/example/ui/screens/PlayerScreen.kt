@@ -289,7 +289,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxWidth(0.28f)
-                    .fillMaxSize()
+                    .fillMaxHeight()
                     .pointerInput(media.id) {
                         var currentVolume = playerState.volume
                         detectVerticalDragGestures(
