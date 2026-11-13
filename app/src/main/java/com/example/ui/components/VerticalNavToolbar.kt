@@ -50,9 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.CyanPrimary
-import com.example.ui.theme.CyanSecondary
-import com.example.ui.theme.FocusHighlight
+import com.example.ui.theme.MaterialTheme.colorScheme.secondary
 
 enum class NavDestination(val label: String) {
     HOME("Beranda"),
@@ -103,7 +101,7 @@ fun VerticalNavToolbar(
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(CyanPrimary, CyanSecondary, Color(0xFFA855F7))
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, Color(0xFFA855F7))
                             )
                         )
                         .border(
@@ -127,7 +125,7 @@ fun VerticalNavToolbar(
                     text = "NSiO",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Black,
-                    color = CyanPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     letterSpacing = 1.sp
                 )
             }
@@ -189,7 +187,7 @@ fun VerticalNavToolbar(
                     text = activeProfileName.take(5),
                     fontSize = 8.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = CyanPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     textAlign = TextAlign.Center
                 )
@@ -212,19 +210,19 @@ private fun NavToolbarGlassItem(
 
     val bgBrush = when {
         isFocused -> Brush.linearGradient(
-            listOf(CyanPrimary.copy(alpha = 0.35f), Color.White.copy(alpha = 0.15f))
+            listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), Color.White.copy(alpha = 0.15f))
         )
         isSelected -> Brush.linearGradient(
-            listOf(CyanPrimary.copy(alpha = 0.22f), CyanSecondary.copy(alpha = 0.08f))
+            listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f), MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f))
         )
         else -> Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
     }
 
     val contentColor by animateColorAsState(
         targetValue = when {
-            isFocused -> FocusHighlight
-            isSelected -> CyanPrimary
-            else -> Color(0xFFCBD5E1)
+            isFocused -> MaterialTheme.colorScheme.primary
+            isSelected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "nav_content_color"
     )
@@ -238,13 +236,13 @@ private fun NavToolbarGlassItem(
                 if (isFocused) {
                     Modifier.border(
                         1.5.dp,
-                        Brush.linearGradient(listOf(FocusHighlight, Color.White)),
+                        Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
                         RoundedCornerShape(14.dp)
                     )
                 } else if (isSelected) {
                     Modifier.border(
                         1.dp,
-                        Brush.linearGradient(listOf(CyanPrimary.copy(alpha = 0.5f), Color.Transparent)),
+                        Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent)),
                         RoundedCornerShape(14.dp)
                     )
                 } else {
