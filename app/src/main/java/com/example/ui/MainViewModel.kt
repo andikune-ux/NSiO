@@ -738,6 +738,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (separator <= 0) null else entry.substring(0, separator).trim() to entry.substring(separator + 1).trim()
                     }
                     .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+                    .toMap()
                     .toMutableMap()
                 if (item.sourceUrl.startsWith("http", ignoreCase = true)) {
                     headers.putIfAbsent("Referer", item.sourceUrl)
