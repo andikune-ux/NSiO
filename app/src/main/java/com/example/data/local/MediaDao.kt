@@ -56,4 +56,10 @@ interface MediaDao {
 
     @Query("SELECT COUNT(*) FROM media_items WHERE playlistId = :playlistId")
     suspend fun countForPlaylist(playlistId: String): Int
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE url = :url AND id != :excludedId")
+    suspend fun countOtherReferencesToUrl(url: String, excludedId: String): Int
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE url = :url AND playlistId != :excludedPlaylistId")
+    suspend fun countReferencesOutsidePlaylist(url: String, excludedPlaylistId: String): Int
 }
