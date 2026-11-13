@@ -362,8 +362,13 @@ private class DownloadPermanentException(message: String) : Exception(message)
  */
 internal fun isStrongEntityTag(value: String): Boolean {
     val tag = value.trim()
-    return tag.length >= 2 && tag.startsWith('"') && tag.endsWith('"') &&
-        !tag.startsWith("W/", ignoreCase = true)
+    if (tag.length < 2 || tag.first() != '"' || tag.last() != '"') return false
+    val opaqueTag = tag.substring(1, tag.lastIndex)
+    // RFC 9110 entity-tag opaque characters: !, # through ~, and obs-text.
+    // Reject embedded quotes, spaces, control characters, and malformed values.
+    return opaqueTag.all { char ->
+        char == '!' || char.code in 0x23..0x7E || char.code in 0x80..0xFF
+    }
 }
 
 internal fun selectResumeValidator(etag: String, lastModified: String): String =
