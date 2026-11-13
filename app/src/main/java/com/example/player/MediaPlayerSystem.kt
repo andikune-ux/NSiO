@@ -36,6 +36,7 @@ interface IPlayer {
     fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap())
     fun togglePlayPause()
     fun pause()
+    fun stop()
     fun seekTo(positionMs: Long)
     fun seekForward(offsetMs: Long = 10000L)
     fun seekBackward(offsetMs: Long = 10000L)
@@ -166,9 +167,10 @@ class CS3IPlayer(
                 exoPlayer?.let { player ->
                     if (player.isPlaying) {
                         _playerState.value = _playerState.value.copy(
-                            currentPositionMs = player.currentPosition,
+                            currentPositionMs = player.currentPosition.coerceAtLeast(0L),
                             durationMs = player.duration.coerceAtLeast(0L)
                         )
+                        lastPositionMs = player.currentPosition.coerceAtLeast(0L)
                     }
                 }
                 delay(500)
@@ -188,10 +190,11 @@ class CS3IPlayer(
                 httpDataSourceFactory.setDefaultRequestProperties(
                     mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders
                 )
-                _playerState.value = _playerState.value.copy(
+                _playerState.value = PlayerState(
                     title = title,
-                    error = null,
-                    isBuffering = true
+                    currentPositionMs = startPositionMs.coerceAtLeast(0L),
+                    isBuffering = true,
+                    isFallbackAvailable = true
                 )
                 val mediaItem = ExoMediaItem.fromUri(url.trim())
                 player.setMediaItem(mediaItem)
@@ -212,7 +215,8 @@ class CS3IPlayer(
 
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
-            play(lastUrl, lastTitle, lastPositionMs, lastHeaders)
+            val current = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
+            play(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders)
         }
     }
 
@@ -236,25 +240,51 @@ class CS3IPlayer(
     }
 
     override fun pause() {
-        exoPlayer?.pause()
+        exoPlayer?.let { player ->
+            lastPositionMs = player.currentPosition.coerceAtLeast(0L)
+            player.pause()
+            _playerState.value = _playerState.value.copy(currentPositionMs = lastPositionMs)
+        }
+    }
+
+    override fun stop() {
+        exoPlayer?.let { player ->
+            player.stop()
+            player.clearMediaItems()
+        }
+        lastUrl = ""
+        lastTitle = ""
+        lastPositionMs = 0L
+        lastHeaders = emptyMap()
+        _playerState.value = PlayerState()
     }
 
     override fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs)
-        _playerState.value = _playerState.value.copy(currentPositionMs = positionMs)
+        val duration = exoPlayer?.duration ?: 0L
+        val target = positionMs.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost(duration) else it }
+        exoPlayer?.seekTo(target)
+        lastPositionMs = target
+        _playerState.value = _playerState.value.copy(currentPositionMs = target)
     }
 
     override fun seekForward(offsetMs: Long) {
         exoPlayer?.let { player ->
-            val target = (player.currentPosition + offsetMs).coerceAtMost(player.duration)
+            val current = player.currentPosition.coerceAtLeast(0L)
+            val target = (current + offsetMs.coerceAtLeast(0L)).let { requested ->
+                if (player.duration > 0L) requested.coerceAtMost(player.duration) else requested
+            }
             player.seekTo(target)
+            lastPositionMs = target
+            _playerState.value = _playerState.value.copy(currentPositionMs = target)
         }
     }
 
     override fun seekBackward(offsetMs: Long) {
         exoPlayer?.let { player ->
-            val target = (player.currentPosition - offsetMs).coerceAtLeast(0L)
+            val target = (player.currentPosition.coerceAtLeast(0L) - offsetMs.coerceAtLeast(0L)).coerceAtLeast(0L)
             player.seekTo(target)
+            lastPositionMs = target
+            _playerState.value = _playerState.value.copy(currentPositionMs = target)
         }
     }
 
