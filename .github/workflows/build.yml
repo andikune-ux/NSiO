@@ -44,15 +44,14 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            // Use the stable workflow filename; context.workflow_ref is not
-            // exposed by every github-script runtime version.
-            const workflowFile = "build.yml";
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+            // List repository runs, then filter by the workflow's path.
+            // This avoids relying on optional workflow context fields or IDs.
+            const allRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner,
               repo,
-              workflow_id: workflowFile,
               per_page: 100
             });
+            const runs = allRuns.filter(run => run.path === ".github/workflows/build.yml");
 
             const artifacts = [];
             for (const run of runs) {
