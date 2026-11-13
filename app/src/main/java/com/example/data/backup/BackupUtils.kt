@@ -152,7 +152,7 @@ object BackupUtils {
                                 id = p.getString("id"),
                                 name = p.getString("name"),
                                 avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                                pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else p.optString("pin", ""),
+                                pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else PinVault.encrypt(context, p.optString("pin", "")),
                                 isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
                                 isDefault = p.optBoolean("isDefault", false),
                                 createdAt = p.optLong("createdAt", System.currentTimeMillis())
@@ -229,7 +229,7 @@ object BackupUtils {
                         id = profileId,
                         name = p.getString("name"),
                         avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                        pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else p.optString("pin", ""),
+                        pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else PinVault.encrypt(context, p.optString("pin", "")),
                         isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
                         isDefault = false
                     )
