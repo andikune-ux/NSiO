@@ -1,6 +1,8 @@
 package com.example.data.download
 
 import android.content.Context
+import android.net.Uri
+import org.json.JSONObject
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
@@ -29,6 +31,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
         const val KEY_ID = "download_id"
         const val KEY_MEDIA_ID = "download_media_id"
         const val KEY_PATH = "download_path"
+        const val KEY_HEADERS = "download_headers"
         @Volatile private var INSTANCE: VideoDownloadManager? = null
 
         fun getInstance(context: Context): VideoDownloadManager = INSTANCE ?: synchronized(this) {
@@ -36,18 +39,28 @@ class VideoDownloadManager private constructor(private val context: Context) {
         }
     }
 
-    suspend fun enqueueDownload(mediaId: String, title: String, url: String) = withContext(Dispatchers.IO) {
+    suspend fun enqueueDownload(
+        mediaId: String,
+        title: String,
+        url: String,
+        requestHeaders: Map<String, String> = emptyMap()
+    ) = withContext(Dispatchers.IO) {
         require(url.startsWith("http://") || url.startsWith("https://")) { "URL unduhan tidak valid" }
         val safeTitle = title.trim().replace(Regex("[^a-zA-Z0-9._-]+"), "_").take(80).ifEmpty { "video" }
         val folder = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Downloads")
         folder.mkdirs()
-        val localFile = File(folder, "$safeTitle-${UUID.randomUUID()}.mp4")
+        val extension = Uri.parse(url).lastPathSegment?.substringAfterLast('.', "")
+            ?.lowercase()
+            ?.takeIf { it.matches(Regex("[a-z0-9]{1,8}")) }
+            ?: "mp4"
+        val localFile = File(folder, "$safeTitle-${UUID.randomUUID()}.$extension")
         val id = UUID.randomUUID().toString()
         downloadDao.insertDownload(DownloadItem(id, mediaId, title, url, localFile.absolutePath, "PENDING"))
         val input = Data.Builder()
             .putString(KEY_ID, id).putString(KEY_MEDIA_ID, mediaId)
             .putString(KEY_TITLE, title).putString(KEY_URL, url)
-            .putString(KEY_PATH, localFile.absolutePath).build()
+            .putString(KEY_PATH, localFile.absolutePath)
+            .putString(KEY_HEADERS, JSONObject(requestHeaders).toString()).build()
         val request = OneTimeWorkRequestBuilder<DownloadFileWorkManager>().setInputData(input).addTag("DOWNLOAD_$id").build()
         WorkManager.getInstance(context).enqueue(request)
     }
@@ -84,7 +97,16 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
         val target = File(path)
         val partial = File("$path.part")
         try {
-            val response = client.newCall(Request.Builder().url(url).header("User-Agent", "NSiO/2.0").build()).execute()
+            val requestBuilder = Request.Builder().url(url).header("User-Agent", "NSiO/2.0")
+            val headersJson = runCatching { JSONObject(inputData.getString(VideoDownloadManager.KEY_HEADERS) ?: "{}") }.getOrDefault(JSONObject())
+            headersJson.keys().forEach { key ->
+                val value = headersJson.optString(key)
+                if (key.isNotBlank() && value.isNotBlank() && !key.equals("Host", true) &&
+                    !key.equals("Content-Length", true) && !key.equals("Connection", true)) {
+                    requestBuilder.header(key, value)
+                }
+            }
+            val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful) throw IOException("Server mengembalikan HTTP ${response.code}")
             val body = response.body ?: throw IOException("Respons unduhan kosong")
             val total = body.contentLength()
