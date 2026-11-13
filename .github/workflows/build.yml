@@ -1,4 +1,4 @@
-name: Build APK NSiO
+name: Build and Release APK NSiO
 
 on:
   push:
@@ -6,86 +6,110 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
-# Prevent overlapping cleanup jobs from racing to delete the same artifacts.
+# A newer main commit supersedes an older in-flight build. Publication is serialized.
 concurrency:
-  group: nsio-build-${{ github.ref }}
+  group: nsio-mainline-release
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build APK
+    name: Test, build, and publish latest NSiO
     runs-on: ubuntu-latest
-
     steps:
-      - name: 📥 Ambil Kode
+      - name: Checkout full mainline history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: ☕ Siapkan Java 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
-      - name: 🛠️ Install Gradle 9.3.1
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: 🏗️ Build Debug APK
+      - name: Compute deterministic NSiO version
+        shell: bash
+        run: bash .github/scripts/compute-nsio-version.sh
+
+      - name: Run unit tests and build APK
         run: gradle testDebugUnitTest assembleDebug --no-daemon
 
-      - name: 📲 Simpan Hasil APK
+      - name: Prepare versioned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          cp "$APK" "NSiO-${NSIO_VERSION_TAG}-debug.apk"
+          sha256sum "NSiO-${NSIO_VERSION_TAG}-debug.apk" | tee "NSiO-${NSIO_VERSION_TAG}-debug.apk.sha256"
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NSiO-Debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: NSiO-${{ env.NSIO_VERSION_TAG }}
+          path: |
+            NSiO-${{ env.NSIO_VERSION_TAG }}-debug.apk
+            NSiO-${{ env.NSIO_VERSION_TAG }}-debug.apk.sha256
           retention-days: 14
 
-      - name: 🧹 Bersihkan Artifact Lama (sisakan 3 terbaru)
+      - name: Publish only if this is still the latest main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$CURRENT_MAIN" != "$GITHUB_SHA" ]]; then
+            echo "Skip release: main has advanced to $CURRENT_MAIN."
+            exit 0
+          fi
+
+          if gh release view "$NSIO_VERSION_TAG" >/dev/null 2>&1; then
+            echo "Release $NSIO_VERSION_TAG already exists; immutable release will not be overwritten."
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$NSIO_VERSION_TAG" >/dev/null 2>&1; then
+            echo "Tag $NSIO_VERSION_TAG already exists without a matching release; refusing to move it."
+            exit 1
+          fi
+
+          gh release create "$NSIO_VERSION_TAG" \
+            "NSiO-$NSIO_VERSION_TAG-debug.apk" \
+            "NSiO-$NSIO_VERSION_TAG-debug.apk.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "NSiO $NSIO_VERSION_TAG" \
+            --generate-notes
+
+      - name: Keep only the 3 newest build artifacts
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            // List repository runs, then filter by the workflow's path.
-            // This avoids relying on optional workflow context fields or IDs.
-            const allRuns = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-              owner,
-              repo,
-              per_page: 100
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+              owner, repo, per_page: 100
             });
-            const runs = allRuns.filter(run => run.path === ".github/workflows/build.yml");
-
+            const buildRuns = runs.filter(run => run.path === ".github/workflows/build.yml");
             const artifacts = [];
-            for (const run of runs) {
-              const runArtifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                owner,
-                repo,
-                run_id: run.id,
-                per_page: 100
+            for (const run of buildRuns) {
+              const items = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner, repo, run_id: run.id, per_page: 100
               });
-              artifacts.push(...runArtifacts.filter(item => !item.expired));
+              artifacts.push(...items.filter(item => !item.expired));
             }
-
             artifacts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-            const obsolete = artifacts.slice(3);
-            for (const artifact of obsolete) {
+            for (const artifact of artifacts.slice(3)) {
               try {
-                await github.rest.actions.deleteArtifact({
-                  owner,
-                  repo,
-                  artifact_id: artifact.id
-                });
-                core.info(`Deleted old artifact ${artifact.name} (#${artifact.id}) from ${artifact.created_at}`);
+                await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
               } catch (error) {
-                // Concurrent workflow runs may already have deleted this artifact.
-                if (error.status === 404) {
-                  core.info(`Artifact #${artifact.id} was already removed by another cleanup run.`);
-                  continue;
-                }
-                throw error;
+                if (error.status !== 404) throw error;
               }
             }
-            core.info(`Artifact aktif: ${Math.min(artifacts.length, 3)} dipertahankan, ${obsolete.length} dihapus.`);
