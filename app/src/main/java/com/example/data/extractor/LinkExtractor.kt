@@ -189,7 +189,7 @@ object LinkExtractor {
             val metadata = fetchDriveMetadata(fileId)
             val title = metadata.second.ifBlank { "Google Drive ($fileId)" }
             val isPhoto = metadata.first.startsWith("image/") ||
-                title.substringBefore('?').matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|bmp)$", RegexOption.IGNORE_CASE)) ||
+                title.substringBefore('?').matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|bmp)(?:\\s*-\\s*Google Drive)?$", RegexOption.IGNORE_CASE)) ||
                 url.substringBefore('?').matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|bmp)$", RegexOption.IGNORE_CASE))
             val previewImageUrl = "https://lh3.googleusercontent.com/d/$fileId=w2000"
             val mediaUrl = if (isPhoto) previewImageUrl else "https://drive.google.com/file/d/$fileId/preview"
