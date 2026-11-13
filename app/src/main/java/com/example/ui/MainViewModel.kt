@@ -47,6 +47,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isCloudSyncing = MutableStateFlow(false)
     val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
+    private val _isUploadingServerMedia = MutableStateFlow(false)
+    val isUploadingServerMedia: StateFlow<Boolean> = _isUploadingServerMedia.asStateFlow()
 
     // Profiles state
     private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
@@ -710,64 +712,77 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun uploadMediaFileToServer(title: String, localUri: String, isPhoto: Boolean) {
-        val currentProfileId = _activeProfile.value?.id ?: return
+    fun uploadMediaFileToServer(
+        title: String,
+        localUri: String,
+        isPhoto: Boolean,
+        onFinished: (Boolean) -> Unit = {}
+    ) {
+        val currentProfileId = _activeProfile.value?.id ?: run {
+            showStatus("Profil aktif tidak ditemukan")
+            onFinished(false)
+            return
+        }
+        if (_isUploadingServerMedia.value) {
+            showStatus("Upload sedang berjalan. Tunggu sampai selesai.")
+            onFinished(false)
+            return
+        }
+        if (localUri.isBlank()) {
+            showStatus("Pilih file terlebih dahulu")
+            onFinished(false)
+            return
+        }
+
         viewModelScope.launch {
-            showStatus("Mengunggah file ke server...")
-            val user = try {
-                authManager.ensureStorageUser()
-            } catch (e: Exception) {
-                showStatus("Sesi penyimpanan gagal: ${e.localizedMessage ?: "Firebase Anonymous Authentication belum diaktifkan"}")
-                return@launch
-            }
-
-            val remoteUri = try {
-                storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
-            } catch (e: Exception) {
-                showStatus("Upload Storage gagal: ${e.localizedMessage ?: "aturan Firebase Storage menolak akses"}")
-                return@launch
-            }
-
+            _isUploadingServerMedia.value = true
+            var uploadCompleted = false
             try {
-                val playlist = ensureSourcePlaylist(
-                    remoteUri.toString(),
-                    title.ifEmpty { "Media Server" },
-                    "SERVER",
-                    currentProfileId
-                )
-                val item = MediaItem(
-                    id = UUID.randomUUID().toString(),
-                    profileId = currentProfileId,
-                    title = title.ifEmpty { "Media Server" },
-                    url = remoteUri.toString(),
-                    thumbnailUrl = if (isPhoto) remoteUri.toString() else "",
-                    type = if (isPhoto) "PHOTO" else "VIDEO",
-                    sourceType = "SERVER",
-                    category = "Media Server",
-                    playlistId = playlist.id,
-                    sourceUrl = remoteUri.toString()
-                )
-                mediaDao.insertMedia(item)
-                sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-                if (!user.isAnonymous) {
-                    try {
-                        cloudRepository.saveMediaItem(user.uid, item)
-                    } catch (e: Exception) {
-                        showStatus("Upload berhasil, tetapi metadata cloud gagal disinkronkan: ${e.localizedMessage ?: "izin Firestore"}")
-                        return@launch
+                showStatus("Mengunggah file ke server...")
+                val user = authManager.ensureStorageUser()
+                val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
+                try {
+                    val playlist = ensureSourcePlaylist(
+                        remoteUri.toString(),
+                        title.ifBlank { "Media Server" },
+                        "SERVER",
+                        currentProfileId
+                    )
+                    val item = MediaItem(
+                        id = UUID.randomUUID().toString(),
+                        profileId = currentProfileId,
+                        title = title.ifBlank { "Media Server" },
+                        url = remoteUri.toString(),
+                        thumbnailUrl = if (isPhoto) remoteUri.toString() else "",
+                        type = if (isPhoto) "PHOTO" else "VIDEO",
+                        sourceType = "SERVER",
+                        category = "Media Server",
+                        playlistId = playlist.id,
+                        sourceUrl = remoteUri.toString()
+                    )
+                    mediaDao.insertMedia(item)
+                    sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
+                    uploadCompleted = true
+                    onFinished(true)
+                    if (!user.isAnonymous) {
+                        runCatching { cloudRepository.saveMediaItem(user.uid, item) }
+                            .onFailure { error ->
+                                showStatus("Upload berhasil, tetapi metadata cloud gagal disinkronkan: ${error.localizedMessage ?: "izin Firestore"}")
+                            }
                     }
+                    if (_statusMessage.value == "Mengunggah file ke server...") {
+                        showStatus("File berhasil di-upload ke Firebase Storage dan ditambahkan ke beranda")
+                    }
+                } catch (e: Exception) {
+                    val cleanup = runCatching { storageRepository.deleteOwnedMedia(user.uid, remoteUri.toString()) }
+                    val suffix = if (cleanup.isFailure) " File Storage belum terhapus otomatis." else " File sementara di Storage sudah dibersihkan."
+                    showStatus("Pencatatan media gagal: ${e.localizedMessage ?: "database lokal"}.$suffix")
                 }
-                showStatus("File berhasil di-upload ke Firebase Storage dan ditambahkan ke beranda")
             } catch (e: Exception) {
-                val cleanup = runCatching {
-                    storageRepository.deleteOwnedMedia(user.uid, remoteUri.toString())
-                }
-                val suffix = if (cleanup.isFailure) {
-                    " File Storage belum terhapus otomatis."
-                } else {
-                    " File sementara di Storage sudah dibersihkan."
-                }
-                showStatus("Pencatatan media gagal: ${e.localizedMessage ?: "database lokal"}.$suffix")
+                showStatus("Upload Storage gagal: ${e.localizedMessage ?: "periksa koneksi dan izin Firebase"}")
+            } finally {
+                _isUploadingServerMedia.value = false
+                if (!uploadCompleted) onFinished(false)
             }
         }
     }
