@@ -131,11 +131,24 @@ fun PlayerScreen(
                         settings.domStorageEnabled = true
                         settings.mediaPlaybackRequiresUserGesture = false
                         webViewClient = WebViewClient()
+                        // Track the requested URL separately: Google may redirect the
+                        // WebView URL, and comparing webView.url causes reload loops.
+                        tag = media.url
                         loadUrl(media.url)
                     }
                 },
                 update = { webView ->
-                    if (webView.url != media.url) webView.loadUrl(media.url)
+                    if (webView.tag != media.url) {
+                        webView.tag = media.url
+                        webView.loadUrl(media.url)
+                    }
+                },
+                onRelease = { webView ->
+                    webView.stopLoading()
+                    webView.loadUrl("about:blank")
+                    webView.clearHistory()
+                    webView.removeAllViews()
+                    webView.destroy()
                 },
                 modifier = Modifier.fillMaxSize()
             )
