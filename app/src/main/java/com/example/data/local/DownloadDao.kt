@@ -33,6 +33,9 @@ interface DownloadDao {
         localPath: String
     )
 
+    @Query("UPDATE downloads SET etag = :etag, lastModified = :lastModified WHERE id = :id")
+    suspend fun updateValidators(id: String, etag: String, lastModified: String)
+
     @Delete
     suspend fun deleteDownload(item: DownloadItem)
 
