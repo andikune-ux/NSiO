@@ -19,7 +19,7 @@ import java.security.MessageDigest
 import org.json.JSONObject
 
 object AppUpdateManager {
-    private const val RELEASE_API = "https://api.github.com/repos/andikune-ux/NSiO/releases/latest"
+    private const val RELEASE_API = "https://api.github.com/repos/andikune-ux/NSiO/releases?per_page=100&page=1"
     private const val PREFS = "nsio_app_updates"
     private const val KEY_DOWNLOAD_ID = "download_id"
     private const val KEY_VERSION = "download_version"
@@ -99,9 +99,12 @@ object AppUpdateManager {
         val current = BuildConfig.VERSION_NAME
         val connection = (URL(RELEASE_API).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
+            useCaches = false
             connectTimeout = 15_000
             readTimeout = 15_000
             setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Pragma", "no-cache")
             setRequestProperty("User-Agent", "NSiO-Android-Updater")
             setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
         }
@@ -109,13 +112,11 @@ object AppUpdateManager {
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 throw IllegalStateException("GitHub merespons HTTP ${connection.responseCode}")
             }
-            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-            if (json.optBoolean("draft") || json.optBoolean("prerelease")) {
-                throw IllegalStateException("Rilis terbaru belum dipublikasikan sebagai versi stabil")
-            }
+            val releases = org.json.JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            val json = selectLatestStableRelease(releases)
+                ?: throw IllegalStateException("Belum ada rilis stabil NSiO dengan format versi yang valid")
             val tag = json.optString("tag_name").trim()
             val latest = normalizeVersionTag(tag)
-            require(parseVersion(latest) != null) { "Format versi rilis tidak valid: $tag" }
             require(parseVersion(current) != null) { "Versi aplikasi terpasang tidak valid: $current" }
             val assets = json.optJSONArray("assets")
             val apks = (0 until (assets?.length() ?: 0))
@@ -312,6 +313,23 @@ object AppUpdateManager {
             url.userInfo.isNullOrEmpty() &&
             url.host.equals("github.com", true) &&
             url.path.startsWith("/andikune-ux/NSiO/releases/download/")
+    }
+
+    internal fun selectLatestStableRelease(releases: org.json.JSONArray): JSONObject? {
+        var selected: JSONObject? = null
+        var selectedVersion: String? = null
+        for (index in 0 until releases.length()) {
+            val candidate = releases.optJSONObject(index) ?: continue
+            if (candidate.optBoolean("draft") || candidate.optBoolean("prerelease")) continue
+            val version = normalizeVersionTag(candidate.optString("tag_name"))
+            if (parseVersion(version) == null) continue
+            val currentBest = selectedVersion
+            if (currentBest == null || compareVersions(version, currentBest) > 0) {
+                selected = candidate
+                selectedVersion = version
+            }
+        }
+        return selected
     }
 
     internal fun normalizeVersionTag(value: String): String =

@@ -25,6 +25,36 @@ class AppUpdateManagerTest {
     }
 
     @Test
+    fun selectsHighestSemanticVersionInsteadOfGithubLatestReleaseOrder() {
+        val releases = org.json.JSONArray(
+            """[
+              {"tag_name":"v1.0.1","draft":false,"prerelease":false},
+              {"tag_name":"v.1.14.295","draft":false,"prerelease":false},
+              {"tag_name":"v.1.14.300","draft":false,"prerelease":false},
+              {"tag_name":"v.99.0.0-rc1","draft":false,"prerelease":true},
+              {"tag_name":"v.100.0.0","draft":true,"prerelease":false},
+              {"tag_name":"invalid","draft":false,"prerelease":false}
+            ]"""
+        )
+        assertEquals(
+            "v.1.14.300",
+            AppUpdateManager.selectLatestStableRelease(releases)?.optString("tag_name")
+        )
+    }
+
+    @Test
+    fun returnsNoStableReleaseWhenOnlyDraftsPrereleasesOrInvalidTagsExist() {
+        val releases = org.json.JSONArray(
+            """[
+              {"tag_name":"v.99.0.0","draft":true,"prerelease":false},
+              {"tag_name":"v.98.0.0","draft":false,"prerelease":true},
+              {"tag_name":"not-a-version","draft":false,"prerelease":false}
+            ]"""
+        )
+        assertNull(AppUpdateManager.selectLatestStableRelease(releases))
+    }
+
+    @Test
     fun comparesVersionsNumerically() {
         assertTrue(AppUpdateManager.compareVersions("1.10.0", "1.9.9") > 0)
         assertTrue(AppUpdateManager.compareVersions("1.0.3", "1.0.2") > 0)
