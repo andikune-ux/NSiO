@@ -349,7 +349,7 @@ internal fun isVerifiedCompletedRange(
     savedLastModified: String
 ): Boolean {
     if (existingBytes <= 0L) return false
-    val total = Regex("^bytes\\\\s+\\\\*/(\\\\d+)$", RegexOption.IGNORE_CASE)
+    val total = Regex("^bytes\\s+\\*/(\\d+)$", RegexOption.IGNORE_CASE)
         .matchEntire(contentRange.trim())?.groupValues?.get(1)?.toLongOrNull() ?: return false
     val validatorMatches = when {
         savedEtag.isNotBlank() -> responseEtag.isNotBlank() && savedEtag == responseEtag
