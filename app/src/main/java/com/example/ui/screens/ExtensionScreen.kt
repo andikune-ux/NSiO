@@ -73,7 +73,6 @@ import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentRed
-import com.example.ui.theme.CyanPrimary
 
 @Composable
 fun ExtensionScreen(
@@ -131,11 +130,11 @@ fun ExtensionScreen(
                 selectedTabIndex = selectedTabIndex,
                 edgePadding = 6.dp,
                 containerColor = Color.Transparent,
-                contentColor = CyanPrimary,
+                contentColor = MaterialTheme.colorScheme.primary,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = CyanPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         height = 3.dp
                     )
                 },
@@ -160,7 +159,7 @@ fun ExtensionScreen(
                                     Icon(
                                         imageVector = if (isServerUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
                                         contentDescription = "Status Kunci",
-                                        tint = if (isServerUnlocked) CyanPrimary else AccentRed,
+                                        tint = if (isServerUnlocked) MaterialTheme.colorScheme.primary else AccentRed,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -169,7 +168,7 @@ fun ExtensionScreen(
                                     text = title,
                                     fontSize = 12.sp,
                                     fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selectedTabIndex == index) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
@@ -272,8 +271,8 @@ private fun LinkSourceTab(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -322,8 +321,8 @@ private fun LinkSourceTab(
                             },
                             enabled = !isLoading && urlInput.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = CyanPrimary,
-                                contentColor = Color.Black
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
@@ -333,7 +332,7 @@ private fun LinkSourceTab(
                         ) {
                             if (isLoading) {
                                 CircularProgressIndicator(
-                                    color = Color.Black,
+                                    color = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp
                                 )
@@ -341,7 +340,7 @@ private fun LinkSourceTab(
                             }
                             Text(
                                 "Urai & Tambahkan Link",
-                                color = Color.Black,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
@@ -351,7 +350,7 @@ private fun LinkSourceTab(
                             Button(
                                 onClick = onNavigateToHome,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White.copy(alpha = 0.15f)
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 ),
                                 shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier.height(48.dp)
@@ -359,11 +358,11 @@ private fun LinkSourceTab(
                                 Icon(
                                     Icons.Default.Home,
                                     contentDescription = null,
-                                    tint = CyanPrimary,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Beranda", color = CyanPrimary, fontSize = 13.sp)
+                                Text("Beranda", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                             }
                         }
                     }
@@ -373,7 +372,7 @@ private fun LinkSourceTab(
                         Text(
                             text = parseFeedback ?: "",
                             fontSize = 11.sp,
-                            color = CyanPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -440,14 +439,14 @@ private fun FileSourceTab(
                     OutlinedTextField(
                         value = titleInput,
                         onValueChange = { titleInput = it },
-                        placeholder = { Text("Judul File / Video...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Judul File / Video...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -457,22 +456,22 @@ private fun FileSourceTab(
                     OutlinedTextField(
                         value = filePathInput,
                         onValueChange = { filePathInput = it },
-                        placeholder = { Text("Path atau Uri file perangkat...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Path atau Uri file perangkat...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.FolderOpen,
                                 contentDescription = null,
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -480,8 +479,8 @@ private fun FileSourceTab(
                     Button(
                         onClick = { filePicker.launch(arrayOf(if (isPhoto) "image/*" else "video/*")) },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.14f),
-                            contentColor = CyanPrimary
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth().height(44.dp)
@@ -506,7 +505,7 @@ private fun FileSourceTab(
                         Button(
                             onClick = { isPhoto = false },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
+                                containerColor = if (!isPhoto) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -522,7 +521,7 @@ private fun FileSourceTab(
                         Button(
                             onClick = { isPhoto = true },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isPhoto) CyanPrimary else Color.White.copy(alpha = 0.12f)
+                                containerColor = if (isPhoto) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -555,8 +554,8 @@ private fun FileSourceTab(
                         },
                         enabled = filePathInput.isNotBlank() && !isImportingLocalFile,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
-                            contentColor = Color.Black
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
@@ -571,11 +570,11 @@ private fun FileSourceTab(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         if (isImportingLocalFile) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.Black)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Mengimpor...", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Mengimpor...", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         } else {
-                            Text("Impor ke Beranda", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Impor ke Beranda", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -624,7 +623,7 @@ private fun ServerSourceTab(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(CyanPrimary),
+                                .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -654,14 +653,14 @@ private fun ServerSourceTab(
                     OutlinedTextField(
                         value = titleInput,
                         onValueChange = { titleInput = it },
-                        placeholder = { Text("Judul konten server...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Judul konten server...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -670,26 +669,26 @@ private fun ServerSourceTab(
 
                     Button(
                         onClick = { filePicker.launch("video/*") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(18.dp),
                         enabled = !isUploadingServerMedia,
                         modifier = Modifier.fillMaxWidth().height(46.dp)
                     ) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(selectedFileUri?.lastPathSegment ?: "Pilih file video dari perangkat", color = CyanPrimary, fontSize = 12.sp, maxLines = 1)
+                        Text(selectedFileUri?.lastPathSegment ?: "Pilih file video dari perangkat", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, maxLines = 1)
                     }
 
                     Button(
                         onClick = { filePicker.launch("image/*") },
                         enabled = !isUploadingServerMedia,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth().height(46.dp)
                     ) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Pilih file foto dari perangkat", color = CyanPrimary, fontSize = 12.sp)
+                        Text("Pilih file foto dari perangkat", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
 
                     if (selectedFileUri != null) {
@@ -702,13 +701,13 @@ private fun ServerSourceTab(
                                     }
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             shape = RoundedCornerShape(18.dp),
                             enabled = !isUploadingServerMedia,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
                         ) {
                             if (isUploadingServerMedia) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.Black)
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Mengunggah...", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             } else {
@@ -719,10 +718,10 @@ private fun ServerSourceTab(
 
                     Button(
                         onClick = onNavigateToHome,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) { Text("Buka Beranda", color = CyanPrimary, fontSize = 13.sp) }
+                    ) { Text("Buka Beranda", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp) }
                 }
             }
         }
@@ -841,7 +840,7 @@ private fun PluginRepoTab(
                         Text("${playlist.itemCount} item • ${playlist.url}", fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = { editingPlaylist = playlist; editedName = playlist.name }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Rename playlist", tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Edit, contentDescription = "Rename playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = { viewModel.deleteSourcePlaylist(playlist) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Hapus playlist", tint = AccentRed, modifier = Modifier.size(18.dp))
@@ -878,14 +877,14 @@ private fun PluginRepoTab(
                     OutlinedTextField(
                         value = repoUrlInput,
                         onValueChange = { repoUrlInput = it.take(2048) },
-                        placeholder = { Text("https://repo.domain.com/plugins.json", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("https://repo.domain.com/plugins.json", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -924,9 +923,9 @@ private fun PluginRepoTab(
                         },
                         enabled = !isAddingRepository,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
-                            contentColor = Color.Black,
-                            disabledContainerColor = CyanPrimary.copy(alpha = 0.45f)
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                         ),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
@@ -935,7 +934,7 @@ private fun PluginRepoTab(
                     ) {
                         if (isAddingRepository) {
                             CircularProgressIndicator(
-                                color = Color.Black,
+                                color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(17.dp),
                                 strokeWidth = 2.dp
                             )
@@ -943,7 +942,7 @@ private fun PluginRepoTab(
                         }
                         Text(
                             if (isAddingRepository) "Menyimpan Repository..." else "Tambahkan Repositori",
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
@@ -978,7 +977,7 @@ private fun PluginRepoTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(repo.pluginLists.firstOrNull().orEmpty(), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(onClick = { viewModel.refreshRepository(repo) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)) {
