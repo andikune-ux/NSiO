@@ -123,19 +123,28 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             if (!response.isSuccessful) {
                 val responseCode = response.code
                 response.close()
-                throw IOException("Server mengembalikan HTTP $responseCode")
+                throw DownloadHttpException(responseCode)
             }
             val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim().lowercase()
             val finalPath = response.request.url.encodedPath.lowercase()
             if (contentType.contains("mpegurl") || contentType.contains("vnd.apple.mpegurl") ||
                 finalPath.endsWith(".m3u8") || finalPath.endsWith(".m3u")) {
                 response.close()
-                throw IOException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
+                throw DownloadPermanentException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
             }
             val append = existingBytes > 0L && response.code == 206
             if (existingBytes > 0L && response.code != 206 && response.code != 200) {
                 response.close()
-                throw IOException("Server tidak mendukung kelanjutan unduhan")
+                throw DownloadPermanentException("Server tidak mendukung kelanjutan unduhan")
+            }
+            if (append) {
+                val contentRange = response.header("Content-Range")
+                val rangeStart = Regex("^bytes\\s+(\\d+)-\\d+/(?:\\d+|\\*)$", RegexOption.IGNORE_CASE)
+                    .matchEntire(contentRange.orEmpty())?.groupValues?.get(1)?.toLongOrNull()
+                if (rangeStart != existingBytes) {
+                    response.close()
+                    throw DownloadPermanentException("Server mengirim rentang byte yang tidak sesuai; unduhan dihentikan agar file tidak rusak.")
+                }
             }
             val body = response.body ?: run {
                 response.close()
@@ -151,8 +160,9 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     var read: Int
                     while (input.read(buffer).also { read = it } >= 0) {
                         if (isStopped) {
-                            partial.delete()
+                            // Keep partial bytes when WorkManager stops this worker so it can resume later.
                             manager.updateProgress(id, 0)
+                            db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
                             return@withContext Result.retry()
                         }
                         if (read == 0) continue
@@ -173,13 +183,30 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             Result.success()
         } catch (e: Exception) {
             manager.updateProgress(id, 0)
-            if (isStopped || e is IOException) {
+            if (isStopped) {
                 db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
                 return@withContext Result.retry()
             }
-            partial.delete()
-            db.updateProgress(id, "FAILED", 0, 0, 0, target.absolutePath)
-            Result.failure(Data.Builder().putString("error", e.message ?: "Unduhan gagal").build())
+            val retryable = when (e) {
+                is DownloadPermanentException -> false
+                is DownloadHttpException -> e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599
+                is IOException -> true // transient network/read failure
+                else -> false
+            }
+            if (retryable) {
+                db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
+                Result.retry()
+            } else {
+                partial.delete()
+                db.updateProgress(id, "FAILED", 0, 0, 0, target.absolutePath)
+                Result.failure(Data.Builder().putString("error", e.message ?: "Unduhan gagal").build())
+            }
         }
     }
 }
+
+
+private class DownloadHttpException(val statusCode: Int) :
+    IOException("Server mengembalikan HTTP $statusCode")
+
+private class DownloadPermanentException(message: String) : Exception(message)
