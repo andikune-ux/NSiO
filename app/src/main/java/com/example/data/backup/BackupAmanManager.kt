@@ -214,7 +214,7 @@ object BackupAmanManager {
 
                 val json = buildRestoreJson(profiles, settings, media).toString(2)
                 val text = buildText(context, profiles, settings, media, json)
-                val fileName = "Backup Aman-NSiO-${jakartaFormat("dd-MM-yyyy").format(Date())}.TXT"
+                val fileName = "Backup Aman-NSiO-${jakartaFormat("dd-MM-yyyy_HH-mm-ss").format(Date())}.TXT"
 
                 var savedFile: File? = null
                 var reason = ""
