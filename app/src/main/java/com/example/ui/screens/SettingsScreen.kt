@@ -79,6 +79,7 @@ import com.example.R
 import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
+import com.example.ui.components.tvFocusable
 import com.example.ui.theme.AccentRed
 import com.example.update.AppUpdateManager
 import kotlinx.coroutines.delay
@@ -518,7 +519,7 @@ fun SettingsScreen(
             }
         }
 
-        // 5. Grid Size Setting (3, 4, 5, 6, 7, 8 kolom)
+        // 5. Grid Size Setting (1–8 kolom; default 4)
         item {
             SettingsGlassCard(
                 icon = Icons.Default.GridOn,
@@ -532,7 +533,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    (3..8).forEach { cols ->
+                    (1..8).forEach { cols ->
                         val isSelected = settings.gridColumns == cols
                         Box(
                             modifier = Modifier
@@ -544,7 +545,8 @@ fun SettingsScreen(
                                     if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable { viewModel.updateSettings(settings.copy(gridColumns = cols)) },
+                                .clickable { viewModel.updateSettings(settings.copy(gridColumns = cols)) }
+                                .tvFocusable(shape = RoundedCornerShape(12.dp), borderWidth = 1.5.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(

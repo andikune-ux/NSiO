@@ -186,7 +186,7 @@ object BackupUtils {
                                 language = s.optString("language", "ID"),
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
-                                gridColumns = s.optInt("gridColumns", 4).coerceIn(3, 8),
+                                gridColumns = s.optInt("gridColumns", 4).coerceIn(1, 8),
                                 serverPin = if (credentialsExcluded) {
                                     existingSettings?.serverPin?.let { PinVault.encrypt(context, it) }
                                         ?: PinVault.encrypt(context, ProfileSettings(profileId = profileId).serverPin)
@@ -259,7 +259,7 @@ object BackupUtils {
                             language = s.optString("language", "ID"),
                             themeMode = s.optString("themeMode", "DARK"),
                             displayMode = s.optString("displayMode", "TV"),
-                            gridColumns = s.optInt("gridColumns", 4).coerceIn(3, 8),
+                            gridColumns = s.optInt("gridColumns", 4).coerceIn(1, 8),
                             serverPin = if (credentialsExcluded) {
                                 existingSettings?.serverPin?.let { PinVault.encrypt(context, it) }
                                     ?: PinVault.encrypt(context, ProfileSettings(profileId = profileId).serverPin)

@@ -53,7 +53,7 @@ data class ProfileSettings(
     val language: String = "ID", // "ID", "EN"
     val themeMode: String = "DARK", // "AUTO", "DARK", "LIGHT"
     val displayMode: String = "TV", // "AUTO", "TV", "HP"
-    val gridColumns: Int = 4, // 3..8
+    val gridColumns: Int = 4, // 1..8; 4 remains the default
     val serverPin: String = generateDefaultServerPin()
 )
 
