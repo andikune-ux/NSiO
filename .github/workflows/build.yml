@@ -9,6 +9,11 @@ permissions:
   contents: read
   actions: write
 
+# Prevent overlapping cleanup jobs from racing to delete the same artifacts.
+concurrency:
+  group: nsio-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build APK
