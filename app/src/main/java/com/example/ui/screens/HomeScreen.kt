@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -97,11 +98,13 @@ fun HomeScreen(
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
+    var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
+    var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded) {
-        isSearchExpanded = false
+    BackHandler(enabled = isSearchExpanded || showPlaylistPicker) {
+        if (showPlaylistPicker) showPlaylistPicker = false else isSearchExpanded = false
     }
 
     LaunchedEffect(isSearchExpanded) {
@@ -685,6 +688,152 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                // Floating playlist selector, kept above the grid and away from player controls.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isSearchExpanded,
+                    enter = fadeIn(animationSpec = tween(160)),
+                    exit = fadeOut(animationSpec = tween(120)),
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(end = 8.dp, bottom = 12.dp)
+                    ) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showPlaylistPicker,
+                            enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .widthIn(min = 230.dp, max = 290.dp)
+                                    .heightIn(max = 340.dp)
+                                    .liquidGlass(
+                                        shape = RoundedCornerShape(22.dp),
+                                        alpha = if (isDark) 0.94f else 0.98f,
+                                        borderAlpha = if (isDark) 0.55f else 0.75f,
+                                        elevation = 18.dp
+                                    )
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(22.dp)
+                                    )
+                                    .padding(12.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "Pilih Playlist",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "Filter media berdasarkan sumber tersimpan",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(13.dp))
+                                        .background(if (selectedFilter == "ALL") accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                        .clickable {
+                                            viewModel.selectFilter("ALL")
+                                            showPlaylistPicker = false
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 11.dp)
+                                        .testTag("playlist_filter_all")
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(9.dp))
+                                        Text("Semua Playlist", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Spacer(Modifier.weight(1f))
+                                        Text("${mediaList.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                    }
+                                }
+                                if (sourcePlaylists.isEmpty()) {
+                                    Text(
+                                        "Belum ada playlist tersimpan.",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+                                    )
+                                } else {
+                                    sourcePlaylists.forEach { playlist ->
+                                        val filter = "PLAYLIST:${playlist.id}"
+                                        val isSelected = selectedFilter == filter
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(13.dp))
+                                                .background(if (isSelected) accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                                .clickable {
+                                                    if (playlist.sourceType == "SERVER" && !isServerUnlocked) {
+                                                        pendingPlaylistFilter = filter
+                                                        showServerPinDialog = true
+                                                    } else {
+                                                        viewModel.selectFilter(filter)
+                                                    }
+                                                    showPlaylistPicker = false
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 10.dp)
+                                                .testTag("playlist_filter_${playlist.id}")
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(9.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        playlist.name,
+                                                        color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        "${playlist.itemCount} media",
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Text(
+                                    "Ubah nama playlist melalui Extension → Plugin & Repo → Riwayat Playlist Sumber.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp,
+                                    lineHeight = 12.sp
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(accentColor)
+                                .clickable { showPlaylistPicker = !showPlaylistPicker }
+                                .liquidGlassTvFocusable(shape = CircleShape)
+                                .testTag("floating_playlist_extension_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Extension,
+                                contentDescription = "Buka pilihan playlist",
+                                tint = if (isDark) Color.Black else Color.White,
+                                modifier = Modifier.size(25.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -696,10 +845,11 @@ fun HomeScreen(
             expectedPin = settings.serverPin,
             onSuccess = {
                 viewModel.unlockServerAccess()
-                viewModel.selectFilter("SERVER")
+                viewModel.selectFilter(pendingPlaylistFilter ?: "SERVER")
+                pendingPlaylistFilter = null
                 showServerPinDialog = false
             },
-            onDismiss = { showServerPinDialog = false }
+            onDismiss = { pendingPlaylistFilter = null; showServerPinDialog = false }
         )
     }
 }
