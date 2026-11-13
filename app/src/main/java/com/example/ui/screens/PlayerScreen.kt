@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -140,26 +143,52 @@ fun PlayerScreen(
             .background(Color.Black)
             .testTag("player_screen")
     ) {
-        // ExoPlayer Surface View atau gambar lokal/remote
-        if (media.type == "PHOTO") {
-            AsyncImage(
-                model = media.url,
-                contentDescription = media.title,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = viewModel.player.exoPlayer
-                        useController = false
-                        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    }
-                },
-                modifier = Modifier.fillMaxSize().clickable(
-                    interactionSource = remember { MutableInteractionSource() }, indication = null
-                ) { showControls = !showControls }
-            )
+        // Swipe kiri/kanan pada area media untuk berpindah item dalam daftar,
+        // termasuk perpindahan video <-> foto. Kontrol overlay tetap menerima sentuhan sendiri.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(media.id, mediaList) {
+                    var horizontalDistance = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, delta -> horizontalDistance += delta },
+                        onDragEnd = {
+                            val direction = when {
+                                horizontalDistance <= -72f -> 1
+                                horizontalDistance >= 72f -> -1
+                                else -> 0
+                            }
+                            if (direction != 0) {
+                                adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
+                                showControls = true
+                            }
+                            horizontalDistance = 0f
+                        },
+                        onDragCancel = { horizontalDistance = 0f }
+                    )
+                }
+        ) {
+            if (media.type == "PHOTO") {
+                AsyncImage(
+                    model = media.url,
+                    contentDescription = media.title,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = viewModel.player.exoPlayer
+                            useController = false
+                            layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().clickable(
+                        interactionSource = remember { MutableInteractionSource() }, indication = null
+                    ) { showControls = !showControls }
+                )
+            }
         }
 
         // Buffering Liquid Glass Indicator
@@ -422,6 +451,51 @@ fun PlayerScreen(
                         IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor)
                         }
+                    }
+                }
+
+                // Floating seek preview: source thumbnail + target timestamp while dragging.
+                if (isSeeking && usesNativePlayer && playerState.durationMs > 0L) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 184.dp)
+                            .width(132.dp)
+                            .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.32f, borderAlpha = 0.55f, elevation = 14.dp)
+                            .padding(7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black.copy(alpha = 0.65f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (media.thumbnailUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = media.thumbnailUrl,
+                                    contentDescription = "Thumbnail video",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(30.dp))
+                            }
+                            Text(
+                                text = formatMs(seekPreviewMs),
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                                    .padding(4.dp)
+                                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(5.dp))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                        Text("PRATINJAU POSISI", color = controlAccentColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
