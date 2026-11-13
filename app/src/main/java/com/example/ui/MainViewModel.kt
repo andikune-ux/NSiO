@@ -22,6 +22,7 @@ import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
 import com.example.player.CS3IPlayer
+import com.example.player.shouldUseNativePlayer
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -877,11 +878,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Player Management ---
     fun playMedia(item: MediaItem) {
-        val isGoogleDrivePreview = item.url.startsWith("https://drive.google.com/file/d/") &&
-            item.url.endsWith("/preview")
-        if (item.type == "PHOTO" || isGoogleDrivePreview) player.stop()
+        val useNativePlayer = shouldUseNativePlayer(item.type, item.url)
+        if (!useNativePlayer) player.stop()
         _currentlyPlaying.value = item
-        if (item.type != "PHOTO" && !isGoogleDrivePreview) {
+        if (useNativePlayer) {
             val headers = item.extraInfo.split('&')
                 .mapNotNull { entry ->
                     val separator = entry.indexOf('=')
@@ -911,8 +911,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun pausePlaybackForBackground() {
         val current = _currentlyPlaying.value ?: return
-        val isNativeVideo = current.type != "PHOTO" &&
-            !(current.url.startsWith("https://drive.google.com/file/d/") && current.url.endsWith("/preview"))
+        val isNativeVideo = shouldUseNativePlayer(current.type, current.url)
         if (!isNativeVideo) return
 
         player.pause()
@@ -929,8 +928,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closePlayer() {
         val current = _currentlyPlaying.value
-        val isPlayableVideo = current != null && current.type != "PHOTO" &&
-            !(current.url.startsWith("https://drive.google.com/file/d/") && current.url.endsWith("/preview"))
+        val isPlayableVideo = current?.let { shouldUseNativePlayer(it.type, it.url) } == true
         if (current != null && isPlayableVideo) {
             val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
             viewModelScope.launch {
