@@ -14,6 +14,7 @@ import com.example.data.firebase.CloudMediaRepository
 import com.example.data.firebase.FirebaseAuthManager
 import com.example.data.firebase.FirebaseStorageRepository
 import com.example.data.local.AppDatabase
+import com.example.data.security.PinVault
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
@@ -127,16 +128,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 profileDao.insertProfile(defaultProfile)
                 val defaultSettings = ProfileSettings(profileId = defaultProfile.id)
-                profileDao.insertSettings(defaultSettings)
+                profileDao.insertSettings(defaultSettings.copy(serverPin = PinVault.encrypt(application, defaultSettings.serverPin)))
 
                 _profiles.value = listOf(defaultProfile)
                 _activeProfile.value = defaultProfile
                 _settings.value = defaultSettings
             } else {
-                _profiles.value = existingProfiles
-                val active = existingProfiles.firstOrNull { it.isDefault } ?: existingProfiles.first()
+                val decodedProfiles = existingProfiles.map { stored ->
+                    val pin = PinVault.decrypt(application, stored.pin)
+                    if (stored.pin.isNotBlank() && !PinVault.isEncrypted(stored.pin)) {
+                        profileDao.updateProfile(stored.copy(pin = PinVault.encrypt(application, pin)))
+                    }
+                    stored.copy(pin = pin)
+                }
+                _profiles.value = decodedProfiles
+                val active = decodedProfiles.firstOrNull { it.isDefault } ?: decodedProfiles.first()
                 _activeProfile.value = active
-                _settings.value = profileDao.getSettings(active.id) ?: ProfileSettings(profileId = active.id)
+                _settings.value = loadSettingsForProfile(active.id)
             }
 
             observeActiveProfileMedia()
@@ -177,7 +185,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _activeProfile.value = profile
             _isServerUnlocked.value = false
             _selectedFilter.value = "ALL"
-            _settings.value = profileDao.getSettings(profile.id) ?: ProfileSettings(profileId = profile.id)
+            _settings.value = loadSettingsForProfile(profile.id)
             observeActiveProfileMedia()
             observeSourcePlaylists()
             showStatus("Beralih ke profil '${profile.name}'")
@@ -198,9 +206,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isPinEnabled = isPinEnabled,
                 isDefault = false
             )
-            profileDao.insertProfile(newProfile)
-            profileDao.insertSettings(ProfileSettings(profileId = newProfile.id))
-            _profiles.value = profileDao.getAllProfilesList()
+            profileDao.insertProfile(newProfile.copy(pin = PinVault.encrypt(getApplication(), newProfile.pin)))
+            val newSettings = ProfileSettings(profileId = newProfile.id)
+            profileDao.insertSettings(newSettings.copy(serverPin = PinVault.encrypt(getApplication(), newSettings.serverPin)))
+            _profiles.value = profileDao.getAllProfilesList().map { it.copy(pin = PinVault.decrypt(getApplication(), it.pin)) }
             switchProfile(newProfile)
         }
     }
@@ -215,17 +224,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 showStatus("Profil tidak ditemukan")
                 return@launch
             }
-            val updated = latest.copy(pin = newPin, isPinEnabled = true)
+            val updated = latest.copy(pin = PinVault.encrypt(getApplication(), newPin), isPinEnabled = true)
             profileDao.updateProfile(updated)
-            _profiles.value = profileDao.getAllProfilesList()
-            if (_activeProfile.value?.id == updated.id) _activeProfile.value = updated
+            val decodedUpdated = updated.copy(pin = newPin)
+            _profiles.value = profileDao.getAllProfilesList().map { it.copy(pin = PinVault.decrypt(getApplication(), it.pin)) }
+            if (_activeProfile.value?.id == decodedUpdated.id) _activeProfile.value = decodedUpdated
             showStatus("PIN profil berhasil diperbarui")
         }
     }
 
+    private suspend fun loadSettingsForProfile(profileId: String): ProfileSettings {
+        val stored = profileDao.getSettings(profileId) ?: ProfileSettings(profileId = profileId)
+        val plainPin = PinVault.decrypt(getApplication(), stored.serverPin)
+        if (stored.serverPin.isNotBlank() && !PinVault.isEncrypted(stored.serverPin)) {
+            profileDao.insertSettings(stored.copy(serverPin = PinVault.encrypt(getApplication(), plainPin)))
+        }
+        return stored.copy(serverPin = plainPin)
+    }
+
     fun updateSettings(newSettings: ProfileSettings) {
         viewModelScope.launch {
-            profileDao.updateSettings(newSettings)
+            profileDao.updateSettings(newSettings.copy(serverPin = PinVault.encrypt(getApplication(), newSettings.serverPin)))
             _settings.value = newSettings
             showStatus("Pengaturan berhasil disimpan")
         }
