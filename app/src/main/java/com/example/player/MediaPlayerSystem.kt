@@ -241,6 +241,12 @@ class CS3IPlayer(
             if (player.isPlaying) {
                 player.pause()
             } else {
+                // A play action after reaching the end should replay from the beginning.
+                if (player.playbackState == Player.STATE_ENDED) {
+                    player.seekTo(0L)
+                    lastPositionMs = 0L
+                    _playerState.value = _playerState.value.copy(currentPositionMs = 0L)
+                }
                 player.play()
             }
         }
