@@ -1,0 +1,6 @@
+{
+  "base_major": 1,
+  "baseline_month": "2026-11",
+  "major_overhaul_count": 0,
+  "policy": "Each Asia/Jakarta month boundary adds one MAJOR; each intentional substantial overhaul increments major_overhaul_count by one. Count both independently."
+}
