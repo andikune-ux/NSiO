@@ -46,7 +46,7 @@ jobs:
             const { owner, repo } = context.repo;
             // List repository runs, then filter by the workflow's path.
             // This avoids relying on optional workflow context fields or IDs.
-            const allRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
+            const allRuns = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
               owner,
               repo,
               per_page: 100
