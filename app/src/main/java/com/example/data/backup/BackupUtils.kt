@@ -49,7 +49,8 @@ object BackupUtils {
         try {
             val rootObj = JSONObject()
             rootObj.put("backupType", "PROFILE_BACKUP")
-            rootObj.put("version", 1)
+            rootObj.put("version", 2)
+            rootObj.put("securityCredentialsExcluded", true)
             rootObj.put("createdAt", System.currentTimeMillis())
             rootObj.put("profileName", profile.name)
 
@@ -58,8 +59,8 @@ object BackupUtils {
                 put("id", profile.id)
                 put("name", profile.name)
                 put("avatarEmoji", profile.avatarEmoji)
-                put("isPinEnabled", profile.isPinEnabled)
-                put("pin", profile.pin) // Stored encrypted/hashed in production
+                // PINs are intentionally not exported in portable backups.
+                put("isPinEnabled", false)
             }
             rootObj.put("profile", profileObj)
 
@@ -71,7 +72,7 @@ object BackupUtils {
                     put("themeMode", s.themeMode)
                     put("displayMode", s.displayMode)
                     put("gridColumns", s.gridColumns)
-                    put("serverPin", s.serverPin)
+                    // Server PIN is device-local and must never be exported.
                 }
                 rootObj.put("settings", settingsObj)
             }
@@ -148,8 +149,8 @@ object BackupUtils {
                                 id = p.getString("id"),
                                 name = p.getString("name"),
                                 avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                                pin = p.optString("pin", ""),
-                                isPinEnabled = p.optBoolean("isPinEnabled", false),
+                                pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else p.optString("pin", ""),
+                                isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
                                 isDefault = p.optBoolean("isDefault", false),
                                 createdAt = p.optLong("createdAt", System.currentTimeMillis())
                             )
@@ -169,7 +170,7 @@ object BackupUtils {
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
                                 gridColumns = s.optInt("gridColumns", 4),
-                                serverPin = s.optString("serverPin", "1234")
+                                serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) "1234" else s.optString("serverPin", "1234")
                             )
                         )
                     }
@@ -218,8 +219,8 @@ object BackupUtils {
                         id = profileId,
                         name = p.getString("name"),
                         avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                        pin = p.optString("pin", ""),
-                        isPinEnabled = p.optBoolean("isPinEnabled", false),
+                        pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else p.optString("pin", ""),
+                        isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
                         isDefault = false
                     )
                 )
@@ -233,7 +234,7 @@ object BackupUtils {
                             themeMode = s.optString("themeMode", "DARK"),
                             displayMode = s.optString("displayMode", "TV"),
                             gridColumns = s.optInt("gridColumns", 4),
-                            serverPin = s.optString("serverPin", "1234")
+                            serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) "1234" else s.optString("serverPin", "1234")
                         )
                     )
                 }
