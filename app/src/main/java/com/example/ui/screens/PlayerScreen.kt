@@ -94,6 +94,7 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.data.model.MediaItem
 import com.example.player.adjacentMedia
+import com.example.player.normalizePlaybackUrl
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
@@ -171,9 +172,9 @@ fun PlayerScreen(
                     if (uri.scheme == "content" || uri.scheme == "file" || uri.scheme == "android.resource") {
                         retriever.setDataSource(context, uri)
                     } else {
-                        retriever.setDataSource(media.url, emptyMap())
+                        retriever.setDataSource(normalizePlaybackUrl(media.url), mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36 NetStream/2.0"))
                     }
-                    retriever.getFrameAtTime(seekPreviewMs.coerceAtLeast(0L) * 1_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    retriever.getFrameAtTime(seekPreviewMs.coerceAtLeast(0L) * 1_000L, MediaMetadataRetriever.OPTION_CLOSEST)
                 } catch (_: Exception) {
                     null
                 } finally {
