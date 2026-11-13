@@ -182,18 +182,24 @@ object LinkExtractor {
         }
 
         if (fileId.isNotEmpty()) {
+            // No Google Drive API key is needed. The file must be shared as
+            // "Anyone with the link" (Viewer). Videos use Drive's embedded
+            // preview player instead of the download endpoint, which often
+            // returns an HTML confirmation page rather than playable media.
             val metadata = fetchDriveMetadata(fileId)
-            val streamUrl = "https://drive.usercontent.google.com/download?id=$fileId&export=download"
-            val thumbnailUrl = "https://lh3.googleusercontent.com/d/$fileId=w1200"
-            val mime = metadata.first
             val title = metadata.second.ifBlank { "Google Drive ($fileId)" }
+            val isPhoto = metadata.first.startsWith("image/") ||
+                title.substringBefore('?').matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|bmp)$", RegexOption.IGNORE_CASE)) ||
+                url.substringBefore('?').matches(Regex(".*\\.(jpg|jpeg|png|gif|webp|bmp)$", RegexOption.IGNORE_CASE))
+            val previewImageUrl = "https://lh3.googleusercontent.com/d/$fileId=w2000"
+            val mediaUrl = if (isPhoto) previewImageUrl else "https://drive.google.com/file/d/$fileId/preview"
             val item = MediaItem(
                 id = UUID.randomUUID().toString(),
                 profileId = profileId,
                 title = title,
-                url = streamUrl,
-                    thumbnailUrl = thumbnailUrl,
-                type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
+                url = mediaUrl,
+                thumbnailUrl = previewImageUrl,
+                type = if (isPhoto) "PHOTO" else "VIDEO",
                 sourceType = "LINK",
                 category = "Google Drive"
             )
@@ -254,7 +260,7 @@ object LinkExtractor {
                 }
                 MediaItem(
                     id = UUID.randomUUID().toString(), profileId = profileId, title = name,
-                    url = "https://drive.usercontent.google.com/download?id=$id&export=download",
+                    url = if (mime.startsWith("image/")) "https://lh3.googleusercontent.com/d/$id=w2000" else "https://drive.google.com/file/d/$id/preview",
                     thumbnailUrl = "https://lh3.googleusercontent.com/d/$id=w800",
                     type = if (mime.startsWith("image/")) "PHOTO" else "VIDEO",
                     sourceType = "LINK", category = "Google Drive"
