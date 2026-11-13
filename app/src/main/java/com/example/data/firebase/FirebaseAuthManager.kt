@@ -83,7 +83,15 @@ class FirebaseAuthManager(private val context: Context) {
             ) {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 val authCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                val authResult = auth.signInWithCredential(authCredential).await()
+                // Upgrade the anonymous Storage account instead of replacing it.
+                // This keeps the UID stable so previously uploaded files remain owned
+                // by the same account after the user connects Google.
+                val currentUser = auth.currentUser
+                val authResult = if (currentUser?.isAnonymous == true) {
+                    currentUser.linkWithCredential(authCredential).await()
+                } else {
+                    auth.signInWithCredential(authCredential).await()
+                }
                 val user = authResult.user ?: throw IllegalStateException("FirebaseUser is null after sign-in")
                 _authState.value = AuthState.Authenticated(user)
                 Result.success(user)
