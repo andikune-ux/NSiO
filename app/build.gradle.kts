@@ -1,4 +1,7 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 
 plugins {
   alias(libs.plugins.android.application)
@@ -10,7 +13,7 @@ plugins {
 
 // Keep local builds aligned with the same Asia/Jakarta + mainline-commit
 // version policy used by GitHub Actions. CI-provided values still take priority.
-val computedNsioFallback = run {
+val computedNsioFallback: Pair<String, Int> = kotlin.run {
   val stateFile = rootProject.file(".versioning/nsio-version-state.json")
   if (!stateFile.isFile) {
     throw GradleException("Missing NSiO version state: ${stateFile.path}")
@@ -24,8 +27,8 @@ val computedNsioFallback = run {
   val baselineText = Regex("\"baseline_month\"\\s*:\\s*\"(\\d{4}-\\d{2})\"")
     .find(state)?.groupValues?.get(1)
     ?: throw GradleException("Invalid NSiO baseline_month")
-  val baseline = java.time.YearMonth.parse(baselineText)
-  val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))
+  val baseline = YearMonth.parse(baselineText)
+  val today = LocalDate.now(ZoneId.of("Asia/Jakarta"))
   val monthDelta = (today.year - baseline.year) * 12 + today.monthValue - baseline.monthValue
   if (monthDelta < 0) throw GradleException("NSiO version baseline is later than the current Jakarta date")
 
