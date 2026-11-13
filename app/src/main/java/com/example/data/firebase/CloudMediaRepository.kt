@@ -6,6 +6,7 @@ import com.example.R
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
+import com.example.data.model.SourcePlaylist
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -123,6 +124,55 @@ class CloudMediaRepository(
             )
         }
         return profiles to settings
+    }
+
+    /**
+     * Syncs named source playlists as portable metadata. Playlist names are
+     * user-editable, so they must not be reconstructed from source URLs.
+     */
+    suspend fun syncSourcePlaylists(userId: String, profileId: String, playlists: List<SourcePlaylist>) {
+        require(playlists.all { it.profileId == profileId }) {
+            "Playlist sinkronisasi harus berasal dari profil yang sama."
+        }
+        if (playlists.isEmpty()) return
+        val collection = usersCollection.document(userId).collection("source_playlists")
+        playlists.distinctBy { it.id }.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { playlist ->
+                val payload = hashMapOf<String, Any>(
+                    "id" to playlist.id,
+                    "profileId" to playlist.profileId,
+                    "name" to playlist.name,
+                    "url" to playlist.url,
+                    "sourceType" to playlist.sourceType,
+                    "itemCount" to playlist.itemCount,
+                    "createdAt" to playlist.createdAt,
+                    "updatedAt" to playlist.updatedAt
+                )
+                batch.set(collection.document(playlist.id), payload, SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+    }
+
+    suspend fun fetchSourcePlaylists(userId: String): List<SourcePlaylist> {
+        val snapshot = usersCollection.document(userId).collection("source_playlists").get().await()
+        return snapshot.documents.mapNotNull { document ->
+            val id = document.getString("id") ?: document.id
+            val profileId = document.getString("profileId") ?: return@mapNotNull null
+            val url = document.getString("url") ?: return@mapNotNull null
+            SourcePlaylist(
+                id = id,
+                profileId = profileId,
+                name = document.getString("name")?.takeIf { it.isNotBlank() }
+                    ?: url.substringAfter("//").substringBefore("/"),
+                url = url,
+                sourceType = document.getString("sourceType") ?: "LINK",
+                itemCount = (document.getLong("itemCount") ?: 0L).toInt(),
+                createdAt = document.getLong("createdAt") ?: System.currentTimeMillis(),
+                updatedAt = document.getLong("updatedAt") ?: System.currentTimeMillis()
+            )
+        }
     }
 
     /**
