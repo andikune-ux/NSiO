@@ -361,9 +361,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     emptyList()
                 } else {
                     database.withTransaction {
+                        // Preserve the device's current default profile. A cloud
+                        // restore must never introduce a second default profile.
+                        var hasDefaultProfile = profileDao.getAllProfilesList().any { it.isDefault }
                         profilesToRestore.forEach { cloudProfile ->
                             if (profileDao.getProfileById(cloudProfile.id) == null) {
-                                profileDao.insertProfile(cloudProfile.copy(pin = "", isPinEnabled = false))
+                                val makeDefault = cloudProfile.isDefault && !hasDefaultProfile
+                                profileDao.insertProfile(
+                                    cloudProfile.copy(
+                                        pin = "",
+                                        isPinEnabled = false,
+                                        isDefault = makeDefault
+                                    )
+                                )
+                                if (makeDefault) hasDefaultProfile = true
                             }
                         }
                         cloudSettings.forEach { cloudSetting ->
