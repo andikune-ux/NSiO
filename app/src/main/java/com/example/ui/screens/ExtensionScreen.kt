@@ -215,6 +215,7 @@ private fun LinkSourceTab(
     onNavigateToHome: () -> Unit
 ) {
     var urlInput by remember { mutableStateOf("") }
+    var playlistNameInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var parseFeedback by remember { mutableStateOf<String?>(null) }
 
@@ -255,28 +256,48 @@ private fun LinkSourceTab(
                             Text(
                                 "Tempelkan link URL media (http:// atau https://)...",
                                 fontSize = 12.sp,
-                                color = Color(0xFF94A3B8)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Link,
                                 contentDescription = null,
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedContainerColor = Color.White.copy(alpha = 0.08f),
                             unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("link_url_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = playlistNameInput,
+                        onValueChange = { playlistNameInput = it.take(48) },
+                        label = { Text("Nama playlist (opsional)") },
+                        placeholder = { Text("Kosongkan untuk memakai nama otomatis", fontSize = 11.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("link_playlist_name_input")
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -289,10 +310,13 @@ private fun LinkSourceTab(
                             onClick = {
                                 if (urlInput.isNotBlank()) {
                                     isLoading = true
-                                    viewModel.parseAndAddLink(urlInput) { message ->
+                                    viewModel.parseAndAddLink(urlInput, playlistNameInput) { message ->
                                         isLoading = false
                                         parseFeedback = message
-                                        if (!message.startsWith("Error:")) urlInput = ""
+                                        if (!message.startsWith("Error:")) {
+                                            urlInput = ""
+                                            playlistNameInput = ""
+                                        }
                                     }
                                 }
                             },
@@ -813,7 +837,7 @@ private fun PluginRepoTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(playlist.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+                        Text(playlist.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         Text("${playlist.itemCount} item • ${playlist.url}", fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = { editingPlaylist = playlist; editedName = playlist.name }) {
@@ -870,7 +894,7 @@ private fun PluginRepoTab(
                         Text(
                             text = message,
                             fontSize = 11.sp,
-                            color = if (message.startsWith("Repository berhasil")) CyanPrimary else AccentRed
+                            color = if (message.startsWith("Repository berhasil")) MaterialTheme.colorScheme.primary else AccentRed
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -1016,7 +1040,7 @@ private fun PluginRepoTab(
                             text = pName,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = CyanPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
