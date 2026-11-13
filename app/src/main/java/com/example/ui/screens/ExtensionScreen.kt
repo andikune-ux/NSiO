@@ -196,7 +196,6 @@ fun ExtensionScreen(
             expectedPin = settings.serverPin,
             onSuccess = {
                 viewModel.unlockServerAccess()
-                isServerUnlocked = true
                 showServerPinDialog = false
                 selectedTabIndex = 2
             },
