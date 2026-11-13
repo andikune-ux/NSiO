@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,12 +60,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -750,30 +754,32 @@ fun SettingsScreen(
         item {
             SettingsGlassCard(
                 icon = Icons.Default.Share,
-                title = "Tautan Pembuat Aplikasi (andikune)",
-                subtitle = "Hubungi pengembang untuk masukan & update"
+                title = "Media Sosial & Komunitas",
+                subtitle = "Ikuti kanal resmi pengembang"
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     val links = listOf(
-                        Triple("Instagram: @andik.une", "https://www.instagram.com/andik.une", "📷"),
-                        Triple("TikTok: @andik.une", "https://www.tiktok.com/@andik.une", "🎵"),
-                        Triple("WhatsApp Komunitas", "https://chat.whatsapp.com/DuRvdGpBNfoE15HthpJvQI?s=cl&p=a&mlu=4&ilr=4", "💬")
+                        Triple("GitHub", "https://github.com/andikune-ux", R.drawable.ic_brand_github),
+                        Triple("WhatsApp", "https://chat.whatsapp.com/BAejUrfRW39FOt8biJleUM", R.drawable.ic_brand_whatsapp),
+                        Triple("TikTok", "https://www.tiktok.com/@nayyra.une", R.drawable.ic_brand_tiktok),
+                        Triple("Instagram", "https://www.instagram.com/nayyra.une", R.drawable.ic_brand_instagram)
                     )
-
-                    links.forEach { (label, url, emoji) ->
+                    links.forEach { (label, url, iconRes) ->
+                        val tint = when (label) {
+                            "WhatsApp" -> Color(0xFF25D366)
+                            "Instagram" -> Color(0xFFE4405F)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .liquidGlass(
-                                    shape = RoundedCornerShape(16.dp),
-                                    alpha = 0.08f,
-                                    borderAlpha = 0.22f,
-                                    elevation = 2.dp
-                                )
-                                .clip(RoundedCornerShape(16.dp))
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                     runCatching { context.startActivity(intent) }
@@ -784,33 +790,15 @@ fun SettingsScreen(
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
-                                }
-                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(text = emoji, fontSize = 16.sp)
-                                    Text(
-                                        text = label,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Text(
-                                    text = "Buka ↗",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Image(
+                                painter = painterResource(iconRes),
+                                contentDescription = label,
+                                colorFilter = ColorFilter.tint(tint),
+                                modifier = Modifier.size(23.dp)
+                            )
                         }
                     }
                 }
@@ -962,17 +950,21 @@ private fun SettingsGlassCard(
                         modifier = Modifier.size(18.dp)
                     )
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = subtitle,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

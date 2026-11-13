@@ -292,7 +292,7 @@ fun PlayerScreen(
                     .fillMaxWidth(0.28f)
                     .fillMaxHeight()
                     .pointerInput(media.id) {
-                        var currentVolume = playerState.volume
+                        var currentVolume = viewModel.player.exoPlayer?.volume ?: playerState.volume
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
                                 change.consume()
