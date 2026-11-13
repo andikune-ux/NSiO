@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.example.data.download.isVerifiedCompletedRange
 import com.example.data.download.calculateRetryProgress
+import com.example.player.shouldUseNativePlayer
 import org.junit.Test
 
 class AppUpdateManagerTest {
@@ -70,6 +71,16 @@ class AppUpdateManagerTest {
         assertEquals(0, negativeInput.percent)
         assertEquals(0L, negativeInput.downloadedBytes)
         assertEquals(0L, negativeInput.totalBytes)
+    }
+
+    @Test
+    fun classifiesNativeAndWebViewPlaybackSourcesConsistently() {
+        assertTrue(shouldUseNativePlayer("VIDEO", "https://cdn.example/video.mp4"))
+        assertTrue(shouldUseNativePlayer("STREAM", "https://cdn.example/live.m3u8"))
+        assertFalse(shouldUseNativePlayer("PHOTO", "https://cdn.example/poster.jpg"))
+        assertFalse(shouldUseNativePlayer("PHOTO", "https://drive.google.com/file/d/id/preview"))
+        assertFalse(shouldUseNativePlayer("VIDEO", "https://drive.google.com/file/d/id/preview"))
+        assertFalse(shouldUseNativePlayer("VIDEO", "   "))
     }
 
     @Test
