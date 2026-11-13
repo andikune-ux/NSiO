@@ -766,6 +766,7 @@ private fun PluginRepoTab(
     var editingPlaylist by remember { mutableStateOf<SourcePlaylist?>(null) }
     var editedName by remember { mutableStateOf("") }
     var repoFeedback by remember { mutableStateOf<String?>(null) }
+    var isAddingRepository by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
@@ -858,8 +859,11 @@ private fun PluginRepoTab(
 
                     Button(
                         onClick = {
-                            if (repoUrlInput.isNotBlank()) {
-                                val url = repoUrlInput.trim()
+                            val url = repoUrlInput.trim()
+                            if (url.isBlank()) {
+                                repoFeedback = "Masukkan URL repository terlebih dahulu."
+                            } else if (!isAddingRepository) {
+                                isAddingRepository = true
                                 scope.launch {
                                     runCatching {
                                         viewModel.pluginManager.addRepository(name = "Koleksi Eksternal", url = url)
@@ -867,22 +871,34 @@ private fun PluginRepoTab(
                                         repoUrlInput = ""
                                         repoFeedback = "Repository berhasil disimpan."
                                     }.onFailure { error ->
-                                        repoFeedback = error.message ?: "URL repository tidak valid."
+                                        repoFeedback = error.message?.takeIf { it.isNotBlank() }
+                                            ?: "Repository gagal disimpan. Periksa URL dan koneksi internet."
                                     }
+                                    isAddingRepository = false
                                 }
                             }
                         },
+                        enabled = !isAddingRepository,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
-                            contentColor = Color.Black
+                            contentColor = Color.Black,
+                            disabledContainerColor = CyanPrimary.copy(alpha = 0.45f)
                         ),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                     ) {
+                        if (isAddingRepository) {
+                            CircularProgressIndicator(
+                                color = Color.Black,
+                                modifier = Modifier.size(17.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         Text(
-                            "Tambahkan Repositori",
+                            if (isAddingRepository) "Menyimpan Repository..." else "Tambahkan Repositori",
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
