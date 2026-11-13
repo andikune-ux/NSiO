@@ -76,9 +76,9 @@ fun VerticalNavToolbar(
             .width(76.dp)
             .liquidGlass(
                 shape = RoundedCornerShape(22.dp),
-                alpha = 0.12f,
-                borderAlpha = 0.35f,
-                elevation = 10.dp
+                alpha = 0.15f,
+                borderAlpha = 0.24f,
+                elevation = 14.dp
             )
             .testTag("vertical_nav_toolbar")
     ) {
@@ -173,7 +173,7 @@ fun VerticalNavToolbar(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
                     .border(
                         0.8.dp,
                         Brush.linearGradient(listOf(Color.White.copy(alpha = 0.25f), Color.Transparent)),
