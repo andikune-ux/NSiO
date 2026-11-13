@@ -50,9 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.CyanPrimary
 import com.example.ui.theme.CyanSecondary
-import com.example.ui.theme.FocusHighlight
 
 /**
  * iOS 26 Floating Liquid Glass Bottom Navigation Capsule
@@ -143,18 +141,18 @@ private fun BottomNavItem(
 
     val iconColor by animateColorAsState(
         targetValue = when {
-            isSelected -> CyanPrimary
-            isFocused -> FocusHighlight
-            else -> Color.White.copy(alpha = 0.65f)
+            isSelected -> MaterialTheme.colorScheme.primary
+            isFocused -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "bottom_nav_icon_color"
     )
 
     val textColor by animateColorAsState(
         targetValue = when {
-            isSelected -> CyanPrimary
-            isFocused -> FocusHighlight
-            else -> Color.White.copy(alpha = 0.6f)
+            isSelected -> MaterialTheme.colorScheme.primary
+            isFocused -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "bottom_nav_text_color"
     )
@@ -172,7 +170,7 @@ private fun BottomNavItem(
             .then(
                 if (isFocused) Modifier.border(
                     1.5.dp,
-                    Brush.linearGradient(listOf(FocusHighlight, Color.White.copy(alpha = 0.7f))),
+                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
                     RoundedCornerShape(20.dp)
                 ) else Modifier
             )
@@ -196,7 +194,7 @@ private fun BottomNavItem(
                         if (isSelected) {
                             Modifier.background(
                                 Brush.radialGradient(
-                                    listOf(CyanPrimary.copy(alpha = 0.28f), Color.Transparent)
+                                    listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f), Color.Transparent)
                                 )
                             )
                         } else {
