@@ -71,7 +71,6 @@ import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentRed
-import com.example.ui.theme.CyanPrimary
 import com.example.update.AppUpdateManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -199,14 +198,14 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(CircleShape)
-                                            .border(1.5.dp, CyanPrimary, CircleShape)
+                                            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                     )
                                 } else {
                                     Box(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(CircleShape)
-                                            .background(CyanPrimary),
+                                            .background(MaterialTheme.colorScheme.primary),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -235,14 +234,14 @@ fun SettingsScreen(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(CyanPrimary.copy(alpha = 0.2f))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = "Cloud Terhubung",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = CyanPrimary
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
@@ -255,7 +254,7 @@ fun SettingsScreen(
                                     onClick = { viewModel.syncToCloud() },
                                     enabled = !isSyncing,
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = CyanPrimary,
+                                        containerColor = MaterialTheme.colorScheme.primary,
                                         contentColor = Color.Black
                                     ),
                                     shape = RoundedCornerShape(16.dp),
@@ -288,7 +287,7 @@ fun SettingsScreen(
                                     enabled = !isSyncing,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color.White.copy(alpha = 0.12f),
-                                        contentColor = CyanPrimary
+                                        contentColor = MaterialTheme.colorScheme.primary
                                     ),
                                     shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier.weight(1f).height(44.dp)
@@ -334,13 +333,13 @@ fun SettingsScreen(
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = CyanPrimary,
+                                color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
                             )
                             Text(
                                 text = "Menghubungkan ke layanan Google Sign-In...",
                                 fontSize = 12.sp,
-                                color = CyanPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -357,7 +356,7 @@ fun SettingsScreen(
                             Button(
                                 onClick = { viewModel.signInWithGoogle() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = CyanPrimary,
+                                    containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = Color.Black
                                 ),
                                 shape = RoundedCornerShape(18.dp),
@@ -401,7 +400,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(language = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -435,7 +434,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(themeMode = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -469,7 +468,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(displayMode = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -506,10 +505,10 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.08f))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
                                 .border(
                                     1.dp,
-                                    if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.2f),
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
                                     RoundedCornerShape(12.dp)
                                 )
                                 .clickable { viewModel.updateSettings(settings.copy(gridColumns = cols)) },
@@ -548,10 +547,10 @@ fun SettingsScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.weight(1f)
                     )
@@ -562,9 +561,9 @@ fun SettingsScreen(
                         },
                         enabled = serverPinInput.length == 4,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = Color.Black,
-                            disabledContainerColor = CyanPrimary.copy(alpha = 0.35f),
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                             disabledContentColor = Color.Black.copy(alpha = 0.55f)
                         ),
                         shape = RoundedCornerShape(16.dp),
@@ -595,7 +594,7 @@ fun SettingsScreen(
                             text = "Versi terbaru: v${release.latestVersion} • ${if (release.assetSize > 0L) android.text.format.Formatter.formatShortFileSize(context, release.assetSize) else "Ukuran tidak diketahui"}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = CyanPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             text = release.notes,
@@ -607,7 +606,7 @@ fun SettingsScreen(
                         Text(
                             text = "NSiO sudah menggunakan versi terbaru (v${BuildConfig.VERSION_NAME}).",
                             fontSize = 12.sp,
-                            color = CyanPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -615,9 +614,9 @@ fun SettingsScreen(
                         androidx.compose.material3.LinearProgressIndicator(
                             progress = updateProgress / 100f,
                             modifier = Modifier.fillMaxWidth(),
-                            color = CyanPrimary
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Text("Progres unduhan: $updateProgress%", fontSize = 10.sp, color = CyanPrimary)
+                        Text("Progres unduhan: $updateProgress%", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Button(
@@ -638,7 +637,7 @@ fun SettingsScreen(
                                 }
                             },
                             enabled = !updateChecking && updateDownloadId == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
                         ) {
@@ -660,7 +659,7 @@ fun SettingsScreen(
                                         }
                                         .onFailure { updateMessage = "Gagal memulai unduhan: ${it.localizedMessage}" }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = CyanPrimary),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.height(44.dp)
                             ) {
@@ -684,7 +683,7 @@ fun SettingsScreen(
                                         updateMessage = "Gagal membuka installer Android."
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         ) {
@@ -758,7 +757,7 @@ fun SettingsScreen(
                                 Text(
                                     text = "Buka ↗",
                                     fontSize = 11.sp,
-                                    color = CyanPrimary,
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -796,14 +795,14 @@ private fun SettingsGlassCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(CyanPrimary.copy(alpha = 0.18f))
-                        .border(1.dp, CyanPrimary.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = CyanPrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
                 }
