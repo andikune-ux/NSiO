@@ -332,12 +332,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 mediaDao.replacePlaylist(playlist.id, listOf(item))
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-                authManager.currentUser?.let { user ->
+                val cloudWarning = authManager.currentUser?.let { user ->
                     runCatching {
                         cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, listOf(item))
-                    }
-                }
-                "Berhasil menambahkan: ${result.item.title}"
+                    }.exceptionOrNull()?.let { " Cloud gagal disinkronkan: ${it.localizedMessage ?: "koneksi bermasalah"}" }
+                }.orEmpty()
+                "Berhasil menambahkan: ${result.item.title}.$cloudWarning"
             }
             is ParseResult.Multiple -> {
                 val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
@@ -352,12 +352,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 mediaDao.replacePlaylist(playlist.id, items)
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-                authManager.currentUser?.let { user ->
+                val cloudWarning = authManager.currentUser?.let { user ->
                     runCatching {
                         cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, items)
-                    }
-                }
-                "${items.size} item berhasil ditambahkan (${result.title})"
+                    }.exceptionOrNull()?.let { " Cloud gagal disinkronkan: ${it.localizedMessage ?: "koneksi bermasalah"}" }
+                }.orEmpty()
+                "${items.size} item berhasil ditambahkan (${result.title}).$cloudWarning"
             }
             is ParseResult.Error -> "Error: ${result.message}"
         }
