@@ -197,6 +197,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        // Prevent native video audio from continuing after the app loses foreground.
+        // MainViewModel persists the playback position without closing the player.
+        viewModel.pausePlaybackForBackground()
+        super.onPause()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
