@@ -112,6 +112,13 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             }
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful) throw IOException("Server mengembalikan HTTP ${response.code}")
+            val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim().lowercase()
+            val finalPath = response.request.url.encodedPath.lowercase()
+            if (contentType.contains("mpegurl") || contentType.contains("vnd.apple.mpegurl") ||
+                finalPath.endsWith(".m3u8") || finalPath.endsWith(".m3u")) {
+                response.close()
+                throw IOException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
+            }
             val body = response.body ?: throw IOException("Respons unduhan kosong")
             val total = body.contentLength()
             db.updateProgress(id, "DOWNLOADING", 0, 0, total, target.absolutePath)
