@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.ui.theme.AccentRed
-import com.example.ui.theme.CyanPrimary
 
 /**
  * iOS 26 Liquid Glass Authenticator PIN Modal
@@ -80,7 +79,7 @@ fun PinDialog(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .background(CyanPrimary.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .border(
                             1.dp,
                             Brush.linearGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent)),
@@ -91,7 +90,7 @@ fun PinDialog(
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Lock",
-                        tint = CyanPrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -124,11 +123,11 @@ fun PinDialog(
                             modifier = Modifier
                                 .size(14.dp)
                                 .clip(CircleShape)
-                                .background(if (isFilled) CyanPrimary else Color.White.copy(alpha = 0.1f))
+                                .background(if (isFilled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.1f))
                                 .border(
                                     width = 1.dp,
                                     brush = Brush.linearGradient(
-                                        if (isFilled) listOf(Color.White, CyanPrimary)
+                                        if (isFilled) listOf(Color.White, MaterialTheme.colorScheme.primary)
                                         else listOf(Color.White.copy(alpha = 0.3f), Color.Transparent)
                                     ),
                                     shape = CircleShape
