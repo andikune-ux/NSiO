@@ -467,6 +467,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 val cloudWarning = authManager.currentUser?.let { user ->
                     runCatching {
+                        sourcePlaylistDao.getForProfile(profileId).firstOrNull { it.id == playlist.id }?.let {
+                            cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(it))
+                        }
                         cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, listOf(item))
                     }.exceptionOrNull()?.let { " Cloud gagal disinkronkan: ${it.localizedMessage ?: "koneksi bermasalah"}" }
                 }.orEmpty()
@@ -493,6 +496,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 val cloudWarning = authManager.currentUser?.let { user ->
                     runCatching {
+                        sourcePlaylistDao.getForProfile(profileId).firstOrNull { it.id == playlist.id }?.let {
+                            cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(it))
+                        }
                         cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, items)
                     }.exceptionOrNull()?.let { " Cloud gagal disinkronkan: ${it.localizedMessage ?: "koneksi bermasalah"}" }
                 }.orEmpty()
@@ -793,6 +799,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (item.playlistId.isNotBlank()) {
                 val remainingCount = mediaDao.countForPlaylist(item.playlistId)
                 sourcePlaylistDao.updateCount(item.playlistId, remainingCount)
+                if (user != null) {
+                    val updatedPlaylist = sourcePlaylistDao.getForProfile(item.profileId)
+                        .firstOrNull { it.id == item.playlistId }
+                    if (updatedPlaylist != null) {
+                        runCatching {
+                            cloudRepository.syncSourcePlaylists(user.uid, item.profileId, listOf(updatedPlaylist))
+                        }.onFailure {
+                            cloudMessage = listOfNotNull(cloudMessage, "metadata playlist gagal diperbarui").joinToString("; ")
+                        }
+                    }
+                }
             }
             val details = listOfNotNull(
                 storageMessage?.let { "Storage: $it" },
