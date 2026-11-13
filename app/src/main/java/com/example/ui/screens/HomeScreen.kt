@@ -144,6 +144,7 @@ fun HomeScreen(
     ) {
         val containerWidth = maxWidth
         val isNarrow = containerWidth < 600.dp
+        val isVeryNarrow = containerWidth < 390.dp
         val columns = when {
             containerWidth < 440.dp -> 2
             containerWidth < 720.dp -> 3
@@ -172,7 +173,7 @@ fun HomeScreen(
                     modifier = Modifier.padding(end = 4.dp)
                 ) {
                     Text(
-                        text = "Net Stream iO",
+                        text = if (isVeryNarrow) "NSiO" else "Net Stream iO",
                         fontSize = if (isNarrow) 16.sp else 18.sp,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onBackground
@@ -201,7 +202,7 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .widthIn(min = 120.dp, max = 360.dp)
+                        .widthIn(min = if (isVeryNarrow) 72.dp else 120.dp, max = 360.dp)
                         .height(36.dp)
                         .padding(horizontal = 6.dp)
                         .liquidGlass(
@@ -350,14 +351,16 @@ fun HomeScreen(
                                 is AuthState.Loading -> "Menghubungkan..."
                                 else -> "Login Cloud"
                             }
-                            Text(
-                                text = cloudLabel,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (!isVeryNarrow) {
+                                Text(
+                                    text = cloudLabel,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
