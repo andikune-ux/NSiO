@@ -4,7 +4,6 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.withTransaction
 import com.example.data.backup.BackupResult
 import com.example.data.backup.BackupUtils
 import com.example.data.download.VideoDownloadManager
@@ -329,11 +328,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     playlistId = playlist.id,
                     sourceUrl = url
                 )
-                database.withTransaction {
-                    mediaDao.clearPlaylist(playlist.id)
-                    mediaDao.insertMedia(item)
-                    sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-                }
+                mediaDao.replacePlaylist(playlist.id, listOf(item))
+                sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.saveMediaItem(user.uid, item) }
                 }
@@ -350,11 +346,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val items = result.items.map {
                     it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
                 }
-                database.withTransaction {
-                    mediaDao.clearPlaylist(playlist.id)
-                    mediaDao.insertAll(items)
-                    sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-                }
+                mediaDao.replacePlaylist(playlist.id, items)
+                sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.syncLocalListToCloud(user.uid, items) }
                 }
