@@ -24,6 +24,7 @@ import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -81,6 +82,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    // Keep only one database observer per active profile.
+    private var mediaObserverJob: Job? = null
+    private var playlistObserverJob: Job? = null
+
     init {
         loadInitialData()
         observeAuthForCloudSync()
@@ -125,7 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value = defaultSettings
             } else {
                 _profiles.value = existingProfiles
-                val active = existingProfiles.first()
+                val active = existingProfiles.firstOrNull { it.isDefault } ?: existingProfiles.first()
                 _activeProfile.value = active
                 _settings.value = profileDao.getSettings(active.id) ?: ProfileSettings(profileId = active.id)
             }
@@ -141,23 +146,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeActiveProfileMedia() {
         val current = _activeProfile.value ?: return
-        viewModelScope.launch {
+        mediaObserverJob?.cancel()
+        _mediaList.value = emptyList()
+        mediaObserverJob = viewModelScope.launch {
             mediaDao.getMediaForProfile(current.id).collect { list ->
-                _mediaList.value = list
+                // Ignore late emissions from a profile that is no longer active.
+                if (_activeProfile.value?.id == current.id) _mediaList.value = list
             }
         }
     }
 
     private fun observeSourcePlaylists() {
         val current = _activeProfile.value ?: return
-        viewModelScope.launch {
-            sourcePlaylistDao.observeForProfile(current.id).collect { _sourcePlaylists.value = it }
+        playlistObserverJob?.cancel()
+        _sourcePlaylists.value = emptyList()
+        playlistObserverJob = viewModelScope.launch {
+            sourcePlaylistDao.observeForProfile(current.id).collect { playlists ->
+                if (_activeProfile.value?.id == current.id) _sourcePlaylists.value = playlists
+            }
         }
     }
 
     fun switchProfile(profile: Profile) {
         viewModelScope.launch {
+            if (_activeProfile.value?.id == profile.id) return@launch
             _activeProfile.value = profile
+            _isServerUnlocked.value = false
+            _selectedFilter.value = "ALL"
             _settings.value = profileDao.getSettings(profile.id) ?: ProfileSettings(profileId = profile.id)
             observeActiveProfileMedia()
             observeSourcePlaylists()
