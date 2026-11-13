@@ -544,7 +544,7 @@ fun ProfileScreen(
                         )
                     }
                     Text(
-                        text = "Mem-backup seluruh isi aplikasi: semua profil, database media, pengaturan, dan histori.",
+                        text = "Mem-backup seluruh isi aplikasi: semua profil, database media, pengaturan, dan histori. File backup memuat data PIN profil; simpan di lokasi pribadi dan jangan dibagikan.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
