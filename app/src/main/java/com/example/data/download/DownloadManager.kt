@@ -317,7 +317,24 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 else -> false
             }
             if (retryable) {
-                db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
+                // Preserve the known representation size and truthful progress across
+                // transient HTTP/network failures so the next attempt can resume cleanly.
+                val saved = db.getDownloadById(id)
+                val partialBytes = if (partial.isFile) partial.length() else 0L
+                val knownTotal = saved?.totalBytes?.coerceAtLeast(0L) ?: 0L
+                val retryPercent = if (knownTotal > 0L) {
+                    ((partialBytes * 100L) / knownTotal).toInt().coerceIn(0, 99)
+                } else {
+                    0
+                }
+                db.updateProgress(
+                    id,
+                    "PAUSED",
+                    retryPercent,
+                    partialBytes,
+                    knownTotal,
+                    target.absolutePath
+                )
                 Result.retry()
             } else {
                 partial.delete()
