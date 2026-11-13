@@ -564,6 +564,7 @@ private fun ServerSourceTab(
     var titleInput by remember { mutableStateOf("") }
     var selectedFileUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var selectedFileIsPhoto by remember { mutableStateOf(false) }
+    val isUploadingServerMedia by viewModel.isUploadingServerMedia.collectAsState()
     val context = LocalContext.current
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedFileUri = uri
@@ -642,6 +643,7 @@ private fun ServerSourceTab(
                         onClick = { filePicker.launch("video/*") },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
                         shape = RoundedCornerShape(18.dp),
+                        enabled = !isUploadingServerMedia,
                         modifier = Modifier.fillMaxWidth().height(46.dp)
                     ) {
                         Icon(Icons.Default.FolderOpen, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
@@ -651,6 +653,7 @@ private fun ServerSourceTab(
 
                     Button(
                         onClick = { filePicker.launch("image/*") },
+                        enabled = !isUploadingServerMedia,
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth().height(46.dp)
@@ -663,14 +666,26 @@ private fun ServerSourceTab(
                     if (selectedFileUri != null) {
                         Button(
                             onClick = {
-                                viewModel.uploadMediaFileToServer(titleInput, selectedFileUri.toString(), selectedFileIsPhoto)
-                                titleInput = ""
-                                selectedFileUri = null
+                                viewModel.uploadMediaFileToServer(titleInput, selectedFileUri.toString(), selectedFileIsPhoto) { success ->
+                                    if (success) {
+                                        titleInput = ""
+                                        selectedFileUri = null
+                                    }
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
                             shape = RoundedCornerShape(18.dp),
+                            enabled = !isUploadingServerMedia,
                             modifier = Modifier.fillMaxWidth().height(48.dp)
-                        ) { Text("Upload File ke Server", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                        ) {
+                            if (isUploadingServerMedia) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.Black)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Mengunggah...", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            } else {
+                                Text("Upload File ke Server", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
                     }
 
                     Button(
