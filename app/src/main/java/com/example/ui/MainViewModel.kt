@@ -253,6 +253,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showStatus("Silakan login Google terlebih dahulu untuk sinkronisasi cloud")
             return
         }
+        val profileId = _activeProfile.value?.id ?: "profile_utama"
         viewModelScope.launch {
             _isCloudSyncing.value = true
             try {
@@ -262,11 +263,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     displayName = user.displayName,
                     photoUrl = user.photoUrl?.toString()
                 )
-                val localItems = _mediaList.value
-                val count = cloudRepository.syncLocalListToCloud(user.uid, localItems)
-                showStatus("$count item berhasil disinkronkan ke Cloud Firestore!")
+                // Read from Room at execution time instead of relying on a possibly
+                // stale StateFlow emission after a profile switch.
+                val localItems = mediaDao.getMediaListForProfile(profileId)
+                val count = cloudRepository.syncLocalListToCloud(user.uid, profileId, localItems)
+                showStatus("$count item profil berhasil disinkronkan ke Cloud Firestore!")
             } catch (e: Exception) {
-                showStatus("Gagal sinkronisasi: ${e.localizedMessage}")
+                showStatus("Gagal sinkronisasi: ${e.localizedMessage ?: "periksa koneksi"}")
             } finally {
                 _isCloudSyncing.value = false
             }
@@ -281,14 +284,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isCloudSyncing.value = true
             try {
-                val cloudItems = cloudRepository.fetchMediaItems(user.uid)
+                val currentProfileId = _activeProfile.value?.id ?: "profile_utama"
+                val cloudItems = cloudRepository.fetchMediaItems(user.uid, currentProfileId)
                 if (cloudItems.isEmpty()) {
-                    showStatus("Tidak ada data tersimpan di Cloud Firestore")
+                    showStatus("Tidak ada data cloud untuk profil ini")
                 } else {
-                    val currentProfileId = _activeProfile.value?.id ?: "profile_utama"
-                    val itemsForProfile = cloudItems.map { it.copy(profileId = currentProfileId) }
-                    mediaDao.insertAll(itemsForProfile)
-                    showStatus("${itemsForProfile.size} item berhasil dipulihkan dari Cloud!")
+                    mediaDao.insertAll(cloudItems)
+                    showStatus("${cloudItems.size} item berhasil dipulihkan ke profil aktif!")
                 }
             } catch (e: Exception) {
                 showStatus("Gagal memulihkan: ${e.localizedMessage}")
