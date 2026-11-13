@@ -378,7 +378,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun parseAndAddLink(url: String, onFinished: (String) -> Unit) {
         val profileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
-            val message = parseAndAddLinkInternal(url, profileId)
+            val message = runCatching { parseAndAddLinkInternal(url.trim(), profileId) }
+                .getOrElse { "Error: ${it.localizedMessage ?: "gagal memproses sumber"}" }
             onFinished(message)
         }
     }
@@ -414,6 +415,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 "Berhasil menambahkan: ${result.item.title}.$cloudWarning"
             }
             is ParseResult.Multiple -> {
+                // A successful HTTP response with an empty/invalid parse must not
+                // replace the existing playlist with an empty list.
+                if (result.items.isEmpty()) {
+                    return "Error: sumber berhasil dibuka tetapi tidak berisi media yang valid; data playlist lama dipertahankan."
+                }
                 val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
                 val playlist = ensureSourcePlaylist(
                     url,
