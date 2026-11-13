@@ -851,7 +851,7 @@ private fun PinResetDialog(
                     ) { Text("Batal", color = MaterialTheme.colorScheme.onSurface) }
                     Button(
                         onClick = { onSave(pin) },
-                        enabled = pin.matches(Regex("\\\\d{4}")) && pin == confirmation,
+                        enabled = pin.matches(Regex("\\d{4}")) && pin == confirmation,
                         modifier = Modifier.weight(1f).height(42.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary)
                     ) { Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold) }
