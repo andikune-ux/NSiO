@@ -145,19 +145,25 @@ object BackupUtils {
                 // Restore all profiles
                 val profArr = root.optJSONArray("profiles")
                 if (profArr != null) {
+                    val credentialsExcluded = root.optBoolean("securityCredentialsExcluded", false)
+                    var hasDefaultProfile = profileDao.getAllProfilesList().any { it.isDefault }
                     for (i in 0 until profArr.length()) {
                         val p = profArr.getJSONObject(i)
+                        val profileId = p.getString("id")
+                        val existing = profileDao.getProfileById(profileId)
+                        val makeDefault = existing?.isDefault ?: (p.optBoolean("isDefault", false) && !hasDefaultProfile)
                         profileDao.insertProfile(
                             Profile(
-                                id = p.getString("id"),
+                                id = profileId,
                                 name = p.getString("name"),
                                 avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                                pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else PinVault.encrypt(context, p.optString("pin", "")),
-                                isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
-                                isDefault = p.optBoolean("isDefault", false),
-                                createdAt = p.optLong("createdAt", System.currentTimeMillis())
+                                pin = if (credentialsExcluded) existing?.pin.orEmpty() else PinVault.encrypt(context, p.optString("pin", "")),
+                                isPinEnabled = if (credentialsExcluded) existing?.isPinEnabled ?: false else p.optBoolean("isPinEnabled", false),
+                                isDefault = makeDefault,
+                                createdAt = existing?.createdAt ?: p.optLong("createdAt", System.currentTimeMillis())
                             )
                         )
+                        if (makeDefault) hasDefaultProfile = true
                     }
                 }
 
@@ -167,20 +173,21 @@ object BackupUtils {
                     for (i in 0 until settArr.length()) {
                         val s = settArr.getJSONObject(i)
                         profileDao.insertSettings(
+                            val profileId = s.getString("profileId")
+                            val existingSettings = profileDao.getSettings(profileId)
+                            val credentialsExcluded = root.optBoolean("securityCredentialsExcluded", false)
                             ProfileSettings(
-                                profileId = s.getString("profileId"),
+                                profileId = profileId,
                                 language = s.optString("language", "ID"),
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
-                                gridColumns = s.optInt("gridColumns", 4),
-                                serverPin = PinVault.encrypt(
-                                context,
-                                if (root.optBoolean("securityCredentialsExcluded", false)) {
-                                    ProfileSettings(profileId = s.getString("profileId")).serverPin
+                                gridColumns = s.optInt("gridColumns", 4).coerceIn(3, 8),
+                                serverPin = if (credentialsExcluded) {
+                                    existingSettings?.serverPin
+                                        ?: PinVault.encrypt(context, ProfileSettings(profileId = profileId).serverPin)
                                 } else {
-                                    s.optString("serverPin", "")
+                                    PinVault.encrypt(context, s.optString("serverPin", ""))
                                 }
-                            )
                             )
                         )
                     }
@@ -218,40 +225,42 @@ object BackupUtils {
 
                 return@withTransaction BackupResult(
                     isSuccess = true,
-                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Demi keamanan, PIN profil perlu dibuat ulang dan PIN server dibuat ulang khusus perangkat ini." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Kredensial lokal yang sudah ada dipertahankan; profil baru perlu mengatur PIN dan mendapatkan PIN server khusus perangkat ini." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
                 )
                 } else if (backupType == "PROFILE_BACKUP") {
                 // Restore single profile
                 val p = root.getJSONObject("profile")
                 val profileId = p.getString("id")
+                val existingProfile = profileDao.getProfileById(profileId)
+                val credentialsExcluded = root.optBoolean("securityCredentialsExcluded", false)
                 profileDao.insertProfile(
                     Profile(
                         id = profileId,
                         name = p.getString("name"),
                         avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                        pin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else PinVault.encrypt(context, p.optString("pin", "")),
-                        isPinEnabled = if (root.optBoolean("securityCredentialsExcluded", false)) false else p.optBoolean("isPinEnabled", false),
-                        isDefault = false
+                        pin = if (credentialsExcluded) existingProfile?.pin.orEmpty() else PinVault.encrypt(context, p.optString("pin", "")),
+                        isPinEnabled = if (credentialsExcluded) existingProfile?.isPinEnabled ?: false else p.optBoolean("isPinEnabled", false),
+                        isDefault = existingProfile?.isDefault ?: false,
+                        createdAt = existingProfile?.createdAt ?: p.optLong("createdAt", System.currentTimeMillis())
                     )
                 )
 
                 if (root.has("settings")) {
                     val s = root.getJSONObject("settings")
+                    val existingSettings = profileDao.getSettings(profileId)
                     profileDao.insertSettings(
                         ProfileSettings(
                             profileId = profileId,
                             language = s.optString("language", "ID"),
                             themeMode = s.optString("themeMode", "DARK"),
                             displayMode = s.optString("displayMode", "TV"),
-                            gridColumns = s.optInt("gridColumns", 4),
-                            serverPin = PinVault.encrypt(
-                            context,
-                            if (root.optBoolean("securityCredentialsExcluded", false)) {
-                                ProfileSettings(profileId = profileId).serverPin
+                            gridColumns = s.optInt("gridColumns", 4).coerceIn(3, 8),
+                            serverPin = if (credentialsExcluded) {
+                                existingSettings?.serverPin
+                                    ?: PinVault.encrypt(context, ProfileSettings(profileId = profileId).serverPin)
                             } else {
-                                s.optString("serverPin", "")
+                                PinVault.encrypt(context, s.optString("serverPin", ""))
                             }
-                        )
                         )
                     )
                 }
@@ -287,7 +296,7 @@ object BackupUtils {
 
                 return@withTransaction BackupResult(
                     isSuccess = true,
-                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN profil tidak disertakan; buat PIN baru dari menu Profil. PIN server dibuat ulang khusus perangkat ini." else "Restore Profil berhasil!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN dan PIN server lokal yang sudah ada dipertahankan; profil baru perlu mengatur kredensial di perangkat ini." else "Restore Profil berhasil!"
                 )
             }
 
