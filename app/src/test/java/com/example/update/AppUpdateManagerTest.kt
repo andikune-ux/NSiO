@@ -83,7 +83,7 @@ class AppUpdateManagerTest {
         assertFalse(isStrongEntityTag("v1"))
         assertFalse(isStrongEntityTag("\"v1\"tail\""))
         assertFalse(isStrongEntityTag("\"v1 value\""))
-        assertFalse(isStrongEntityTag("\"v1\\n\""))
+        assertFalse(isStrongEntityTag("\"v1\n\""))
         assertEquals("\"v1\"", selectResumeValidator(" \"v1\" ", "Wed, 21 Oct 2015 07:28:00 GMT"))
         assertEquals("Wed, 21 Oct 2015 07:28:00 GMT", selectResumeValidator("W/\"v1\"", "Wed, 21 Oct 2015 07:28:00 GMT"))
         assertEquals("", selectResumeValidator("W/\"v1\"", ""))
