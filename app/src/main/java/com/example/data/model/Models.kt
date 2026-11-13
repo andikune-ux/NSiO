@@ -69,5 +69,7 @@ data class DownloadItem(
     val progressPercent: Int = 0,
     val downloadedBytes: Long = 0L,
     val totalBytes: Long = 0L,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val etag: String = "",
+    val lastModified: String = ""
 )
