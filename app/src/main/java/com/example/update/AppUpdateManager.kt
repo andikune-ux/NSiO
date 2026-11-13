@@ -63,7 +63,7 @@ object AppUpdateManager {
                 throw IllegalStateException("Rilis terbaru belum dipublikasikan sebagai versi stabil")
             }
             val tag = json.optString("tag_name").trim()
-            val latest = tag.removePrefix("v").removePrefix("V")
+            val latest = normalizeVersionTag(tag)
             require(parseVersion(latest) != null) { "Format versi rilis tidak valid: $tag" }
             require(parseVersion(current) != null) { "Versi aplikasi terpasang tidak valid: $current" }
             val assets = json.optJSONArray("assets")
@@ -236,8 +236,11 @@ object AppUpdateManager {
             url.path.startsWith("/andikune-ux/NSiO/releases/download/")
     }
 
+    internal fun normalizeVersionTag(value: String): String =
+        value.trim().removePrefix("v.").removePrefix("V.").removePrefix("v").removePrefix("V")
+
     internal fun parseVersion(value: String): List<Int>? {
-        val normalized = value.trim().removePrefix("v").removePrefix("V")
+        val normalized = normalizeVersionTag(value)
         if (!normalized.matches(Regex("\\d+(\\.\\d+)*"))) return null
         return normalized.split(".").map { it.toIntOrNull() ?: return null }
     }
