@@ -125,7 +125,12 @@ class CS3IPlayer(
                     }
 
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        _playerState.value = _playerState.value.copy(isPlaying = isPlaying)
+                        val position = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
+                        if (!isPlaying) lastPositionMs = position
+                        _playerState.value = _playerState.value.copy(
+                            isPlaying = isPlaying,
+                            currentPositionMs = if (isPlaying) _playerState.value.currentPositionMs else position
+                        )
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
