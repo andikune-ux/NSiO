@@ -56,6 +56,7 @@ fun PinDialog(
 ) {
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val pinLength = expectedPin.length.takeIf { it == 4 || it == 6 } ?: 4
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -117,7 +118,7 @@ fun PinDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    repeat(4) { index ->
+                    repeat(pinLength) { index ->
                         val isFilled = index < enteredPin.length
                         Box(
                             modifier = Modifier
@@ -171,10 +172,10 @@ fun PinDialog(
                                             "C" -> enteredPin = ""
                                             "DEL" -> if (enteredPin.isNotEmpty()) enteredPin = enteredPin.dropLast(1)
                                             else -> {
-                                                if (enteredPin.length < 4) {
+                                                if (enteredPin.length < pinLength) {
                                                     val next = enteredPin + digit
                                                     enteredPin = next
-                                                    if (next.length == 4) {
+                                                    if (next.length == pinLength) {
                                                         if (expectedPin.length == 4 && next == expectedPin) {
                                                             onSuccess()
                                                         } else {

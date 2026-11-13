@@ -2,7 +2,6 @@ package com.example.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import java.security.SecureRandom
 
 @Entity(tableName = "media_items")
 data class MediaItem(
@@ -46,7 +45,7 @@ data class Profile(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-private fun generateDefaultServerPin(): String = SecureRandom().nextInt(10_000).toString().padStart(4, '0')
+private fun generateDefaultServerPin(): String = "123456"
 
 @Entity(tableName = "profile_settings")
 data class ProfileSettings(

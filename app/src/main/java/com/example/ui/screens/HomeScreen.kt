@@ -155,12 +155,8 @@ fun HomeScreen(
         val isNarrow = containerWidth < 600.dp
         val isVeryNarrow = containerWidth < 420.dp
         val showHeaderLabels = containerWidth >= 460.dp
-        val columns = when {
-            containerWidth < 440.dp -> 2
-            containerWidth < 720.dp -> 3
-            containerWidth < 1020.dp -> 4
-            else -> settings.gridColumns.coerceIn(3, 7)
-        }
+        // Respect the user's explicit grid setting on phones and TV alike.
+        val columns = settings.gridColumns.coerceIn(2, 8)
 
         Column(modifier = Modifier.fillMaxSize()) {
             // ==========================================

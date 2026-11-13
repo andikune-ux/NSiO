@@ -67,6 +67,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.BuildConfig
 import com.example.data.firebase.AuthState
@@ -87,7 +88,7 @@ fun SettingsScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
-    var serverPinInput by remember(settings.profileId) { mutableStateOf(settings.serverPin) }
+    var showServerPinDialog by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
     var updateRelease by remember { mutableStateOf<AppUpdateManager.Release?>(null) }
     var updateChecking by remember { mutableStateOf(false) }
@@ -98,6 +99,14 @@ fun SettingsScreen(
     var readyToInstallVersion by remember { mutableStateOf<String?>(null) }
     var updateStorageAllowed by remember { mutableStateOf(AppUpdateManager.hasUpdateStorageAccess(context)) }
     var updateHistory by remember { mutableStateOf(AppUpdateManager.listDownloadedApks(context)) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            updateStorageAllowed = AppUpdateManager.hasUpdateStorageAccess(context)
+            updateHistory = AppUpdateManager.listDownloadedApks(context)
+            delay(2_000)
+        }
+    }
 
     LaunchedEffect(Unit) {
         updateChecking = true
@@ -549,46 +558,16 @@ fun SettingsScreen(
             SettingsGlassCard(
                 icon = Icons.Default.Lock,
                 title = "Keamanan PIN Sumber Server",
-                subtitle = "PIN untuk membuka menu upload dan kelola server"
+                subtitle = "PIN terenkripsi untuk membuka menu upload dan kelola server"
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                Button(
+                    onClick = { showServerPinDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    OutlinedTextField(
-                        value = serverPinInput,
-                        onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) serverPinInput = value },
-                        visualTransformation = PasswordVisualTransformation(),
-                        placeholder = { Text("PIN 4 Digit", fontSize = 12.sp) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Button(
-                        onClick = {
-                            viewModel.updateSettings(settings.copy(serverPin = serverPinInput))
-                        },
-                        enabled = serverPinInput.length == 4,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.Black,
-                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                            disabledContentColor = Color.Black.copy(alpha = 0.55f)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Text("Simpan PIN", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ubah PIN keamanan", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -835,6 +814,112 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+ 
+    if (showServerPinDialog) {
+        ServerPinChangeDialog(
+            currentPin = settings.serverPin.ifBlank { "123456" },
+            onDismiss = { showServerPinDialog = false },
+            onSave = { newPin ->
+                viewModel.updateSettings(settings.copy(serverPin = newPin))
+                showServerPinDialog = false
+            }
+        )
+    }
+}
+ 
+@Composable
+private fun ServerPinChangeDialog(
+    currentPin: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var oldPin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var verified by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                if (verified) "Buat PIN baru" else "Verifikasi PIN lama",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                if (verified) "Masukkan PIN baru 6 digit, lalu ulangi untuk konfirmasi."
+                else "Masukkan PIN saat ini untuk membuka pengaturan keamanan.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!verified) {
+                OutlinedTextField(
+                    value = oldPin,
+                    onValueChange = { value -> if (value.length <= currentPin.length && value.all(Char::isDigit)) oldPin = value },
+                    label = { Text("PIN lama") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                OutlinedTextField(
+                    value = newPin,
+                    onValueChange = { value -> if (value.length <= 6 && value.all(Char::isDigit)) newPin = value },
+                    label = { Text("PIN baru (6 digit)") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirmPin,
+                    onValueChange = { value -> if (value.length <= 6 && value.all(Char::isDigit)) confirmPin = value },
+                    label = { Text("Ulangi PIN baru") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Batal") }
+                Button(
+                    onClick = {
+                        if (!verified) {
+                            if (oldPin == currentPin) {
+                                verified = true
+                                error = null
+                            } else {
+                                error = "PIN lama salah. Akses perubahan ditolak."
+                                oldPin = ""
+                            }
+                        } else if (!newPin.matches(Regex("\\d{6}"))) {
+                            error = "PIN baru harus tepat 6 digit."
+                        } else if (newPin != confirmPin) {
+                            error = "Konfirmasi PIN tidak cocok."
+                            confirmPin = ""
+                        } else if (newPin == currentPin) {
+                            error = "Gunakan PIN yang berbeda dari PIN lama."
+                        } else {
+                            onSave(newPin)
+                        }
+                    },
+                    enabled = if (verified) newPin.length == 6 && confirmPin.length == 6 else oldPin.length == currentPin.length,
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (verified) "Simpan" else "Verifikasi") }
             }
         }
     }
