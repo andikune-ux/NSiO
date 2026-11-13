@@ -172,10 +172,10 @@ object BackupUtils {
                 if (settArr != null) {
                     for (i in 0 until settArr.length()) {
                         val s = settArr.getJSONObject(i)
+                        val profileId = s.getString("profileId")
+                        val existingSettings = profileDao.getSettings(profileId)
+                        val credentialsExcluded = root.optBoolean("securityCredentialsExcluded", false)
                         profileDao.insertSettings(
-                            val profileId = s.getString("profileId")
-                            val existingSettings = profileDao.getSettings(profileId)
-                            val credentialsExcluded = root.optBoolean("securityCredentialsExcluded", false)
                             ProfileSettings(
                                 profileId = profileId,
                                 language = s.optString("language", "ID"),
