@@ -17,8 +17,15 @@ class FirebaseStorageRepository {
             ?.takeIf { it.matches(Regex("[A-Za-z0-9]{1,5}")) }
             ?.let { ".$it" } ?: ""
         val ref = storage.reference.child("users/$userId/media/${UUID.randomUUID()}_$safeName$extension")
-        ref.putFile(localUri).await()
-        return ref.downloadUrl.await()
+        try {
+            ref.putFile(localUri).await()
+            ref.downloadUrl.await()
+        } catch (e: Exception) {
+            // If upload succeeded but URL retrieval failed, remove the object
+            // so an unreferenced file is not left in the user's bucket.
+            runCatching { ref.delete().await() }
+            throw e
+        }
     }
 
     fun isFirebaseStorageUrl(downloadUrl: String): Boolean {
