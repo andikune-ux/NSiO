@@ -301,10 +301,13 @@ fun PlayerScreen(
                                 color = if (next.id == media.id) CyanPrimary else Color.White,
                                 fontSize = 11.sp,
                                 maxLines = 1,
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    showQueue = false
-                                    viewModel.playMedia(next)
-                                }.padding(horizontal = 8.dp, vertical = 8.dp)
+                                modifier = Modifier.fillMaxWidth()
+                                    .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        showQueue = false
+                                        viewModel.playMedia(next)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
                             )
                         }
                     }
