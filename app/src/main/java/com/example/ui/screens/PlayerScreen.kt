@@ -251,7 +251,7 @@ fun PlayerScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.12f))
+                                .background(if ((MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
                                 .liquidGlassTvFocusable(shape = CircleShape)
                         ) {
                             Icon(
@@ -280,7 +280,7 @@ fun PlayerScreen(
                                     fontSize = 10.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = CyanPrimary
+                                    color = controlAccentColor
                                 )
                                 Text(
                                     text = "• ${media.sourceType}",
