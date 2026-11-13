@@ -2,6 +2,7 @@ package com.example.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.security.SecureRandom
 
 @Entity(tableName = "media_items")
 data class MediaItem(
@@ -45,6 +46,8 @@ data class Profile(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+private fun generateDefaultServerPin(): String = SecureRandom().nextInt(10_000).toString().padStart(4, '0')
+
 @Entity(tableName = "profile_settings")
 data class ProfileSettings(
     @PrimaryKey val profileId: String,
@@ -52,7 +55,7 @@ data class ProfileSettings(
     val themeMode: String = "DARK", // "AUTO", "DARK", "LIGHT"
     val displayMode: String = "TV", // "AUTO", "TV", "HP"
     val gridColumns: Int = 4, // 3..8
-    val serverPin: String = "1234"
+    val serverPin: String = generateDefaultServerPin()
 )
 
 @Entity(tableName = "downloads")
