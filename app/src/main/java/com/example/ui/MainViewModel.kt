@@ -312,6 +312,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 cloudRepository.syncProfileMetadata(user.uid, allProfiles, allSettings)
                 var totalSynced = 0
                 allProfiles.forEach { profile ->
+                    val localPlaylists = sourcePlaylistDao.getForProfile(profile.id)
+                    cloudRepository.syncSourcePlaylists(user.uid, profile.id, localPlaylists)
                     val localItems = mediaDao.getMediaListForProfile(profile.id)
                     totalSynced += cloudRepository.syncLocalListToCloud(user.uid, profile.id, localItems)
                 }
@@ -336,8 +338,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // to profiles that do not exist on this device.
                 val (cloudProfiles, cloudSettings) = cloudRepository.fetchProfileMetadata(user.uid)
                 val cloudItems = cloudRepository.fetchMediaItems(user.uid)
+                val cloudPlaylists = cloudRepository.fetchSourcePlaylists(user.uid)
                 val profileIdsInCloud = cloudProfiles.mapTo(mutableSetOf()) { it.id }
-                val legacyProfiles = cloudItems.map { it.profileId }.distinct()
+                val legacyProfileIds = (cloudItems.map { it.profileId } + cloudPlaylists.map { it.profileId }).distinct()
+                val legacyProfiles = legacyProfileIds
                     .filter { it !in profileIdsInCloud }
                     .map { profileId ->
                         Profile(
@@ -361,8 +365,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         ?: PinVault.encrypt(getApplication(), cloudSetting.serverPin)
                     profileDao.insertSettings(cloudSetting.copy(serverPin = serverPin))
                 }
+                cloudPlaylists.forEach { cloudPlaylist ->
+                    val existing = sourcePlaylistDao.findByUrl(cloudPlaylist.profileId, cloudPlaylist.url)
+                    if (existing == null) {
+                        sourcePlaylistDao.insert(cloudPlaylist)
+                    } else {
+                        // Keep the local user-edited title; only reconcile metadata.
+                        sourcePlaylistDao.insert(
+                            existing.copy(
+                                itemCount = cloudPlaylist.itemCount,
+                                updatedAt = maxOf(existing.updatedAt, cloudPlaylist.updatedAt)
+                            )
+                        )
+                    }
+                }
 
-                if (cloudItems.isEmpty() && profilesToRestore.isEmpty()) {
+                if (cloudItems.isEmpty() && profilesToRestore.isEmpty() && cloudPlaylists.isEmpty()) {
                     showStatus("Belum ada data profil atau media di Cloud")
                 } else {
                     val restoredItems = restoreSourcePlaylistsForItems(cloudItems)
@@ -374,7 +392,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _settings.value = loadSettingsForProfile(active.id)
                     }
                     showStatus(
-                        "${profilesToRestore.size} profil dan ${restoredItems.size} item berhasil dipulihkan. " +
+                        "${profilesToRestore.size} profil, ${cloudPlaylists.size} playlist, dan ${restoredItems.size} item berhasil dipulihkan. " +
                             "PIN profil dan PIN server tetap aman dan tidak dipindahkan antarperangkat."
                     )
                 }
