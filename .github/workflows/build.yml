@@ -44,11 +44,13 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const workflowId = context.workflow.id;
+            const workflowFile = context.workflow_ref
+              .split("/.github/workflows/")[1]
+              .split("@")[0];
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner,
               repo,
-              workflow_id: workflowId,
+              workflow_id: workflowFile,
               per_page: 100
             });
 
