@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.data.backup.BackupResult
 import com.example.data.backup.BackupUtils
 import com.example.data.download.VideoDownloadManager
@@ -340,7 +341,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val cloudItems = cloudRepository.fetchMediaItems(user.uid)
                 val cloudPlaylists = cloudRepository.fetchSourcePlaylists(user.uid)
                 val profileIdsInCloud = cloudProfiles.mapTo(mutableSetOf()) { it.id }
-                val legacyProfileIds = (cloudItems.map { it.profileId } + cloudPlaylists.map { it.profileId }).distinct()
+                val legacyProfileIds = (
+                    cloudItems.map { it.profileId } +
+                        cloudPlaylists.map { it.profileId } +
+                        cloudSettings.map { it.profileId }
+                    ).distinct()
                 val legacyProfiles = legacyProfileIds
                     .filter { it !in profileIdsInCloud }
                     .map { profileId ->
@@ -352,39 +357,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 val profilesToRestore = (cloudProfiles + legacyProfiles).distinctBy { it.id }
-                profilesToRestore.forEach { cloudProfile ->
-                    if (profileDao.getProfileById(cloudProfile.id) == null) {
-                        profileDao.insertProfile(cloudProfile.copy(pin = "", isPinEnabled = false))
-                    }
-                }
-                cloudSettings.forEach { cloudSetting ->
-                    val localSettings = profileDao.getSettings(cloudSetting.profileId)
-                    // Restore portable preferences while retaining this device's
-                    // existing encrypted server PIN. A new profile gets a fresh PIN.
-                    val serverPin = localSettings?.serverPin
-                        ?: PinVault.encrypt(getApplication(), cloudSetting.serverPin)
-                    profileDao.insertSettings(cloudSetting.copy(serverPin = serverPin))
-                }
-                cloudPlaylists.forEach { cloudPlaylist ->
-                    val existing = sourcePlaylistDao.findByUrl(cloudPlaylist.profileId, cloudPlaylist.url)
-                    if (existing == null) {
-                        sourcePlaylistDao.insert(cloudPlaylist)
-                    } else {
-                        // Keep the local user-edited title; only reconcile metadata.
-                        sourcePlaylistDao.insert(
-                            existing.copy(
-                                itemCount = cloudPlaylist.itemCount,
-                                updatedAt = maxOf(existing.updatedAt, cloudPlaylist.updatedAt)
-                            )
-                        )
+                val restoredItems = if (cloudItems.isEmpty() && profilesToRestore.isEmpty() && cloudPlaylists.isEmpty()) {
+                    emptyList()
+                } else {
+                    database.withTransaction {
+                        profilesToRestore.forEach { cloudProfile ->
+                            if (profileDao.getProfileById(cloudProfile.id) == null) {
+                                profileDao.insertProfile(cloudProfile.copy(pin = "", isPinEnabled = false))
+                            }
+                        }
+                        cloudSettings.forEach { cloudSetting ->
+                            val localSettings = profileDao.getSettings(cloudSetting.profileId)
+                            // Keep the encrypted device-local server PIN; cloud only carries preferences.
+                            val serverPin = localSettings?.serverPin
+                                ?: PinVault.encrypt(getApplication(), cloudSetting.serverPin)
+                            profileDao.insertSettings(cloudSetting.copy(serverPin = serverPin))
+                        }
+                        cloudPlaylists.forEach { cloudPlaylist ->
+                            val existing = sourcePlaylistDao.findByUrl(cloudPlaylist.profileId, cloudPlaylist.url)
+                            if (existing == null) {
+                                sourcePlaylistDao.insert(cloudPlaylist)
+                            } else {
+                                // Keep the local user-edited title; only reconcile metadata.
+                                sourcePlaylistDao.insert(
+                                    existing.copy(
+                                        itemCount = cloudPlaylist.itemCount,
+                                        updatedAt = maxOf(existing.updatedAt, cloudPlaylist.updatedAt)
+                                    )
+                                )
+                            }
+                        }
+                        val normalized = restoreSourcePlaylistsForItems(cloudItems)
+                        if (normalized.isNotEmpty()) mediaDao.insertAll(normalized)
+                        normalized
                     }
                 }
 
                 if (cloudItems.isEmpty() && profilesToRestore.isEmpty() && cloudPlaylists.isEmpty()) {
                     showStatus("Belum ada data profil atau media di Cloud")
                 } else {
-                    val restoredItems = restoreSourcePlaylistsForItems(cloudItems)
-                    if (restoredItems.isNotEmpty()) mediaDao.insertAll(restoredItems)
                     _profiles.value = profileDao.getAllProfilesList().map { stored ->
                         stored.copy(pin = PinVault.decrypt(getApplication(), stored.pin))
                     }
