@@ -173,6 +173,46 @@ class CloudMediaRepository(
     }
 
     /**
+     * Reconciles one refreshed source playlist without touching other
+     * playlists or manually added media in the same profile.
+     */
+    suspend fun syncPlaylistToCloud(
+        userId: String,
+        profileId: String,
+        playlistId: String,
+        items: List<MediaItem>
+    ): Int {
+        require(items.all { it.profileId == profileId && it.playlistId == playlistId }) {
+            "Item sinkronisasi harus berasal dari playlist dan profil yang sama."
+        }
+        if (items.isEmpty()) return 0
+
+        val mediaCollection = usersCollection.document(userId).collection("media")
+        val uniqueItems = items.distinctBy { it.id }
+        uniqueItems.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { item ->
+                batch.set(mediaCollection.document(item.id), mediaPayload(item), SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+
+        val keepIds = uniqueItems.mapTo(mutableSetOf()) { it.id }
+        val existingSnapshot = mediaCollection
+            .whereEqualTo("profileId", profileId)
+            .whereEqualTo("playlistId", playlistId)
+            .get()
+            .await()
+        val staleDocuments = existingSnapshot.documents.filter { it.id !in keepIds }
+        staleDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
+        return uniqueItems.size
+    }
+
+    /**
      * Returns only the requested profile's media. Documents created by older
      * app versions without profileId are treated as belonging to the default
      * profile for backwards compatibility.
