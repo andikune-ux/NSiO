@@ -9,37 +9,39 @@ import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary = CyanPrimary,
-    onPrimary = Color.Black,
+    onPrimary = Color(0xFF061014),
     secondary = CyanSecondary,
-    onSecondary = Color.Black,
+    onSecondary = Color(0xFF071116),
     tertiary = CyanTertiary,
     background = DarkBackground,
-    onBackground = Color(0xFFF1F5F9),
+    onBackground = Color(0xFFF0F2F5),
     surface = DarkSurface,
-    onSurface = Color(0xFFF1F5F9),
+    onSurface = Color(0xFFF0F2F5),
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = DarkBorder
+    onSurfaceVariant = Color(0xFFADB4C0),
+    outline = DarkBorder,
+    error = AccentRed
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF0284C7),
+    primary = Color(0xFF087F91),
     onPrimary = Color.White,
-    secondary = Color(0xFF0EA5E9),
+    secondary = Color(0xFF397F91),
     onSecondary = Color.White,
-    tertiary = Color(0xFF6366F1),
-    background = Color(0xFFF1F5F9),
-    onBackground = Color(0xFF0F172A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = Color(0xFFE2E8F0),
-    onSurfaceVariant = Color(0xFF475569),
-    outline = Color(0xFFCBD5E1)
+    tertiary = Color(0xFF666EAA),
+    background = LightBackground,
+    onBackground = Color(0xFF202832),
+    surface = LightSurface,
+    onSurface = Color(0xFF202832),
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = Color(0xFF536171),
+    outline = LightBorder,
+    error = Color(0xFFB42335)
 )
 
 @Composable
 fun MyApplicationTheme(
-    themeMode: String = "AUTO", // AUTO, DARK, LIGHT
+    themeMode: String = "AUTO",
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -47,11 +49,8 @@ fun MyApplicationTheme(
         "LIGHT" -> false
         else -> isSystemInDarkTheme()
     }
-
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content
     )
