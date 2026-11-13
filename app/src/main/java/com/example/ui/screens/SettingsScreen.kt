@@ -94,6 +94,20 @@ fun SettingsScreen(
     var updateProgress by remember { mutableStateOf(0) }
     var readyToInstallVersion by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(Unit) {
+        updateChecking = true
+        runCatching { AppUpdateManager.checkLatest() }
+            .onSuccess { release ->
+                updateRelease = release
+                updateMessage = if (release.available) "Pembaruan v${release.latestVersion} tersedia."
+                    else "NSiO sudah menggunakan versi terbaru."
+            }
+            .onFailure { error ->
+                updateMessage = "Pemeriksaan otomatis gagal: ${error.localizedMessage ?: "periksa koneksi internet"}"
+            }
+        updateChecking = false
+    }
+
     LaunchedEffect(updateDownloadId, updateVersion) {
         val id = updateDownloadId ?: return@LaunchedEffect
         val version = updateVersion ?: return@LaunchedEffect
