@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.example.R
 import com.example.data.model.MediaItem
+import com.example.data.model.Profile
+import com.example.data.model.ProfileSettings
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -47,6 +49,80 @@ class CloudMediaRepository(
             Log.e(TAG, "Gagal menyimpan user profile: ${e.message}", e)
             throw e
         }
+    }
+
+    /**
+     * Syncs portable profile metadata and non-sensitive preferences.
+     * Profile PINs and server PINs are deliberately never uploaded.
+     */
+    suspend fun syncProfileMetadata(
+        userId: String,
+        profiles: List<Profile>,
+        settings: List<ProfileSettings>
+    ) {
+        val userDocument = usersCollection.document(userId)
+        profiles.distinctBy { it.id }.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { profile ->
+                val payload = hashMapOf<String, Any>(
+                    "id" to profile.id,
+                    "name" to profile.name,
+                    "avatarEmoji" to profile.avatarEmoji,
+                    "isDefault" to profile.isDefault,
+                    "createdAt" to profile.createdAt,
+                    "isPinEnabled" to false
+                )
+                batch.set(userDocument.collection("profiles").document(profile.id), payload, SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+        settings.distinctBy { it.profileId }.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { setting ->
+                val payload = hashMapOf<String, Any>(
+                    "profileId" to setting.profileId,
+                    "language" to setting.language,
+                    "themeMode" to setting.themeMode,
+                    "displayMode" to setting.displayMode,
+                    "gridColumns" to setting.gridColumns
+                )
+                batch.set(userDocument.collection("profile_settings").document(setting.profileId), payload, SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+    }
+
+    /**
+     * Returns portable profiles only. PINs are always disabled on a new device.
+     */
+    suspend fun fetchProfileMetadata(userId: String): Pair<List<Profile>, List<ProfileSettings>> {
+        val userDocument = usersCollection.document(userId)
+        val profileSnapshot = userDocument.collection("profiles").get().await()
+        val profiles = profileSnapshot.documents.mapNotNull { document ->
+            val id = document.getString("id") ?: document.id
+            val name = document.getString("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            Profile(
+                id = id,
+                name = name,
+                avatarEmoji = document.getString("avatarEmoji") ?: "🎬",
+                pin = "",
+                isPinEnabled = false,
+                isDefault = document.getBoolean("isDefault") ?: false,
+                createdAt = document.getLong("createdAt") ?: System.currentTimeMillis()
+            )
+        }
+        val settingsSnapshot = userDocument.collection("profile_settings").get().await()
+        val settings = settingsSnapshot.documents.mapNotNull { document ->
+            val profileId = document.getString("profileId") ?: document.id
+            ProfileSettings(
+                profileId = profileId,
+                language = document.getString("language") ?: "ID",
+                themeMode = document.getString("themeMode") ?: "DARK",
+                displayMode = document.getString("displayMode") ?: "TV",
+                gridColumns = (document.getLong("gridColumns") ?: 4L).toInt()
+            )
+        }
+        return profiles to settings
     }
 
     /**
