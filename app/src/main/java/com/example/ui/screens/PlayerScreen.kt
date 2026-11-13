@@ -82,6 +82,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.data.model.MediaItem
+import com.example.player.adjacentMedia
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
