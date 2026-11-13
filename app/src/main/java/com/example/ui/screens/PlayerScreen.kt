@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -85,6 +87,9 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
+    val isGoogleDriveVideo = media.type != "PHOTO" &&
+        media.url.startsWith("https://drive.google.com/file/d/") &&
+        media.url.endsWith("/preview")
 
     // Handle Android system back
     BackHandler {
@@ -108,7 +113,30 @@ fun PlayerScreen(
     ) {
         // ExoPlayer Surface View atau gambar lokal/remote
         if (media.type == "PHOTO") {
-            AsyncImage(model = media.url, contentDescription = media.title, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = media.url,
+                contentDescription = media.title,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (isGoogleDriveVideo) {
+            // Drive's /preview endpoint is an HTML player, not a raw MP4 stream.
+            // Use WebView so Google's own public-file player can handle playback.
+            AndroidView(
+                factory = { ctx ->
+                    WebView(ctx).apply {
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        webViewClient = WebViewClient()
+                        loadUrl(media.url)
+                    }
+                },
+                update = { webView ->
+                    if (webView.url != media.url) webView.loadUrl(media.url)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             AndroidView(
                 factory = { ctx ->
@@ -239,7 +267,7 @@ fun PlayerScreen(
                 }
 
                 // Center Liquid Glass Orb Controls
-                Row(
+                if (!isGoogleDriveVideo) Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -304,7 +332,7 @@ fun PlayerScreen(
                 }
 
                 // Bottom Timeline Scrubber Capsule
-                Box(
+                if (!isGoogleDriveVideo) Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
