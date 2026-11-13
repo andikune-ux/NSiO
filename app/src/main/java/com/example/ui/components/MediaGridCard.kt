@@ -66,7 +66,11 @@ fun MediaGridCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .liquidGlassTvFocusable(shape = RoundedCornerShape(18.dp))
+            .liquidGlassTvFocusable(
+                shape = RoundedCornerShape(18.dp),
+                scaleFocused = 1.055f,
+                interactionSource = interactionSource
+            )
             .liquidGlass(
                 shape = RoundedCornerShape(18.dp),
                 alpha = 0.10f,
