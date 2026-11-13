@@ -443,11 +443,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteMedia(item: MediaItem) {
         viewModelScope.launch {
-            mediaDao.deleteMedia(item)
-            authManager.currentUser?.let { user ->
-                try { cloudRepository.deleteMediaItem(user.uid, item.id) } catch (_: Exception) {}
+            val user = authManager.currentUser
+            var storageDeleted = item.sourceType != "SERVER"
+            var cloudDeleted = user == null
+            var storageMessage: String? = null
+            var cloudMessage: String? = null
+
+            if (item.sourceType == "SERVER") {
+                if (user == null) {
+                    storageMessage = "file server tidak dihapus karena akun penyimpanan tidak aktif"
+                } else {
+                    try {
+                        storageRepository.deleteOwnedMedia(user.uid, item.url)
+                        storageDeleted = true
+                    } catch (e: Exception) {
+                        storageMessage = e.localizedMessage ?: "file server tidak dapat dihapus"
+                    }
+                }
             }
-            showStatus("Media '${item.title}' dihapus")
+
+            if (user != null) {
+                try {
+                    cloudRepository.deleteMediaItem(user.uid, item.id)
+                    cloudDeleted = true
+                } catch (e: Exception) {
+                    cloudMessage = e.localizedMessage ?: "metadata cloud gagal dihapus"
+                }
+            }
+
+            // Local removal is always allowed; remote failures are reported so the user
+            // knows that a Storage object or cloud record may still need attention.
+            mediaDao.deleteMedia(item)
+            val details = listOfNotNull(
+                storageMessage?.let { "Storage: $it" },
+                cloudMessage?.let { "Cloud: $it" }
+            )
+            if (details.isEmpty()) {
+                showStatus("Media '${item.title}' dihapus dari perangkat" +
+                    if (item.sourceType == "SERVER") " dan Firebase Storage" else "")
+            } else {
+                showStatus("Media '${item.title}' dihapus dari perangkat. " + details.joinToString("; "))
+            }
         }
     }
 
@@ -513,33 +549,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 showStatus("Sesi penyimpanan gagal: ${e.localizedMessage ?: "Firebase Anonymous Authentication belum diaktifkan"}")
                 return@launch
             }
+
             val remoteUri = try {
                 storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
             } catch (e: Exception) {
                 showStatus("Upload Storage gagal: ${e.localizedMessage ?: "aturan Firebase Storage menolak akses"}")
                 return@launch
             }
+
             try {
-                val playlist = ensureSourcePlaylist(remoteUri.toString(), title.ifEmpty { "Media Server" }, "SERVER", currentProfileId)
+                val playlist = ensureSourcePlaylist(
+                    remoteUri.toString(),
+                    title.ifEmpty { "Media Server" },
+                    "SERVER",
+                    currentProfileId
+                )
                 val item = MediaItem(
-                    id = UUID.randomUUID().toString(), profileId = currentProfileId,
-                    title = title.ifEmpty { "Media Server" }, url = remoteUri.toString(),
+                    id = UUID.randomUUID().toString(),
+                    profileId = currentProfileId,
+                    title = title.ifEmpty { "Media Server" },
+                    url = remoteUri.toString(),
                     thumbnailUrl = if (isPhoto) remoteUri.toString() else "",
-                    type = if (isPhoto) "PHOTO" else "VIDEO", sourceType = "SERVER",
-                    category = "Media Server", playlistId = playlist.id, sourceUrl = remoteUri.toString()
+                    type = if (isPhoto) "PHOTO" else "VIDEO",
+                    sourceType = "SERVER",
+                    category = "Media Server",
+                    playlistId = playlist.id,
+                    sourceUrl = remoteUri.toString()
                 )
                 mediaDao.insertMedia(item)
                 if (!user.isAnonymous) {
-                    runCatching { cloudRepository.saveMediaItem(user.uid, item) }
-                        .onFailure { showStatus("File sudah tersimpan di server dan beranda; sinkronisasi cloud dilewati: ${it.localizedMessage ?: "izin metadata"}") }
+                    try {
+                        cloudRepository.saveMediaItem(user.uid, item)
+                    } catch (e: Exception) {
+                        showStatus("Upload berhasil, tetapi metadata cloud gagal disinkronkan: ${e.localizedMessage ?: "izin Firestore"}")
+                        return@launch
+                    }
                 }
-                if (user.isAnonymous) {
-                    showStatus("File berhasil di-upload ke server privat dan ditambahkan ke beranda")
-                } else {
-                    showStatus("File berhasil di-upload ke server dan ditambahkan ke beranda")
-                }
+                showStatus("File berhasil di-upload ke Firebase Storage dan ditambahkan ke beranda")
             } catch (e: Exception) {
-                showStatus("File sudah masuk Storage, tetapi pencatatan lokal gagal: ${e.localizedMessage ?: "database lokal"}")
+                val cleanup = runCatching {
+                    storageRepository.deleteOwnedMedia(user.uid, remoteUri.toString())
+                }
+                val suffix = if (cleanup.isFailure) {
+                    " File Storage belum terhapus otomatis."
+                } else {
+                    " File sementara di Storage sudah dibersihkan."
+                }
+                showStatus("Pencatatan media gagal: ${e.localizedMessage ?: "database lokal"}.$suffix")
             }
         }
     }
