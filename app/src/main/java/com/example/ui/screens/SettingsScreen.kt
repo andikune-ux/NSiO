@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.BuildConfig
 import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
@@ -76,8 +76,6 @@ fun SettingsScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
-    var isCheckingUpdate by remember { mutableStateOf(false) }
-    var updateStatus by remember { mutableStateOf<String?>(null) }
     var serverPinInput by remember { mutableStateOf(settings.serverPin) }
 
     LazyColumn(
@@ -503,30 +501,30 @@ fun SettingsScreen(
             }
         }
 
-        // 7. Check Update
+        // 7. App updates
         item {
             SettingsGlassCard(
                 icon = Icons.Default.SystemUpdate,
-                title = "Cek Pembaharuan Aplikasi",
-                subtitle = "Versi saat ini: v1.0.0 (Net Stream iO Engine)"
+                title = "Pembaruan Aplikasi",
+                subtitle = "Versi terpasang: v${BuildConfig.VERSION_NAME}"
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Lihat catatan rilis dan unduh APK terbaru dari halaman resmi GitHub NSiO.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Button(
                         onClick = {
-                            isCheckingUpdate = true
-                            updateStatus = null
-                            ContextCompat.getMainExecutor(context).execute {
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    isCheckingUpdate = false
-                                    updateStatus = "Net Stream iO versi 1.0.0 adalah versi terbaru."
-                                }, 1200)
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://github.com/andikune-ux/NSiO/releases")
+                                    )
+                                )
                             }
                         },
-                        enabled = !isCheckingUpdate,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
@@ -534,24 +532,9 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.height(44.dp)
                     ) {
-                        if (isCheckingUpdate) {
-                            CircularProgressIndicator(
-                                color = Color.Black,
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-                        Text("Periksa Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-
-                    if (updateStatus != null) {
-                        Text(
-                            text = updateStatus ?: "",
-                            fontSize = 11.sp,
-                            color = CyanPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Lihat Rilis GitHub", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }
