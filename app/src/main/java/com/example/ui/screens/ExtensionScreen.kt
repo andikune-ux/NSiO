@@ -775,13 +775,13 @@ private fun PluginRepoTab(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Arsitektur Plugin CloudStream",
+                        text = "Repository Eksternal",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Tambah URL repository JSON untuk memuat plugin scraper streaming eksternal.",
+                        text = "Simpan URL katalog/repository eksternal. Saat ini NSiO dapat memperbarui sumber playlist M3U dari URL yang didukung, tetapi belum menjalankan plugin CloudStream berbasis Kotlin/JS secara langsung.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -837,7 +837,7 @@ private fun PluginRepoTab(
 
         item {
             Text(
-                text = "Repository Aktif (${repos.size}):",
+                text = "Repository Tersimpan (${repos.size}):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -863,7 +863,7 @@ private fun PluginRepoTab(
 
         item {
             Text(
-                text = "Plugin Terpasang (${plugins.size}):",
+                text = "Plugin Runtime (${plugins.size}):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
