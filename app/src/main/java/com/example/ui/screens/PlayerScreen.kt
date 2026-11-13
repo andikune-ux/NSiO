@@ -87,9 +87,11 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
-    val isGoogleDriveVideo = media.type != "PHOTO" &&
+    val isPhoto = media.type == "PHOTO"
+    val isGoogleDriveVideo = !isPhoto &&
         media.url.startsWith("https://drive.google.com/file/d/") &&
         media.url.endsWith("/preview")
+    val usesNativePlayer = !isPhoto && !isGoogleDriveVideo
 
     // Handle Android system back
     BackHandler {
@@ -239,8 +241,10 @@ fun PlayerScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { showQueue = !showQueue }) {
-                            Icon(Icons.Default.List, contentDescription = "Daftar video", tint = Color.White)
+                        if (!isPhoto) {
+                            IconButton(onClick = { showQueue = !showQueue }) {
+                                Icon(Icons.Default.List, contentDescription = "Daftar video", tint = Color.White)
+                            }
                         }
                     }
                 }
@@ -267,7 +271,7 @@ fun PlayerScreen(
                 }
 
                 // Center Liquid Glass Orb Controls
-                if (!isGoogleDriveVideo) Row(
+                if (usesNativePlayer) Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -332,7 +336,7 @@ fun PlayerScreen(
                 }
 
                 // Bottom Timeline Scrubber Capsule
-                if (!isGoogleDriveVideo) Box(
+                if (usesNativePlayer) Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
@@ -372,6 +376,7 @@ fun PlayerScreen(
 
                         Slider(
                             value = currentRatio,
+                            enabled = playerState.durationMs > 0L,
                             onValueChange = { ratio ->
                                 val target = (ratio * total).toLong()
                                 viewModel.player.seekTo(target)
