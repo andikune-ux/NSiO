@@ -60,7 +60,10 @@ class PluginManager(private val context: Context) {
     private val _repositories = MutableStateFlow<List<RepoManifest>>(emptyList())
     val repositories: StateFlow<List<RepoManifest>> = _repositories.asStateFlow()
 
-    init { loadRepositories() }
+    init {
+        loadRepositories()
+        loadInstalledPlugins()
+    }
 
     fun getLocalPluginsDirectory(): File = File(context.filesDir, "Cloudstream3/plugins").also { it.mkdirs() }
     fun getOnlinePluginsDirectory(repoHash: String): File = File(context.filesDir, "Extensions/$repoHash").also { it.mkdirs() }
@@ -112,6 +115,40 @@ class PluginManager(private val context: Context) {
             })
         }
         prefs.edit().putString(REPOSITORIES_KEY, array.toString()).apply()
+    }
+
+    /**
+     * Restores installed plugin entries as metadata-only placeholders.
+     * NSiO does not execute arbitrary Cloudstream APK/DEX plugin code.
+     */
+    private fun loadInstalledPlugins() {
+        val raw = prefs.getString(PLUGINS_KEY, null) ?: return
+        runCatching {
+            val array = JSONArray(raw)
+            _installedPlugins.value = (0 until array.length()).mapNotNull { index ->
+                val obj = array.optJSONObject(index) ?: return@mapNotNull null
+                val manifest = PluginManifest(
+                    name = obj.optString("name").trim(),
+                    pluginClassName = obj.optString("pluginClassName"),
+                    version = obj.optInt("version", 1),
+                    description = obj.optString("description"),
+                    url = obj.optString("url"),
+                    author = obj.optString("author", "NSiO Community"),
+                    iconUrl = obj.optString("iconUrl")
+                )
+                if (manifest.name.isBlank()) return@mapNotNull null
+                object : Plugin() {
+                    init {
+                        this.manifest = manifest
+                        this.filename = manifest.url
+                        load(context)
+                    }
+                }
+            }
+        }.onFailure {
+            // Keep the app usable if a previous plugin metadata file is malformed.
+            _installedPlugins.value = emptyList()
+        }
     }
 
     private fun savePlugins() {
