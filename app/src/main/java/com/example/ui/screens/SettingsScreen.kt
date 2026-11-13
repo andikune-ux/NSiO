@@ -43,11 +43,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import android.app.DownloadManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +70,9 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentRed
 import com.example.ui.theme.CyanPrimary
+import com.example.update.AppUpdateManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -79,6 +85,54 @@ fun SettingsScreen(
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
     var serverPinInput by remember(settings.profileId) { mutableStateOf(settings.serverPin) }
+    val updateScope = rememberCoroutineScope()
+    var updateRelease by remember { mutableStateOf<AppUpdateManager.Release?>(null) }
+    var updateChecking by remember { mutableStateOf(false) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var updateDownloadId by remember { mutableStateOf(AppUpdateManager.pendingDownloadId(context)) }
+    var updateVersion by remember { mutableStateOf(AppUpdateManager.pendingVersion(context)) }
+    var updateProgress by remember { mutableStateOf(0) }
+    var readyToInstallVersion by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(updateDownloadId, updateVersion) {
+        val id = updateDownloadId ?: return@LaunchedEffect
+        val version = updateVersion ?: return@LaunchedEffect
+        while (true) {
+            val state = AppUpdateManager.queryDownload(context, id)
+            if (state == null) {
+                updateMessage = "Status unduhan tidak ditemukan. Silakan cek pembaruan kembali."
+                AppUpdateManager.clearPending(context)
+                updateDownloadId = null
+                updateVersion = null
+                break
+            }
+            updateProgress = state.progress
+            when (state.status) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    if (AppUpdateManager.isDownloadedApkValid(context, version)) {
+                        readyToInstallVersion = version
+                        updateMessage = "APK v$version selesai diunduh dan lolos validasi."
+                    } else {
+                        updateMessage = "APK selesai diunduh tetapi gagal validasi. Hapus unduhan dan coba lagi."
+                        AppUpdateManager.clearPending(context)
+                    }
+                    updateDownloadId = null
+                    break
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    updateMessage = "Unduhan gagal (kode ${state.reason}). Silakan coba lagi."
+                    AppUpdateManager.clearPending(context)
+                    updateDownloadId = null
+                    updateVersion = null
+                    break
+                }
+                DownloadManager.STATUS_PENDING, DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED -> {
+                    updateMessage = if (state.status == DownloadManager.STATUS_PAUSED) "Unduhan dijeda..." else "Mengunduh NSiO v$version..."
+                }
+            }
+            delay(500)
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -511,33 +565,115 @@ fun SettingsScreen(
                 title = "Pembaruan Aplikasi",
                 subtitle = "Versi terpasang: v${BuildConfig.VERSION_NAME}"
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Lihat catatan rilis dan unduh APK terbaru dari halaman resmi GitHub NSiO.",
+                        text = updateMessage ?: "Periksa rilis resmi NSiO. APK akan divalidasi sebelum installer Android dibuka.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://github.com/andikune-ux/NSiO/releases")
-                                    )
-                                )
+                    if (updateRelease?.available == true) {
+                        val release = updateRelease!!
+                        Text(
+                            text = "Versi terbaru: v${release.latestVersion} • ${if (release.assetSize > 0L) android.text.format.Formatter.formatShortFileSize(context, release.assetSize) else "Ukuran tidak diketahui"}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanPrimary
+                        )
+                        Text(
+                            text = release.notes,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 8
+                        )
+                    } else if (updateRelease != null) {
+                        Text(
+                            text = "NSiO sudah menggunakan versi terbaru (v${BuildConfig.VERSION_NAME}).",
+                            fontSize = 12.sp,
+                            color = CyanPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (updateDownloadId != null) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { updateProgress / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CyanPrimary
+                        )
+                        Text("Progres unduhan: $updateProgress%", fontSize = 10.sp, color = CyanPrimary)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                updateScope.launch {
+                                    updateChecking = true
+                                    updateMessage = "Memeriksa rilis GitHub..."
+                                    updateRelease = runCatching { AppUpdateManager.checkLatest() }.getOrElse { error ->
+                                        updateMessage = "Gagal memeriksa update: ${error.localizedMessage ?: "koneksi bermasalah"}"
+                                        null
+                                    }
+                                    if (updateRelease?.available == true) {
+                                        updateMessage = "Pembaruan v${updateRelease!!.latestVersion} tersedia."
+                                    } else if (updateRelease != null) {
+                                        updateMessage = "NSiO sudah versi terbaru."
+                                    }
+                                    updateChecking = false
+                                }
+                            },
+                            enabled = !updateChecking && updateDownloadId == null,
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.weight(1f).height(44.dp)
+                        ) {
+                            if (updateChecking) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.Black)
+                            else Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (updateChecking) "Memeriksa..." else "Cek Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        if (updateRelease?.available == true && readyToInstallVersion == null && updateDownloadId == null) {
+                            Button(
+                                onClick = {
+                                    runCatching { AppUpdateManager.startDownload(context, updateRelease!!) }
+                                        .onSuccess { id ->
+                                            updateDownloadId = id
+                                            updateVersion = updateRelease!!.latestVersion
+                                            readyToInstallVersion = null
+                                            updateProgress = 0
+                                            updateMessage = "Menyiapkan unduhan..."
+                                        }
+                                        .onFailure { updateMessage = "Gagal memulai unduhan: ${it.localizedMessage}" }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = CyanPrimary),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text("Unduh APK", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(44.dp)
-                    ) {
-                        Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Lihat Rilis GitHub", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                    readyToInstallVersion?.let { version ->
+                        Button(
+                            onClick = {
+                                when (AppUpdateManager.install(context, version)) {
+                                    AppUpdateManager.InstallResult.OPENED ->
+                                        updateMessage = "Installer Android dibuka. Konfirmasi pemasangan untuk menyelesaikan update."
+                                    AppUpdateManager.InstallResult.PERMISSION_REQUIRED ->
+                                        updateMessage = "Aktifkan izin 'Instal aplikasi tidak dikenal' untuk NSiO, lalu tekan Instal lagi."
+                                    AppUpdateManager.InstallResult.INVALID_APK ->
+                                        updateMessage = "APK tidak valid, versi atau tanda tangan tidak cocok. Unduh ulang dari rilis resmi."
+                                    AppUpdateManager.InstallResult.FAILED ->
+                                        updateMessage = "Gagal membuka installer Android."
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(7.dp))
+                            Text("Instal Pembaruan v$version", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }
