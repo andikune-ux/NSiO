@@ -917,7 +917,16 @@ private fun PluginRepoTab(
             )
         }
 
-        items(repos, key = { it.pluginLists.joinToString("|") }) { repo ->
+        if (repos.isEmpty()) {
+            item {
+                Text(
+                    "Belum ada repository tersimpan. Tambahkan URL katalog yang kamu percaya untuk mulai mengelolanya.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(repos, key = { it.pluginLists.joinToString("|") }) { repo ->
             Row(
                 modifier = Modifier.fillMaxWidth().liquidGlass(
                     shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
@@ -932,6 +941,7 @@ private fun PluginRepoTab(
                     Text("Refresh", fontSize = 11.sp)
                 }
             }
+        }
         }
 
         item {
@@ -948,7 +958,16 @@ private fun PluginRepoTab(
             )
         }
 
-        items(plugins, key = { plugin ->
+        if (plugins.isEmpty()) {
+            item {
+                Text(
+                    "Belum ada metadata plugin. Catatan: NSiO belum menjalankan kode plugin CloudStream eksternal.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(plugins, key = { plugin ->
             plugin.manifest?.let { "${it.name}|${it.url}|${it.version}" }
                 ?: plugin.filename.ifBlank { "plugin-${plugins.indexOf(plugin)}" }
         }) { plugin ->
@@ -1002,6 +1021,7 @@ private fun PluginRepoTab(
                     }
                 }
             }
+        }
         }
     }
     editingPlaylist?.let { playlist ->
