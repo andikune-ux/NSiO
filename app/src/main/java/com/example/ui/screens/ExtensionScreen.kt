@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -126,6 +127,7 @@ fun ExtensionScreen(
                 .padding(4.dp)
         ) {
             ScrollableTabRow(
+                modifier = Modifier.focusGroup(),
                 selectedTabIndex = selectedTabIndex,
                 edgePadding = 6.dp,
                 containerColor = Color.Transparent,
