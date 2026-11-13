@@ -66,6 +66,11 @@ object BackupUtils {
             }
             rootObj.put("profile", profileObj)
 
+            // A profile backup must never contain another profile's data,
+            // even if a caller accidentally passes mixed-profile collections.
+            val profileMedia = mediaList.filter { it.profileId == profile.id }
+            val profileSettings = settings?.takeIf { it.profileId == profile.id }
+
             // Settings
             profileSettings?.let { s ->
                 val settingsObj = JSONObject().apply {
@@ -78,11 +83,6 @@ object BackupUtils {
                 }
                 rootObj.put("settings", settingsObj)
             }
-
-            // A profile backup must never contain another profile's media,
-            // even if a caller accidentally passes a mixed list.
-            val profileMedia = mediaList.filter { it.profileId == profile.id }
-            val profileSettings = settings?.takeIf { it.profileId == profile.id }
 
             // Media list
             val mediaArray = JSONArray()
