@@ -853,7 +853,7 @@ private fun PluginRepoTab(
 
                     OutlinedTextField(
                         value = repoUrlInput,
-                        onValueChange = { repoUrlInput = it },
+                        onValueChange = { repoUrlInput = it.take(2048) },
                         placeholder = { Text("https://repo.domain.com/plugins.json", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                         singleLine = true,
                         shape = RoundedCornerShape(18.dp),
@@ -946,7 +946,7 @@ private fun PluginRepoTab(
                 )
             }
         } else {
-            items(repos, key = { it.pluginLists.joinToString("|") }) { repo ->
+            items(repos, key = { it.pluginLists.firstOrNull() ?: "${it.name}:${it.description}" }) { repo ->
             Row(
                 modifier = Modifier.fillMaxWidth().liquidGlass(
                     shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
@@ -954,8 +954,8 @@ private fun PluginRepoTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
-                    Text(repo.pluginLists.firstOrNull().orEmpty(), fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CyanPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(repo.pluginLists.firstOrNull().orEmpty(), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(onClick = { viewModel.refreshRepository(repo) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)) {
                     Text("Refresh", fontSize = 11.sp)
@@ -1049,10 +1049,10 @@ private fun PluginRepoTab(
             onDismissRequest = { editingPlaylist = null },
             title = { Text("Rename Playlist") },
             text = {
-                OutlinedTextField(value = editedName, onValueChange = { editedName = it }, singleLine = true, label = { Text("Nama playlist") })
+                OutlinedTextField(value = editedName, onValueChange = { editedName = it.take(48) }, singleLine = true, label = { Text("Nama playlist") }, supportingText = { Text("${editedName.length}/48") })
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.renameSourcePlaylist(playlist, editedName); editingPlaylist = null }) { Text("Simpan") }
+                TextButton(onClick = { viewModel.renameSourcePlaylist(playlist, editedName.trim()); editingPlaylist = null }, enabled = editedName.isNotBlank() && editedName.trim() != playlist.name) { Text("Simpan") }
             },
             dismissButton = { TextButton(onClick = { editingPlaylist = null }) { Text("Batal") } }
         )
