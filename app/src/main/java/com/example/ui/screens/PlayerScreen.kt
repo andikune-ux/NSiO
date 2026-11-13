@@ -514,7 +514,7 @@ fun PlayerScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Putar Stream Demo / Cadangan",
+                                        text = "Putar Video Demo (bukan sumber asli)",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
