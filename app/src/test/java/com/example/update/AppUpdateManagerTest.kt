@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.example.data.download.isVerifiedCompletedRange
 import org.junit.Test
 
 class AppUpdateManagerTest {
@@ -42,4 +43,48 @@ class AppUpdateManagerTest {
             "https://github.com:444/andikune-ux/NSiO/releases/download/v1.0.2/app.apk"
         ))
     }
+    @Test
+    fun acceptsHttp416AsCompleteOnlyWhenSizeAndValidatorMatch() {
+        assertTrue(
+            isVerifiedCompletedRange(
+                contentRange = "bytes */1048576",
+                existingBytes = 1048576L,
+                responseEtag = "\"v1\"",
+                responseLastModified = "",
+                savedEtag = "\"v1\"",
+                savedLastModified = ""
+            )
+        )
+        assertFalse(
+            isVerifiedCompletedRange(
+                contentRange = "bytes */1048576",
+                existingBytes = 1048576L,
+                responseEtag = "\"v2\"",
+                responseLastModified = "",
+                savedEtag = "\"v1\"",
+                savedLastModified = ""
+            )
+        )
+        assertFalse(
+            isVerifiedCompletedRange(
+                contentRange = "bytes */1048577",
+                existingBytes = 1048576L,
+                responseEtag = "\"v1\"",
+                responseLastModified = "",
+                savedEtag = "\"v1\"",
+                savedLastModified = ""
+            )
+        )
+        assertFalse(
+            isVerifiedCompletedRange(
+                contentRange = "bytes */1048576",
+                existingBytes = 1048576L,
+                responseEtag = "",
+                responseLastModified = "",
+                savedEtag = "",
+                savedLastModified = ""
+            )
+        )
+    }
+
 }
