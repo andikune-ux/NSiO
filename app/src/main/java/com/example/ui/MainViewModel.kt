@@ -444,8 +444,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteMedia(item: MediaItem) {
         viewModelScope.launch {
             val user = authManager.currentUser
-            var storageDeleted = item.sourceType != "SERVER"
-            var cloudDeleted = user == null
             var storageMessage: String? = null
             var cloudMessage: String? = null
 
@@ -455,7 +453,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     try {
                         storageRepository.deleteOwnedMedia(user.uid, item.url)
-                        storageDeleted = true
                     } catch (e: Exception) {
                         storageMessage = e.localizedMessage ?: "file server tidak dapat dihapus"
                     }
@@ -465,7 +462,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (user != null) {
                 try {
                     cloudRepository.deleteMediaItem(user.uid, item.id)
-                    cloudDeleted = true
                 } catch (e: Exception) {
                     cloudMessage = e.localizedMessage ?: "metadata cloud gagal dihapus"
                 }
