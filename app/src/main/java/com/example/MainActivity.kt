@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -80,7 +81,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            var currentNav by remember { mutableStateOf(NavDestination.HOME) }
+            var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
             val snackbarHostState = remember { SnackbarHostState() }
 
             LaunchedEffect(statusMessage) {
