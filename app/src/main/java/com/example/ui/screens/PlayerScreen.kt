@@ -167,10 +167,10 @@ fun PlayerScreen(
         if (!isSeeking || !usesNativePlayer) {
             previewFrame = null
         } else {
-            delay(220)
-            // Clear the previous timestamp immediately so a failed extraction never
-            // leaves a stale frame that looks like the current seek position.
+            // Clear immediately on every drag update; never display a frame from
+            // the previous timestamp while the next frame is being extracted.
             previewFrame = null
+            delay(220)
             val extracted = withContext(Dispatchers.IO) {
                 val retriever = MediaMetadataRetriever()
                 try {
