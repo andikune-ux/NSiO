@@ -203,6 +203,10 @@ class CloudMediaRepository(
         require(items.all { it.profileId == profileId && it.playlistId == playlistId }) {
             "Item sinkronisasi harus berasal dari playlist dan profil yang sama."
         }
+        // An empty parse result must never be interpreted as an instruction to
+        // delete every cloud item; explicit playlist deletion uses deletePlaylistItems().
+        if (items.isEmpty()) return 0
+
         val mediaCollection = usersCollection.document(userId).collection("media")
         val uniqueItems = items.distinctBy { it.id }
         uniqueItems.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
