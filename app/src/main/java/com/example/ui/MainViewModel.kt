@@ -533,8 +533,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val cleanName = newName.trim().take(48)
             if (cleanName.isNotEmpty()) {
-                sourcePlaylistDao.update(playlist.copy(name = cleanName, updatedAt = System.currentTimeMillis()))
-                showStatus("Nama playlist diubah menjadi '$cleanName'")
+                val updatedPlaylist = playlist.copy(name = cleanName, updatedAt = System.currentTimeMillis())
+                sourcePlaylistDao.update(updatedPlaylist)
+                val cloudSyncFailed = authManager.currentUser?.let { user ->
+                    runCatching {
+                        cloudRepository.syncSourcePlaylists(user.uid, updatedPlaylist.profileId, listOf(updatedPlaylist))
+                    }.isFailure
+                } ?: false
+                showStatus(
+                    if (cloudSyncFailed) "Nama playlist diubah di perangkat, tetapi sinkronisasi Cloud gagal"
+                    else "Nama playlist diubah menjadi '$cleanName'"
+                )
             } else {
                 showStatus("Nama playlist tidak boleh kosong")
             }
@@ -552,6 +561,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (user != null) {
                 cloudMetadataDeleted = runCatching {
                     cloudRepository.deletePlaylistItems(user.uid, playlist.profileId, playlist.id)
+                    cloudRepository.deleteSourcePlaylist(user.uid, playlist.id)
                     true
                 }.getOrElse {
                     warnings += "metadata cloud gagal dihapus"
