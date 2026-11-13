@@ -112,6 +112,18 @@ fun SettingsScreen(
     LaunchedEffect(updateDownloadId, updateVersion) {
         val id = updateDownloadId ?: return@LaunchedEffect
         val version = updateVersion ?: return@LaunchedEffect
+        // After a successful installation Android restarts NSiO with the new
+        // BuildConfig version. Clear the old completed download instead of
+        // showing it as an invalid APK on every subsequent visit.
+        if (AppUpdateManager.compareVersions(BuildConfig.VERSION_NAME, version) >= 0) {
+            AppUpdateManager.clearPending(context)
+            updateDownloadId = null
+            updateVersion = null
+            readyToInstallVersion = null
+            updateProgress = 0
+            updateMessage = "Pembaruan v$version sudah terpasang."
+            return@LaunchedEffect
+        }
         while (true) {
             val state = AppUpdateManager.queryDownload(context, id)
             if (state == null) {
