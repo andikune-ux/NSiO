@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.offset
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,10 +51,15 @@ fun Modifier.liquidGlass(
     val shadowDepth = elevation.coerceIn(3.dp, 18.dp)
     val relief = (0.42f + elevation.value / 36f).coerceIn(0.42f, 0.78f)
 
+    val shadowShift = (elevation.value * 0.28f).coerceIn(2f, 5f).dp
     return this
-        // Opposing, soft shadow lobes create the characteristic molded relief.
-        .shadow(shadowDepth, shape, ambientColor = lightShadow.copy(alpha = relief * 0.42f), spotColor = lightShadow.copy(alpha = relief * 0.30f))
+        // Offset paired shadows in opposite directions to model one upper-left light source.
+        .offset(x = -shadowShift, y = -shadowShift)
+        .shadow(shadowDepth, shape, ambientColor = lightShadow.copy(alpha = relief * 0.54f), spotColor = lightShadow.copy(alpha = relief * 0.42f))
+        .offset(x = shadowShift, y = shadowShift)
+        .offset(x = shadowShift, y = shadowShift)
         .shadow(shadowDepth, shape, ambientColor = darkShadow.copy(alpha = relief), spotColor = darkShadow.copy(alpha = relief * 0.82f))
+        .offset(x = -shadowShift, y = -shadowShift)
         .clip(shape)
         .background(surface)
         // A restrained bevel replaces the former bright glass rim.

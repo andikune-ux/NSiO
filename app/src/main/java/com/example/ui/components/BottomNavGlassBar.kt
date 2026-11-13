@@ -192,15 +192,8 @@ private fun BottomNavItem(
                     .size(36.dp)
                     .clip(CircleShape)
                     .then(
-                        if (isSelected) {
-                            Modifier.background(
-                                Brush.radialGradient(
-                                    listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f), Color.Transparent)
-                                )
-                            )
-                        } else {
-                            Modifier.background(Color.Transparent)
-                        }
+                        if (isSelected) Modifier.neumorphicInset(CircleShape, depth = 4.dp)
+                        else Modifier.background(Color.Transparent)
                     ),
                 contentAlignment = Alignment.Center
             ) {

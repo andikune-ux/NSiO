@@ -207,15 +207,7 @@ private fun NavToolbarGlassItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    val bgBrush = when {
-        isFocused -> Brush.linearGradient(
-            listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), Color.White.copy(alpha = 0.15f))
-        )
-        isSelected -> Brush.linearGradient(
-            listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f), MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f))
-        )
-        else -> Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-    }
+    val bgBrush = Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
 
     val contentColor by animateColorAsState(
         targetValue = when {
@@ -231,6 +223,7 @@ private fun NavToolbarGlassItem(
             .width(66.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bgBrush)
+            .then(if (isSelected) Modifier.neumorphicInset(RoundedCornerShape(14.dp), depth = 4.dp) else Modifier)
             .then(
                 if (isFocused) {
                     Modifier.border(
