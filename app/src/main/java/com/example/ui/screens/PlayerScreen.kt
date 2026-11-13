@@ -168,6 +168,9 @@ fun PlayerScreen(
             previewFrame = null
         } else {
             delay(220)
+            // Clear the previous timestamp immediately so a failed extraction never
+            // leaves a stale frame that looks like the current seek position.
+            previewFrame = null
             val extracted = withContext(Dispatchers.IO) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -671,13 +674,6 @@ fun PlayerScreen(
                                 color = controlTextColor
                             )
 
-                            Text(
-                                text = if (playerState.isSeekable) "GESER UNTUK MENCARI POSISI" else "LIVE / TIDAK DAPAT DI-SEEK",
-                                fontSize = 9.sp,
-                                maxLines = 1,
-                                color = controlAccentColor,
-                                fontWeight = FontWeight.SemiBold
-                            )
                         }
 
                         val total = playerState.durationMs.coerceAtLeast(1L)

@@ -23,7 +23,7 @@ import com.example.ui.theme.FocusHighlight
 fun Modifier.tvFocusable(
     shape: Shape = RoundedCornerShape(12.dp),
     scaleFocused: Float = 1.04f,
-    borderWidth: Dp = 2.5.dp,
+    borderWidth: Dp = 1.5.dp,
     focusedBorderColor: Color = FocusHighlight,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
 ): Modifier {

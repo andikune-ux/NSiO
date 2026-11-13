@@ -121,5 +121,5 @@ fun Modifier.liquidGlassTvFocusable(
     return this
         .scale(scale)
         .focusable(interactionSource = interactionSource)
-        .then(if (isFocused) Modifier.border(1.5.dp, focusedBorderColor, shape) else Modifier)
+        .then(if (isFocused) Modifier.border(1.25.dp, focusedBorderColor, shape) else Modifier)
 }
