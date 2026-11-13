@@ -292,7 +292,7 @@ private fun LinkSourceTab(
                                     viewModel.parseAndAddLink(urlInput) { message ->
                                         isLoading = false
                                         parseFeedback = message
-                                        urlInput = ""
+                                        if (!message.startsWith("Error:")) urlInput = ""
                                     }
                                 }
                             },
@@ -368,6 +368,7 @@ private fun FileSourceTab(
     var titleInput by remember { mutableStateOf("") }
     var filePathInput by remember { mutableStateOf("") }
     var isPhoto by remember { mutableStateOf(false) }
+    val isImportingLocalFile by viewModel.isImportingLocalFile.collectAsState()
     val context = LocalContext.current
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         filePathInput = uri?.toString().orEmpty()
@@ -519,13 +520,16 @@ private fun FileSourceTab(
                                 viewModel.showStatus("Pilih file terlebih dahulu")
                             } else {
                                 val finalTitle = titleInput.ifBlank { "Media Lokal ${System.currentTimeMillis() % 1000}" }
-                                viewModel.addLocalFileMedia(finalTitle, filePathInput, isPhoto)
-                                titleInput = ""
-                                filePathInput = ""
-                                onNavigateToHome()
+                                viewModel.addLocalFileMedia(finalTitle, filePathInput, isPhoto) { success ->
+                                    if (success) {
+                                        titleInput = ""
+                                        filePathInput = ""
+                                        onNavigateToHome()
+                                    }
+                                }
                             }
                         },
-                        enabled = filePathInput.isNotBlank(),
+                        enabled = filePathInput.isNotBlank() && !isImportingLocalFile,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
@@ -542,12 +546,13 @@ private fun FileSourceTab(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "Impor ke Beranda",
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+                        if (isImportingLocalFile) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.Black)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Mengimpor...", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        } else {
+                            Text("Impor ke Beranda", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
                 }
             }
