@@ -595,7 +595,7 @@ fun SettingsScreen(
                     }
                     if (updateDownloadId != null) {
                         androidx.compose.material3.LinearProgressIndicator(
-                            progress = { updateProgress / 100f },
+                            progress = updateProgress / 100f,
                             modifier = Modifier.fillMaxWidth(),
                             color = CyanPrimary
                         )
