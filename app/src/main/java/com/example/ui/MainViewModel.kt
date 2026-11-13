@@ -335,9 +335,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Restore portable profile metadata first so media never points
                 // to profiles that do not exist on this device.
                 val (cloudProfiles, cloudSettings) = cloudRepository.fetchProfileMetadata(user.uid)
-                cloudProfiles.forEach { cloudProfile ->
-                    val localProfile = profileDao.getProfileById(cloudProfile.id)
-                    if (localProfile == null) {
+                val cloudItems = cloudRepository.fetchMediaItems(user.uid)
+                val profileIdsInCloud = cloudProfiles.mapTo(mutableSetOf()) { it.id }
+                val legacyProfiles = cloudItems.map { it.profileId }.distinct()
+                    .filter { it !in profileIdsInCloud }
+                    .map { profileId ->
+                        Profile(
+                            id = profileId,
+                            name = if (profileId == "profile_utama") "Utama" else "Profil dipulihkan",
+                            isDefault = profileId == "profile_utama",
+                            isPinEnabled = false
+                        )
+                    }
+                val profilesToRestore = (cloudProfiles + legacyProfiles).distinctBy { it.id }
+                profilesToRestore.forEach { cloudProfile ->
+                    if (profileDao.getProfileById(cloudProfile.id) == null) {
                         profileDao.insertProfile(cloudProfile.copy(pin = "", isPinEnabled = false))
                     }
                 }
@@ -350,8 +362,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     profileDao.insertSettings(cloudSetting.copy(serverPin = serverPin))
                 }
 
-                val cloudItems = cloudRepository.fetchMediaItems(user.uid)
-                if (cloudItems.isEmpty() && cloudProfiles.isEmpty()) {
+                if (cloudItems.isEmpty() && profilesToRestore.isEmpty()) {
                     showStatus("Belum ada data profil atau media di Cloud")
                 } else {
                     val restoredItems = restoreSourcePlaylistsForItems(cloudItems)
@@ -359,9 +370,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _profiles.value = profileDao.getAllProfilesList().map { stored ->
                         stored.copy(pin = PinVault.decrypt(getApplication(), stored.pin))
                     }
+                    _activeProfile.value?.let { active ->
+                        _settings.value = loadSettingsForProfile(active.id)
+                    }
                     showStatus(
-                        "${cloudProfiles.size} profil dan ${restoredItems.size} item berhasil dipulihkan. " +
-                            "PIN profil dan PIN server harus diatur ulang pada perangkat ini."
+                        "${profilesToRestore.size} profil dan ${restoredItems.size} item berhasil dipulihkan. " +
+                            "PIN profil dan PIN server tetap aman dan tidak dipindahkan antarperangkat."
                     )
                 }
             } catch (e: Exception) {
