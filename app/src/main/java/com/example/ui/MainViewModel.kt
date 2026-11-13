@@ -472,8 +472,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             mediaDao.deleteMedia(item)
             if (item.playlistId.isNotBlank()) {
                 val remainingCount = mediaDao.countForPlaylist(item.playlistId)
-                sourcePlaylistDao.findByUrl(item.profileId, item.sourceUrl)
-                    ?.let { sourcePlaylistDao.updateCount(it.id, remainingCount) }
+                sourcePlaylistDao.updateCount(item.playlistId, remainingCount)
             }
             val details = listOfNotNull(
                 storageMessage?.let { "Storage: $it" },
