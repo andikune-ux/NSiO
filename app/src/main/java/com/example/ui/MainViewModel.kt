@@ -390,12 +390,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .filter { it.playlistId == playlist.id }
             val user = authManager.currentUser
             val warnings = mutableListOf<String>()
+            var cloudMetadataDeleted = false
 
             if (user != null) {
-                runCatching {
+                cloudMetadataDeleted = runCatching {
                     cloudRepository.deletePlaylistItems(user.uid, playlist.profileId, playlist.id)
-                }.onFailure {
+                    true
+                }.getOrElse {
                     warnings += "metadata cloud gagal dihapus"
+                    false
                 }
             } else if (profileItems.isNotEmpty()) {
                 warnings += "metadata cloud belum dibersihkan karena akun tidak aktif"
@@ -407,10 +410,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .forEach { item ->
                     val usedElsewhere = mediaDao.countReferencesOutsidePlaylist(item.url, playlist.id) > 0
                     if (usedElsewhere) return@forEach
-                    if (user == null) {
-                        warnings += "file Storage '${item.title}' masih tersimpan"
+                    if (!cloudMetadataDeleted) {
+                        warnings += "file Storage '${item.title}' dipertahankan agar metadata cloud tidak rusak"
                     } else {
-                        runCatching { storageRepository.deleteOwnedMedia(user.uid, item.url) }
+                        runCatching { storageRepository.deleteOwnedMedia(user!!.uid, item.url) }
                             .onFailure { warnings += "file Storage '${item.title}' gagal dihapus" }
                     }
                 }
@@ -567,27 +570,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val isFirebaseFile = item.sourceType == "SERVER" &&
                 storageRepository.isFirebaseStorageUrl(item.url)
 
+            var cloudMetadataDeleted = false
+            if (user != null) {
+                try {
+                    cloudRepository.deleteMediaItem(user.uid, item.id)
+                    cloudMetadataDeleted = true
+                } catch (e: Exception) {
+                    cloudMessage = e.localizedMessage ?: "metadata cloud gagal dihapus"
+                }
+            } else {
+                cloudMessage = "metadata cloud belum dibersihkan karena akun tidak aktif"
+            }
+
             if (isFirebaseFile) {
                 val usedElsewhere = mediaDao.countOtherReferencesToUrl(item.url, item.id) > 0
                 if (usedElsewhere) {
                     storageMessage = "file Firebase dipertahankan karena masih dipakai media lain"
-                } else if (user == null) {
-                    storageMessage = "file Firebase tidak dihapus karena akun penyimpanan tidak aktif"
+                } else if (!cloudMetadataDeleted) {
+                    storageMessage = "file Firebase dipertahankan agar metadata cloud tidak menunjuk file yang hilang"
                 } else {
                     try {
-                        storageRepository.deleteOwnedMedia(user.uid, item.url)
+                        storageRepository.deleteOwnedMedia(user!!.uid, item.url)
                         storageDeleted = true
                     } catch (e: Exception) {
                         storageMessage = e.localizedMessage ?: "file Firebase tidak dapat dihapus"
                     }
-                }
-            }
-
-            if (user != null) {
-                try {
-                    cloudRepository.deleteMediaItem(user.uid, item.id)
-                } catch (e: Exception) {
-                    cloudMessage = e.localizedMessage ?: "metadata cloud gagal dihapus"
                 }
             }
 
