@@ -204,6 +204,15 @@ class CloudMediaRepository(
     }
 
     /**
+     * Removes a playlist metadata document after its media references have
+     * been handled. The document ID is globally unique in the local schema.
+     */
+    suspend fun deleteSourcePlaylist(userId: String, playlistId: String) {
+        usersCollection.document(userId).collection("source_playlists")
+            .document(playlistId).delete().await()
+    }
+
+    /**
      * Deletes cloud metadata for one playlist only. Legacy documents without
      * profileId are considered part of the default profile.
      */
