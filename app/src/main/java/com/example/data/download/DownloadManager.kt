@@ -165,7 +165,7 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 val rangeEnd = rangeMatch?.groupValues?.get(2)?.toLongOrNull()
                 rangeTotalBytes = rangeMatch?.groupValues?.get(3)?.takeUnless { it == "*" }?.toLongOrNull()
                 if (rangeStart != existingBytes || rangeEnd == null || rangeEnd < existingBytes ||
-                    (rangeTotalBytes != null && rangeEnd >= rangeTotalBytes)) {
+                    rangeTotalBytes == null || rangeEnd >= rangeTotalBytes) {
                     response.close()
                     throw DownloadPermanentException("Server mengirim rentang byte yang tidak sesuai; unduhan dihentikan agar file tidak rusak.")
                 }
