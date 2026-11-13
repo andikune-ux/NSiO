@@ -54,24 +54,7 @@ class CloudMediaRepository(
      */
     suspend fun saveMediaItem(userId: String, item: MediaItem) {
         val docRef = usersCollection.document(userId).collection("media").document(item.id)
-        val payload = hashMapOf(
-            "id" to item.id,
-            "profileId" to item.profileId,
-            "title" to item.title,
-            "url" to item.url,
-            "thumbnailUrl" to item.thumbnailUrl,
-            "type" to item.type,
-            "sourceType" to item.sourceType,
-            "category" to item.category,
-            "playlistId" to item.playlistId,
-            "sourceUrl" to item.sourceUrl,
-            "durationMs" to item.durationMs,
-            "progressMs" to item.progressMs,
-            "isFavorite" to item.isFavorite,
-            "createdAt" to item.createdAt,
-            "extraInfo" to item.extraInfo,
-            "syncedAt" to FieldValue.serverTimestamp()
-        )
+        val payload = mediaPayload(item)
         try {
             docRef.set(payload, SetOptions.merge()).await()
             Log.d(TAG, "Media item synced: ${item.title}")
@@ -97,36 +80,8 @@ class CloudMediaRepository(
     /**
      * Fetches all media items for the user from Firestore.
      */
-    suspend fun fetchMediaItems(userId: String): List<MediaItem> {
-        return try {
-            val snapshot = usersCollection.document(userId).collection("media").get().await()
-            snapshot.documents.mapNotNull { doc ->
-                val id = doc.getString("id") ?: doc.id
-                val title = doc.getString("title") ?: return@mapNotNull null
-                val url = doc.getString("url") ?: return@mapNotNull null
-                MediaItem(
-                    id = id,
-                    profileId = doc.getString("profileId") ?: "profile_utama",
-                    title = title,
-                    url = url,
-                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
-                    type = doc.getString("type") ?: "VIDEO",
-                    sourceType = doc.getString("sourceType") ?: "LINK",
-                    category = doc.getString("category") ?: "Umum",
-                    playlistId = doc.getString("playlistId") ?: "",
-                    sourceUrl = doc.getString("sourceUrl") ?: "",
-                    durationMs = doc.getLong("durationMs") ?: 0L,
-                    progressMs = doc.getLong("progressMs") ?: 0L,
-                    isFavorite = doc.getBoolean("isFavorite") ?: false,
-                    createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
-                    extraInfo = doc.getString("extraInfo") ?: ""
-                )
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Gagal mengambil media items dari Firestore: ${e.message}", e)
-            throw e
-        }
-    }
+    suspend fun fetchMediaItems(userId: String): List<MediaItem> =
+        fetchMediaItems(userId, null)
 
     /**
      * Observes user's media items in real time via snapshot listener.
