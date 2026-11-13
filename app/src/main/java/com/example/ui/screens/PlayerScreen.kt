@@ -21,12 +21,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -270,8 +273,11 @@ fun PlayerScreen(
                             }
                         }
                         if (!isPhoto) {
-                            IconButton(onClick = { showQueue = !showQueue }) {
-                                Icon(Icons.Default.List, contentDescription = "Daftar video", tint = Color.White)
+                            IconButton(
+                                onClick = { showQueue = !showQueue },
+                                modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Daftar video", tint = Color.White, modifier = Modifier.size(19.dp))
                             }
                         }
                     }
@@ -281,9 +287,15 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier.align(Alignment.TopEnd).padding(top = 58.dp).width(280.dp)
                             .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.28f, borderAlpha = 0.5f, elevation = 16.dp)
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
                             .padding(8.dp)
                     ) {
-                        mediaList.filter { it.type != "PHOTO" }.take(20).forEach { next ->
+                        val queueItems = mediaList.filter { it.type != "PHOTO" }.take(20)
+                        if (queueItems.isEmpty()) {
+                            Text("Belum ada video di antrean", color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp, modifier = Modifier.padding(12.dp))
+                        }
+                        queueItems.forEach { next ->
                             Text(
                                 text = next.title,
                                 color = if (next.id == media.id) CyanPrimary else Color.White,
@@ -299,6 +311,17 @@ fun PlayerScreen(
                 }
 
                 // Center Liquid Glass Orb Controls
+                if (isGoogleDriveVideo) {
+                    Text(
+                        text = "Gunakan kontrol di pemutar Google Drive untuk putar, jeda, dan pencarian waktu",
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
+                            .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.2f, borderAlpha = 0.35f)
+                            .padding(horizontal = 14.dp, vertical = 9.dp)
+                    )
+                }
                 if (usesNativePlayer) Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -307,6 +330,7 @@ fun PlayerScreen(
                     // Rewind 10s
                     IconButton(
                         onClick = { viewModel.player.seekBackward(10000L) },
+                        enabled = playerState.isSeekable,
                         modifier = Modifier
                             .size(50.dp)
                             .liquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.45f)
@@ -349,6 +373,7 @@ fun PlayerScreen(
                     // Forward 10s
                     IconButton(
                         onClick = { viewModel.player.seekForward(10000L) },
+                        enabled = playerState.isSeekable,
                         modifier = Modifier
                             .size(50.dp)
                             .liquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.45f)
@@ -392,7 +417,7 @@ fun PlayerScreen(
                             )
 
                             Text(
-                                text = "iOS 26 Liquid Cinema Engine",
+                                text = if (playerState.isSeekable) "GESER UNTUK MENCARI POSISI" else "LIVE / TIDAK DAPAT DI-SEEK",
                                 fontSize = 9.sp,
                                 color = CyanPrimary,
                                 fontWeight = FontWeight.SemiBold
@@ -405,7 +430,7 @@ fun PlayerScreen(
 
                         Slider(
                             value = currentRatio,
-                            enabled = playerState.durationMs > 0L,
+                            enabled = playerState.isSeekable && playerState.durationMs > 0L,
                             onValueChange = { ratio ->
                                 isSeeking = true
                                 seekPreviewMs = (ratio * total).toLong().coerceIn(0L, total)
