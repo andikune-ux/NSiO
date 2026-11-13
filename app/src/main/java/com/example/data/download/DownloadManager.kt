@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import org.json.JSONObject
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -52,22 +53,43 @@ class VideoDownloadManager private constructor(private val context: Context) {
         require(urlExtension != "m3u8" && urlExtension != "m3u") {
             "Unduhan HLS belum didukung. Tautan ini adalah playlist streaming, bukan file video langsung."
         }
-        val safeTitle = title.trim().replace(Regex("[^a-zA-Z0-9._-]+"), "_").take(80).ifEmpty { "video" }
-        val folder = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Downloads")
-        folder.mkdirs()
-        val extension = urlExtension
-            .takeIf { it.matches(Regex("[a-z0-9]{1,8}")) }
-            ?: "mp4"
-        val localFile = File(folder, "$safeTitle-${UUID.randomUUID()}.$extension")
-        val id = UUID.randomUUID().toString()
-        downloadDao.insertDownload(DownloadItem(id, mediaId, title, url, localFile.absolutePath, "PENDING"))
+
+        // Reuse an unfinished row for the same media URL instead of creating duplicate files/jobs.
+        val existing = downloadDao.getResumableDownloadForMedia(mediaId, url)
+        val item = if (existing != null) {
+            val partial = File("${existing.localPath}.part")
+            val bytes = if (partial.exists()) partial.length() else 0L
+            if (existing.status != "DOWNLOADING") {
+                downloadDao.updateProgress(
+                    existing.id, "PENDING", existing.progressPercent.coerceIn(0, 99),
+                    bytes, existing.totalBytes, existing.localPath
+                )
+            }
+            existing
+        } else {
+            val safeTitle = title.trim().replace(Regex("[^a-zA-Z0-9._-]+"), "_").take(80).ifEmpty { "video" }
+            val folder = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Downloads")
+            if (!folder.exists() && !folder.mkdirs()) throw IOException("Folder unduhan tidak dapat dibuat")
+            val extension = urlExtension.takeIf { it.matches(Regex("[a-z0-9]{1,8}")) } ?: "mp4"
+            val localFile = File(folder, "$safeTitle-${UUID.randomUUID()}.$extension")
+            DownloadItem(UUID.randomUUID().toString(), mediaId, title, url, localFile.absolutePath, "PENDING")
+                .also { downloadDao.insertDownload(it) }
+        }
+
         val input = Data.Builder()
-            .putString(KEY_ID, id).putString(KEY_MEDIA_ID, mediaId)
+            .putString(KEY_ID, item.id).putString(KEY_MEDIA_ID, mediaId)
             .putString(KEY_TITLE, title).putString(KEY_URL, url)
-            .putString(KEY_PATH, localFile.absolutePath)
+            .putString(KEY_PATH, item.localPath)
             .putString(KEY_HEADERS, JSONObject(requestHeaders).toString()).build()
-        val request = OneTimeWorkRequestBuilder<DownloadFileWorkManager>().setInputData(input).addTag("DOWNLOAD_$id").build()
-        WorkManager.getInstance(context).enqueue(request)
+        val request = OneTimeWorkRequestBuilder<DownloadFileWorkManager>()
+            .setInputData(input)
+            .addTag("DOWNLOAD_${item.id}")
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "NSIO_DOWNLOAD_${item.id}",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
     }
 
     suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
