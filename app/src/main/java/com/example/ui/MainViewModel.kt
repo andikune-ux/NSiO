@@ -300,41 +300,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Link Parsing (B1) ---
     fun parseAndAddLink(url: String, onFinished: (String) -> Unit) {
-        val currentProfileId = _activeProfile.value?.id ?: return
+        val profileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
-            when (val result = LinkExtractor.parseUrl(url, currentProfileId)) {
-                is ParseResult.Single -> {
-                    val sourceKind = if (result.item.type == "STREAM") "STREAM" else if (url.lowercase().contains(".json")) "REPO" else "LINK"
-                    val playlist = ensureSourcePlaylist(url, result.item.title, sourceKind, currentProfileId)
-                    val item = result.item.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
+            val message = parseAndAddLinkInternal(url, profileId)
+            onFinished(message)
+        }
+    }
+
+    /**
+     * Parses and persists one source in the caller's coroutine.
+     * Keeping this suspendable lets bulk refresh wait for real completion instead
+     * of reporting success while child jobs are still running.
+     */
+    private suspend fun parseAndAddLinkInternal(url: String, profileId: String): String {
+        return when (val result = LinkExtractor.parseUrl(url, profileId)) {
+            is ParseResult.Single -> {
+                val sourceKind = if (result.item.type == "STREAM") {
+                    "STREAM"
+                } else if (url.lowercase().contains(".json")) {
+                    "REPO"
+                } else {
+                    "LINK"
+                }
+                val playlist = ensureSourcePlaylist(url, result.item.title, sourceKind, profileId)
+                val item = result.item.copy(
+                    sourceType = sourceKind,
+                    playlistId = playlist.id,
+                    sourceUrl = url
+                )
+                database.withTransaction {
                     mediaDao.clearPlaylist(playlist.id)
                     mediaDao.insertMedia(item)
-                    sourcePlaylistDao.updateCount(playlist.id, 1)
-                    // If user is authenticated, sync to cloud
-                    authManager.currentUser?.let { user ->
-                        try { cloudRepository.saveMediaItem(user.uid, item) } catch (_: Exception) {}
-                    }
-                    showStatus("1 Media berhasil ditambahkan: ${result.item.title}")
-                    onFinished("Berhasil menambahkan: ${result.item.title}")
+                    sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 }
-                is ParseResult.Multiple -> {
-                    val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
-                    val playlist = ensureSourcePlaylist(url, playlistNameFromUrl(url, result.title), sourceKind, currentProfileId)
-                    val items = result.items.map { it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url) }
+                authManager.currentUser?.let { user ->
+                    runCatching { cloudRepository.saveMediaItem(user.uid, item) }
+                }
+                "Berhasil menambahkan: ${result.item.title}"
+            }
+            is ParseResult.Multiple -> {
+                val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
+                val playlist = ensureSourcePlaylist(
+                    url,
+                    playlistNameFromUrl(url, result.title),
+                    sourceKind,
+                    profileId
+                )
+                val items = result.items.map {
+                    it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
+                }
+                database.withTransaction {
                     mediaDao.clearPlaylist(playlist.id)
                     mediaDao.insertAll(items)
-                    sourcePlaylistDao.updateCount(playlist.id, items.size)
-                    authManager.currentUser?.let { user ->
-                        try { cloudRepository.syncLocalListToCloud(user.uid, items) } catch (_: Exception) {}
-                    }
-                    showStatus("${items.size} item berhasil ditambahkan ke beranda!")
-                    onFinished("${items.size} item berhasil ditambahkan (${result.title})")
+                    sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 }
-                is ParseResult.Error -> {
-                    showStatus("Error: ${result.message}")
-                    onFinished("Error: ${result.message}")
+                authManager.currentUser?.let { user ->
+                    runCatching { cloudRepository.syncLocalListToCloud(user.uid, items) }
                 }
+                "${items.size} item berhasil ditambahkan (${result.title})"
             }
+            is ParseResult.Error -> "Error: ${result.message}"
         }
     }
 
@@ -369,18 +394,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
-        repo.pluginLists.forEach { url ->
-            parseAndAddLink(url) { message -> showStatus("Refresh repo: $message") }
+        val profileId = _activeProfile.value?.id ?: return
+        viewModelScope.launch {
+            var successCount = 0
+            val failures = mutableListOf<String>()
+            repo.pluginLists.distinct().forEach { url ->
+                val result = runCatching { parseAndAddLinkInternal(url, profileId) }
+                    .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
+                if (result.startsWith("Error:")) failures += result else successCount++
+            }
+            showStatus(
+                if (failures.isEmpty()) "Repository diperbarui: $successCount sumber"
+                else "Repository: $successCount berhasil, ${failures.size} gagal"
+            )
         }
     }
 
     fun refreshAllSourcePlaylists() {
         val profileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
-            sourcePlaylistDao.getForProfile(profileId)
+            val playlists = sourcePlaylistDao.getForProfile(profileId)
                 .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" }
-                .forEach { playlist -> parseAndAddLink(playlist.url) { } }
-            showStatus("Semua playlist sumber diperbarui")
+            if (playlists.isEmpty()) {
+                showStatus("Belum ada playlist sumber untuk diperbarui")
+                return@launch
+            }
+
+            var successCount = 0
+            val failures = mutableListOf<String>()
+            playlists.forEach { playlist ->
+                val result = runCatching { parseAndAddLinkInternal(playlist.url, profileId) }
+                    .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
+                if (result.startsWith("Error:")) failures += "${playlist.name}: $result"
+                else successCount++
+            }
+
+            showStatus(
+                if (failures.isEmpty()) "Selesai memperbarui $successCount playlist sumber"
+                else "$successCount playlist berhasil diperbarui, ${failures.size} gagal"
+            )
         }
     }
 
@@ -424,10 +476,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 category = "Media Server", playlistId = playlist.id, sourceUrl = url
             )
             mediaDao.insertMedia(newItem)
+            sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
             authManager.currentUser?.let { user ->
                 try { cloudRepository.saveMediaItem(user.uid, newItem) } catch (_: Exception) {}
             }
-            showStatus("Media berhasil di-upload ke server & beranda!")
+            showStatus("Media berhasil ditambahkan ke server & beranda!")
         }
     }
 
