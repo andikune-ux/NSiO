@@ -32,21 +32,23 @@ val computedNsioFallback: Pair<String, Int> = kotlin.run {
   val monthDelta = (today.year - baseline.year) * 12 + today.monthValue - baseline.monthValue
   if (monthDelta < 0) throw GradleException("NSiO version baseline is later than the current Jakarta date")
 
-  val git = ProcessBuilder("git", "rev-list", "--count", "HEAD")
-    .directory(rootProject.projectDir)
-    .redirectErrorStream(true)
-    .start()
-  val gitOutput = git.inputStream.bufferedReader().use { it.readText().trim() }
-  if (git.waitFor() != 0) throw GradleException("Cannot calculate NSiO commit ordinal: $gitOutput")
+  // Gradle's provider-based process API is compatible with configuration cache.
+  val gitOutput = providers.exec {
+    workingDir(rootProject.projectDir)
+    commandLine("git", "rev-list", "--count", "HEAD")
+  }.standardOutput.asText.get().trim()
   val commitOrdinal = gitOutput.toIntOrNull()
-    ?: throw GradleException("Invalid NSiO commit ordinal: $gitOutput")
+    ?: throw GradleException("Cannot calculate NSiO commit ordinal from git output: $gitOutput")
   if (commitOrdinal !in 1..99999) throw GradleException("NSiO commit ordinal outside supported range: $commitOrdinal")
 
   val major = stateInt("base_major") + monthDelta + stateInt("major_overhaul_count")
   val versionName = "$major.${today.dayOfMonth}.$commitOrdinal"
-  val versionCode = major * 50_000_000 + today.dayOfYear * 100_000 + commitOrdinal
-  if (versionCode > 2_100_000_000) throw GradleException("NSiO versionCode exceeds Android's safe integer limit")
-  versionName to versionCode
+  val versionCodeLong = major.toLong() * 50_000_000L +
+    today.dayOfYear.toLong() * 100_000L + commitOrdinal.toLong()
+  if (versionCodeLong > 2_100_000_000L) {
+    throw GradleException("NSiO versionCode exceeds Android's safe integer limit")
+  }
+  versionName to versionCodeLong.toInt()
 }
 
 val nsioVersionName = providers.gradleProperty("nsioVersionName")
