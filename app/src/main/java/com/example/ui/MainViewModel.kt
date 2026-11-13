@@ -740,7 +740,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 showStatus("Mengunggah file ke server...")
                 val user = authManager.ensureStorageUser()
-                val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title)
+                val remoteUri = storageRepository.uploadMedia(user.uid, Uri.parse(localUri), title.ifBlank { "Media Server" })
                 try {
                     val playlist = ensureSourcePlaylist(
                         remoteUri.toString(),
