@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -65,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -216,28 +218,33 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(horizontal = 18.dp, vertical = 20.dp)
             ) {
-                // Top Header: Floating Liquid Glass Pill
+                // Header stretches to use the available width without crowding its actions.
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(0.96f)
                         .liquidGlass(
-                            shape = RoundedCornerShape(20.dp),
-                            alpha = 0.18f,
-                            borderAlpha = 0.4f,
-                            elevation = 12.dp
+                            shape = RoundedCornerShape(22.dp),
+                            alpha = 0.2f,
+                            borderAlpha = 0.42f,
+                            elevation = 14.dp
                         )
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .padding(horizontal = 8.dp, vertical = 7.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         IconButton(
                             onClick = {
                                 viewModel.player.clearError()
                                 onClose()
                             },
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.12f))
                                 .liquidGlassTvFocusable(shape = CircleShape)
@@ -246,28 +253,35 @@ fun PlayerScreen(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Kembali",
                                 tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(21.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = playerState.title.ifEmpty { media.title },
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
                                     text = media.category,
                                     fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = CyanPrimary
                                 )
                                 Text(
-                                    text = "•  ${media.sourceType}",
+                                    text = "• ${media.sourceType}",
                                     fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = Color(0xFFCBD5E1)
                                 )
                             }
@@ -275,9 +289,16 @@ fun PlayerScreen(
                         if (!isPhoto) {
                             IconButton(
                                 onClick = { showQueue = !showQueue },
-                                modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .liquidGlassTvFocusable(shape = CircleShape)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Daftar video", tint = Color.White, modifier = Modifier.size(19.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.List,
+                                    contentDescription = "Daftar video",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(21.dp)
+                                )
                             }
                         }
                     }
@@ -285,11 +306,19 @@ fun PlayerScreen(
 
                 if (showQueue) {
                     Column(
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 58.dp).width(280.dp)
-                            .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.28f, borderAlpha = 0.5f, elevation = 16.dp)
-                            .heightIn(max = 420.dp)
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 76.dp)
+                            .width(300.dp)
+                            .heightIn(max = 360.dp)
+                            .liquidGlass(
+                                shape = RoundedCornerShape(20.dp),
+                                alpha = 0.3f,
+                                borderAlpha = 0.55f,
+                                elevation = 18.dp
+                            )
                             .verticalScroll(rememberScrollState())
-                            .padding(8.dp)
+                            .padding(10.dp)
                     ) {
                         val queueItems = mediaList.filter { it.type != "PHOTO" }.take(20)
                         if (queueItems.isEmpty()) {
@@ -299,15 +328,18 @@ fun PlayerScreen(
                             Text(
                                 text = next.title,
                                 color = if (next.id == media.id) CyanPrimary else Color.White,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 maxLines = 1,
-                                modifier = Modifier.fillMaxWidth()
-                                    .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable {
                                         showQueue = false
                                         viewModel.playMedia(next)
                                     }
-                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                                    .padding(horizontal = 12.dp, vertical = 11.dp)
                             )
                         }
                     }
@@ -327,7 +359,7 @@ fun PlayerScreen(
                 }
                 if (usesNativePlayer) Row(
                     modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Rewind 10s
@@ -335,15 +367,15 @@ fun PlayerScreen(
                         onClick = { viewModel.player.seekBackward(10000L) },
                         enabled = playerState.isSeekable,
                         modifier = Modifier
-                            .size(50.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.45f)
+                            .size(56.dp)
+                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
                             .liquidGlassTvFocusable(shape = CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Replay10,
                             contentDescription = "Mundur 10 Detik",
                             tint = Color.White,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(29.dp)
                         )
                     }
 
@@ -351,7 +383,7 @@ fun PlayerScreen(
                     IconButton(
                         onClick = { viewModel.player.togglePlayPause() },
                         modifier = Modifier
-                            .size(66.dp)
+                            .size(76.dp)
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
@@ -369,7 +401,7 @@ fun PlayerScreen(
                             imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
                             tint = Color.Black,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(44.dp)
                         )
                     }
 
@@ -378,15 +410,15 @@ fun PlayerScreen(
                         onClick = { viewModel.player.seekForward(10000L) },
                         enabled = playerState.isSeekable,
                         modifier = Modifier
-                            .size(50.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.45f)
+                            .size(56.dp)
+                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
                             .liquidGlassTvFocusable(shape = CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Forward10,
                             contentDescription = "Maju 10 Detik",
                             tint = Color.White,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(29.dp)
                         )
                     }
                 }
@@ -402,7 +434,7 @@ fun PlayerScreen(
                             borderAlpha = 0.4f,
                             elevation = 12.dp
                         )
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .padding(horizontal = 20.dp, vertical = 13.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -414,7 +446,7 @@ fun PlayerScreen(
                             val totalFormatted = formatMs(playerState.durationMs)
                             Text(
                                 text = "$currentFormatted / $totalFormatted",
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
@@ -422,6 +454,7 @@ fun PlayerScreen(
                             Text(
                                 text = if (playerState.isSeekable) "GESER UNTUK MENCARI POSISI" else "LIVE / TIDAK DAPAT DI-SEEK",
                                 fontSize = 9.sp,
+                                maxLines = 1,
                                 color = CyanPrimary,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -527,7 +560,7 @@ fun PlayerScreen(
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(48.dp)
+                                        .height(52.dp)
                                         .liquidGlassTvFocusable(shape = RoundedCornerShape(16.dp)),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = CyanPrimary,
@@ -544,7 +577,9 @@ fun PlayerScreen(
                                     Text(
                                         text = "Putar Video Demo (bukan sumber asli)",
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -559,7 +594,7 @@ fun PlayerScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(44.dp)
+                                        .height(48.dp)
                                         .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp)),
                                     shape = RoundedCornerShape(14.dp),
                                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
@@ -581,7 +616,7 @@ fun PlayerScreen(
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(44.dp)
+                                        .height(48.dp)
                                         .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp)),
                                     shape = RoundedCornerShape(14.dp),
                                     border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.45f)),
