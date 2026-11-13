@@ -247,7 +247,8 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     var read: Int
                     while (input.read(buffer).also { read = it } >= 0) {
                         if (isStopped) {
-                            // Keep partial bytes when WorkManager stops this worker so it can resume later.
+                            // Flush buffered bytes before recording the resumable file length.
+                            output.flush()
                             manager.updateProgress(id, 0)
                             val pausedBytes = partial.length()
                             val pausedPercent = if (total > 0L) ((pausedBytes * 100L) / total).toInt().coerceIn(0, 99) else 0
