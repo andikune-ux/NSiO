@@ -342,10 +342,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 cloudSettings.forEach { cloudSetting ->
-                    if (profileDao.getSettings(cloudSetting.profileId) == null) {
-                        // Server PIN is device-local and intentionally regenerated.
-                        profileDao.insertSettings(cloudSetting)
-                    }
+                    val localSettings = profileDao.getSettings(cloudSetting.profileId)
+                    // Restore portable preferences while retaining this device's
+                    // existing encrypted server PIN. A new profile gets a fresh PIN.
+                    val serverPin = localSettings?.serverPin
+                        ?: PinVault.encrypt(getApplication(), cloudSetting.serverPin)
+                    profileDao.insertSettings(cloudSetting.copy(serverPin = serverPin))
                 }
 
                 val cloudItems = cloudRepository.fetchMediaItems(user.uid)
@@ -373,7 +375,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun restoreSourcePlaylistsForItems(items: List<MediaItem>): List<MediaItem> {
         val normalized = items.toMutableList()
         items.filter { it.sourceUrl.isNotBlank() }
-            .groupBy { it.playlistId.ifBlank { it.sourceUrl } }
+            .groupBy { Triple(it.profileId, it.playlistId.ifBlank { it.sourceUrl }, it.sourceUrl) }
             .values.forEach { group ->
                 val first = group.first()
                 val existing = sourcePlaylistDao.findByUrl(first.profileId, first.sourceUrl)
