@@ -171,13 +171,18 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             }
             val response = client.newCall(requestBuilder.build()).execute()
             if (response.code == 416 && existingBytes > 0L) {
-                val unsatisfiedRange = response.header("Content-Range").orEmpty()
-                val serverTotal = Regex("^bytes\\s+\\*/(\\d+)$", RegexOption.IGNORE_CASE)
-                    .matchEntire(unsatisfiedRange)?.groupValues?.get(1)?.toLongOrNull()
+                val isAlreadyComplete = isVerifiedCompletedRange(
+                    contentRange = response.header("Content-Range").orEmpty(),
+                    existingBytes = existingBytes,
+                    responseEtag = response.header("ETag").orEmpty(),
+                    responseLastModified = response.header("Last-Modified").orEmpty(),
+                    savedEtag = savedEtag,
+                    savedLastModified = savedLastModified
+                )
                 response.close()
-                if (serverTotal != null && serverTotal == existingBytes && partial.isFile) {
+                if (isAlreadyComplete && partial.isFile && partial.length() == existingBytes) {
                     if (!partial.renameTo(target)) throw IOException("Gagal menyimpan file hasil resume")
-                    db.updateProgress(id, "COMPLETED", 100, existingBytes, serverTotal, target.absolutePath)
+                    db.updateProgress(id, "COMPLETED", 100, existingBytes, existingBytes, target.absolutePath)
                     manager.updateProgress(id, 100)
                     return@withContext Result.success()
                 }
@@ -328,3 +333,28 @@ private class DownloadHttpException(val statusCode: Int) :
     IOException("Server mengembalikan HTTP $statusCode")
 
 private class DownloadPermanentException(message: String) : Exception(message)
+
+
+/**
+ * HTTP 416 can mean the partial file already contains the entire representation.
+ * Accept that case only when the server confirms the exact byte total and the
+ * same entity validator used for the original partial download.
+ */
+internal fun isVerifiedCompletedRange(
+    contentRange: String,
+    existingBytes: Long,
+    responseEtag: String,
+    responseLastModified: String,
+    savedEtag: String,
+    savedLastModified: String
+): Boolean {
+    if (existingBytes <= 0L) return false
+    val total = Regex("^bytes\\\\s+\\\\*/(\\\\d+)$", RegexOption.IGNORE_CASE)
+        .matchEntire(contentRange.trim())?.groupValues?.get(1)?.toLongOrNull() ?: return false
+    val validatorMatches = when {
+        savedEtag.isNotBlank() -> responseEtag.isNotBlank() && savedEtag == responseEtag
+        savedLastModified.isNotBlank() -> responseLastModified.isNotBlank() && savedLastModified == responseLastModified
+        else -> false
+    }
+    return total == existingBytes && validatorMatches
+}
