@@ -375,11 +375,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Link Parsing (B1) ---
-    fun parseAndAddLink(url: String, onFinished: (String) -> Unit) {
+    fun parseAndAddLink(url: String, playlistName: String = "", onFinished: (String) -> Unit) {
         val profileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
-            val message = runCatching { parseAndAddLinkInternal(url.trim(), profileId) }
-                .getOrElse { "Error: ${it.localizedMessage ?: "gagal memproses sumber"}" }
+            val message = runCatching {
+                parseAndAddLinkInternal(url.trim(), profileId, playlistName.trim())
+            }.getOrElse { "Error: ${it.localizedMessage ?: "gagal memproses sumber"}" }
             onFinished(message)
         }
     }
@@ -389,7 +390,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Keeping this suspendable lets bulk refresh wait for real completion instead
      * of reporting success while child jobs are still running.
      */
-    private suspend fun parseAndAddLinkInternal(url: String, profileId: String): String {
+    private suspend fun parseAndAddLinkInternal(url: String, profileId: String, playlistName: String = ""): String {
         return when (val result = LinkExtractor.parseUrl(url, profileId)) {
             is ParseResult.Single -> {
                 val sourceKind = if (result.item.type == "STREAM") {
@@ -399,7 +400,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     "LINK"
                 }
-                val playlist = ensureSourcePlaylist(url, result.item.title, sourceKind, profileId)
+                val playlist = ensureSourcePlaylist(url, playlistName.ifBlank { result.item.title }, sourceKind, profileId, playlistName)
                 val item = result.item.copy(
                     sourceType = sourceKind,
                     playlistId = playlist.id,
@@ -425,7 +426,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     url,
                     playlistNameFromUrl(url, result.title),
                     sourceKind,
-                    profileId
+                    profileId,
+                    playlistName
                 )
                 val items = result.items.map {
                     it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
@@ -443,12 +445,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun ensureSourcePlaylist(url: String, name: String, sourceType: String, profileId: String): SourcePlaylist {
+    private suspend fun ensureSourcePlaylist(
+        url: String,
+        name: String,
+        sourceType: String,
+        profileId: String,
+        preferredName: String = ""
+    ): SourcePlaylist {
         val existing = sourcePlaylistDao.findByUrl(profileId, url)
-        if (existing != null) return existing
+        if (existing != null) {
+            val cleanName = preferredName.trim().take(48)
+            if (cleanName.isNotEmpty() && cleanName != existing.name) {
+                return existing.copy(name = cleanName, updatedAt = System.currentTimeMillis())
+                    .also { sourcePlaylistDao.update(it) }
+            }
+            return existing
+        }
         return SourcePlaylist(
             id = UUID.randomUUID().toString(), profileId = profileId,
-            name = name.ifBlank { playlistNameFromUrl(url, "Playlist") }, url = url,
+            name = preferredName.trim().take(48).ifBlank { name.ifBlank { playlistNameFromUrl(url, "Playlist") } }, url = url,
             sourceType = sourceType
         ).also { sourcePlaylistDao.insert(it) }
     }
@@ -459,8 +474,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun renameSourcePlaylist(playlist: SourcePlaylist, newName: String) {
         viewModelScope.launch {
-            val cleanName = newName.trim()
-            if (cleanName.isNotEmpty()) sourcePlaylistDao.update(playlist.copy(name = cleanName, updatedAt = System.currentTimeMillis()))
+            val cleanName = newName.trim().take(48)
+            if (cleanName.isNotEmpty()) {
+                sourcePlaylistDao.update(playlist.copy(name = cleanName, updatedAt = System.currentTimeMillis()))
+                showStatus("Nama playlist diubah menjadi '$cleanName'")
+            } else {
+                showStatus("Nama playlist tidak boleh kosong")
+            }
         }
     }
 
