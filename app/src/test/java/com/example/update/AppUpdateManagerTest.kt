@@ -11,6 +11,8 @@ class AppUpdateManagerTest {
     @Test
     fun parsesVersionTagsAndRejectsMalformedValues() {
         assertEquals(listOf(1, 0, 2), AppUpdateManager.parseVersion("v1.0.2"))
+        assertEquals(listOf(1, 13, 203), AppUpdateManager.parseVersion("v.1.13.203"))
+        assertEquals("1.13.203", AppUpdateManager.normalizeVersionTag("v.1.13.203"))
         assertEquals(listOf(1, 10, 0), AppUpdateManager.parseVersion("1.10.0"))
         assertNull(AppUpdateManager.parseVersion("v1.x.2"))
         assertNull(AppUpdateManager.parseVersion(""))
@@ -23,6 +25,9 @@ class AppUpdateManagerTest {
         assertTrue(AppUpdateManager.compareVersions("1.0.3", "1.0.2") > 0)
         assertEquals(0, AppUpdateManager.compareVersions("1.0", "1.0.0"))
         assertTrue(AppUpdateManager.compareVersions("1.0.1", "1.0.2") < 0)
+        assertTrue(AppUpdateManager.compareVersions("2.1.1", "1.31.999") > 0)
+        assertTrue(AppUpdateManager.compareVersions("1.14.1", "1.13.999") > 0)
+        assertTrue(AppUpdateManager.compareVersions("1.13.204", "1.13.203") > 0)
     }
 
     @Test
