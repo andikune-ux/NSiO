@@ -35,7 +35,7 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: 🏗️ Build Debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle testDebugUnitTest assembleDebug --no-daemon
 
       - name: 📲 Simpan Hasil APK
         uses: actions/upload-artifact@v4
