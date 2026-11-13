@@ -170,7 +170,7 @@ object BackupUtils {
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
                                 gridColumns = s.optInt("gridColumns", 4),
-                                serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) "1234" else s.optString("serverPin", "1234")
+                                serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) ProfileSettings(profileId = s.getString("profileId")).serverPin else s.optString("serverPin", "1234")
                             )
                         )
                     }
