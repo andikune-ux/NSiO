@@ -182,7 +182,7 @@ fun MediaGridCard(
                             else -> Icons.Default.PlayArrow
                         },
                         contentDescription = "Play",
-                        tint = CyanPrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
