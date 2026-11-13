@@ -74,9 +74,9 @@ fun BottomNavGlassBar(
                 .fillMaxWidth()
                 .liquidGlass(
                     shape = RoundedCornerShape(28.dp),
-                    alpha = 0.14f,
-                    borderAlpha = 0.38f,
-                    elevation = 12.dp
+                    alpha = 0.16f,
+                    borderAlpha = 0.24f,
+                    elevation = 16.dp
                 )
                 .padding(horizontal = 8.dp, vertical = 6.dp)
                 .testTag("bottom_nav_glass_bar")
@@ -170,7 +170,7 @@ private fun BottomNavItem(
             .focusable(interactionSource = interactionSource)
             .then(
                 if (isFocused) Modifier.border(
-                    1.5.dp,
+                    1.dp,
                     Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
                     RoundedCornerShape(20.dp)
                 ) else Modifier
