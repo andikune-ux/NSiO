@@ -26,6 +26,7 @@ data class PlayerState(
     val isBuffering: Boolean = false,
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
+    val isSeekable: Boolean = false,
     val title: String = "",
     val error: String? = null,
     val isFallbackAvailable: Boolean = true
@@ -108,6 +109,7 @@ class CS3IPlayer(
                                 _playerState.value = _playerState.value.copy(
                                     isBuffering = false,
                                     durationMs = duration.coerceAtLeast(0L),
+                                    isSeekable = isCurrentMediaItemSeekable,
                                     isPlaying = isPlaying,
                                     error = null
                                 )
@@ -119,7 +121,7 @@ class CS3IPlayer(
                                 )
                             }
                             Player.STATE_IDLE -> {
-                                _playerState.value = _playerState.value.copy(isBuffering = false)
+                                _playerState.value = _playerState.value.copy(isBuffering = false, isSeekable = false)
                             }
                         }
                     }
@@ -265,15 +267,17 @@ class CS3IPlayer(
     }
 
     override fun seekTo(positionMs: Long) {
-        val duration = exoPlayer?.duration ?: 0L
-        val target = positionMs.coerceAtLeast(0L).let { if (duration > 0L) it.coerceAtMost(duration) else it }
-        exoPlayer?.seekTo(target)
+        val player = exoPlayer ?: return
+        if (!player.isCurrentMediaItemSeekable) return
+        val duration = player.duration.coerceAtLeast(0L)
+        val target = positionMs.coerceAtLeast(0L).coerceAtMost(duration)
+        player.seekTo(target)
         lastPositionMs = target
         _playerState.value = _playerState.value.copy(currentPositionMs = target)
     }
 
     override fun seekForward(offsetMs: Long) {
-        exoPlayer?.let { player ->
+        exoPlayer?.takeIf { it.isCurrentMediaItemSeekable }?.let { player ->
             val current = player.currentPosition.coerceAtLeast(0L)
             val target = (current + offsetMs.coerceAtLeast(0L)).let { requested ->
                 if (player.duration > 0L) requested.coerceAtMost(player.duration) else requested
@@ -285,7 +289,7 @@ class CS3IPlayer(
     }
 
     override fun seekBackward(offsetMs: Long) {
-        exoPlayer?.let { player ->
+        exoPlayer?.takeIf { it.isCurrentMediaItemSeekable }?.let { player ->
             val target = (player.currentPosition.coerceAtLeast(0L) - offsetMs.coerceAtLeast(0L)).coerceAtLeast(0L)
             player.seekTo(target)
             lastPositionMs = target
