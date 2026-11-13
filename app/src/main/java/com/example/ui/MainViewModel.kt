@@ -386,10 +386,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSourcePlaylist(playlist: SourcePlaylist) {
         viewModelScope.launch {
+            val profileItems = mediaDao.getMediaListForProfile(playlist.profileId)
+                .filter { it.playlistId == playlist.id }
+            val user = authManager.currentUser
+            val warnings = mutableListOf<String>()
+
+            if (user != null) {
+                runCatching {
+                    cloudRepository.deletePlaylistItems(user.uid, playlist.profileId, playlist.id)
+                }.onFailure {
+                    warnings += "metadata cloud gagal dihapus"
+                }
+            } else if (profileItems.isNotEmpty()) {
+                warnings += "metadata cloud belum dibersihkan karena akun tidak aktif"
+            }
+
+            profileItems.asSequence()
+                .filter { it.sourceType == "SERVER" && storageRepository.isFirebaseStorageUrl(it.url) }
+                .distinctBy { it.url }
+                .forEach { item ->
+                    val usedElsewhere = mediaDao.countReferencesOutsidePlaylist(item.url, playlist.id) > 0
+                    if (usedElsewhere) return@forEach
+                    if (user == null) {
+                        warnings += "file Storage '${item.title}' masih tersimpan"
+                    } else {
+                        runCatching { storageRepository.deleteOwnedMedia(user.uid, item.url) }
+                            .onFailure { warnings += "file Storage '${item.title}' gagal dihapus" }
+                    }
+                }
+
             mediaDao.clearPlaylist(playlist.id)
             sourcePlaylistDao.delete(playlist)
             if (_selectedFilter.value == "PLAYLIST:${playlist.id}") _selectedFilter.value = "ALL"
-            showStatus("Playlist '${playlist.name}' dihapus")
+
+            showStatus(
+                if (warnings.isEmpty()) "Playlist '${playlist.name}' dan data terkait berhasil dihapus"
+                else "Playlist '${playlist.name}' dihapus dari perangkat. Perlu perhatian: ${warnings.distinct().joinToString("; ")}"
+            )
         }
     }
 
@@ -535,7 +568,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 storageRepository.isFirebaseStorageUrl(item.url)
 
             if (isFirebaseFile) {
-                if (user == null) {
+                val usedElsewhere = mediaDao.countOtherReferencesToUrl(item.url, item.id) > 0
+                if (usedElsewhere) {
+                    storageMessage = "file Firebase dipertahankan karena masih dipakai media lain"
+                } else if (user == null) {
                     storageMessage = "file Firebase tidak dihapus karena akun penyimpanan tidak aktif"
                 } else {
                     try {
