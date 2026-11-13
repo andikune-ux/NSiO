@@ -400,6 +400,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 category = "Penyimpanan Lokal", playlistId = playlist.id, sourceUrl = fileUri
             )
             mediaDao.insertMedia(newItem)
+            sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
             authManager.currentUser?.let { user ->
                 try { cloudRepository.saveMediaItem(user.uid, newItem) } catch (_: Exception) {}
             }
@@ -447,14 +448,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var storageMessage: String? = null
             var cloudMessage: String? = null
 
-            if (item.sourceType == "SERVER") {
+            if (item.sourceType == "SERVER" && storageRepository.isFirebaseStorageUrl(item.url)) {
                 if (user == null) {
-                    storageMessage = "file server tidak dihapus karena akun penyimpanan tidak aktif"
+                    storageMessage = "file Firebase tidak dihapus karena akun penyimpanan tidak aktif"
                 } else {
                     try {
                         storageRepository.deleteOwnedMedia(user.uid, item.url)
                     } catch (e: Exception) {
-                        storageMessage = e.localizedMessage ?: "file server tidak dapat dihapus"
+                        storageMessage = e.localizedMessage ?: "file Firebase tidak dapat dihapus"
                     }
                 }
             }
@@ -577,6 +578,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sourceUrl = remoteUri.toString()
                 )
                 mediaDao.insertMedia(item)
+                sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 if (!user.isAnonymous) {
                     try {
                         cloudRepository.saveMediaItem(user.uid, item)
