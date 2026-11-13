@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.BuildConfig
+import com.example.R
 import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass

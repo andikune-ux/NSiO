@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.LayoutInflater
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -92,6 +93,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.model.MediaItem
 import com.example.player.adjacentMedia
 import com.example.player.normalizePlaybackUrl
@@ -247,7 +249,8 @@ fun PlayerScreen(
             } else {
                 AndroidView(
                     factory = { ctx ->
-                        PlayerView(ctx).apply {
+                        (LayoutInflater.from(ctx)
+                            .inflate(R.layout.player_view_texture, null, false) as PlayerView).apply {
                             player = viewModel.player.exoPlayer
                             useController = false
                             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)

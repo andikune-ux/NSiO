@@ -263,10 +263,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             didRecoverLocalPin = true
             return stored.copy(serverPin = replacementPin)
         }
-        if (stored.serverPin.isNotBlank() && !wasEncrypted) {
-            profileDao.insertSettings(stored.copy(serverPin = PinVault.encrypt(getApplication(), plainPin)))
+        val effectivePin = plainPin.ifBlank { "123456" }
+        if (stored.serverPin.isBlank() || !wasEncrypted) {
+            profileDao.insertSettings(stored.copy(serverPin = PinVault.encrypt(getApplication(), effectivePin)))
         }
-        return stored.copy(serverPin = plainPin)
+        return stored.copy(serverPin = effectivePin)
     }
 
     fun updateSettings(newSettings: ProfileSettings) {
