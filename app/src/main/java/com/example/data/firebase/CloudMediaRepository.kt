@@ -174,12 +174,10 @@ class CloudMediaRepository(
     suspend fun syncLocalListToCloud(userId: String, items: List<MediaItem>): Int {
         var count = 0
         for (item in items) {
-            try {
-                saveMediaItem(userId, item)
-                count++
-            } catch (e: Exception) {
-                Log.w(TAG, "Skipping item sync failure: ${item.title}")
-            }
+            // Do not silently report a partial sync as a complete success.
+            // Let the caller surface the first failure and allow a safe retry.
+            saveMediaItem(userId, item)
+            count++
         }
         return count
     }
