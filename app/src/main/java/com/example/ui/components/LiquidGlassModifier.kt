@@ -14,10 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -25,10 +23,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.CyanPrimary
 import com.example.ui.theme.FocusHighlight
+import com.example.ui.theme.NeumorphBlackShadow
+import com.example.ui.theme.NeumorphDarkShadow
+import com.example.ui.theme.NeumorphLightShadow
+import com.example.ui.theme.NeumorphDarkHighlight
 
 /**
- * Tactile neumorphic surface fused with OS 26 Liquid Glass:
- * paired soft shadows, a restrained inset/specular rim and translucent acrylic.
+ * Matte neumorphic surface. Kept under the historical name so existing screens
+ * retain their API while the visual language changes from glass to soft relief.
+ * Raised controls use one consistent top-left light source and a paired shadow.
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -37,59 +40,51 @@ fun Modifier.liquidGlass(
     alpha: Float = 0.08f,
     borderAlpha: Float = 0.28f,
     elevation: Dp = 8.dp,
-    hasSheen: Boolean = true
+    hasSheen: Boolean = false
 ): Modifier {
-    val isDark = MaterialTheme.colorScheme.background.run { (red + green + blue) < 1.5f }
+    val isDark = MaterialTheme.colorScheme.background == MaterialTheme.colorScheme.surface &&
+        MaterialTheme.colorScheme.background.red < 0.2f
     val surface = MaterialTheme.colorScheme.surface
-    val glassAlpha = if (isDark) (alpha * 0.72f).coerceIn(0.045f, 0.22f) else (0.56f + alpha * 0.5f).coerceIn(0.58f, 0.82f)
-    val surfaceBrush = if (isDark) {
-        Brush.verticalGradient(listOf(
-            Color(0xFF272B32).copy(alpha = glassAlpha),
-            Color(0xFF15171C).copy(alpha = glassAlpha + 0.05f),
-            Color(0xFF1C1F25).copy(alpha = glassAlpha)
-        ))
-    } else {
-        Brush.verticalGradient(listOf(
-            Color.White.copy(alpha = glassAlpha),
-            surface.copy(alpha = 0.94f),
-            Color(0xFFDDE3EC).copy(alpha = 0.92f)
-        ))
-    }
-    val rim = if (isDark) {
-        Brush.linearGradient(listOf(
-            Color.White.copy(alpha = (borderAlpha * 0.72f).coerceAtMost(0.42f)),
-            Color(0xFF59616D).copy(alpha = 0.22f),
-            Color.Black.copy(alpha = 0.30f)
-        ))
-    } else {
-        Brush.linearGradient(listOf(
-            Color.White.copy(alpha = 0.96f),
-            Color(0xFFB7C1CE).copy(alpha = 0.62f),
-            Color.White.copy(alpha = 0.42f)
-        ))
-    }
-    val ambient = if (isDark) Color.Black.copy(alpha = 0.78f) else Color(0xFF8793A3).copy(alpha = 0.25f)
-    val spot = if (isDark) Color(0xFF343A44).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.88f)
+    val lightShadow = if (isDark) NeumorphDarkHighlight else NeumorphLightShadow
+    val darkShadow = if (isDark) NeumorphBlackShadow else NeumorphDarkShadow
+    val shadowDepth = elevation.coerceIn(3.dp, 18.dp)
+    val relief = (0.42f + elevation.value / 36f).coerceIn(0.42f, 0.78f)
 
     return this
-        .shadow(elevation, shape, ambientColor = ambient, spotColor = spot)
+        // Opposing, soft shadow lobes create the characteristic molded relief.
+        .shadow(shadowDepth, shape, ambientColor = lightShadow.copy(alpha = relief * 0.42f), spotColor = lightShadow.copy(alpha = relief * 0.30f))
+        .shadow(shadowDepth, shape, ambientColor = darkShadow.copy(alpha = relief), spotColor = darkShadow.copy(alpha = relief * 0.82f))
         .clip(shape)
-        .background(surfaceBrush)
-        .border(0.8.dp, rim, shape)
-        .then(if (hasSheen) Modifier.drawBehind {
-            val highlight = if (isDark) Color.White.copy(alpha = 0.045f) else Color.White.copy(alpha = 0.72f)
-            drawLine(highlight, Offset(size.width * 0.12f, 1f), Offset(size.width * 0.88f, 1f), strokeWidth = 1.dp.toPx())
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(highlight, Color.Transparent),
-                    startY = 0f,
-                    endY = size.height * 0.28f
-                )
-            )
-            if (isDark) {
-                drawLine(Color.Black.copy(alpha = 0.24f), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), strokeWidth = 1.dp.toPx())
-            }
-        } else Modifier)
+        .background(surface)
+        // A restrained bevel replaces the former bright glass rim.
+        .border(
+            0.65.dp,
+            Brush.linearGradient(
+                if (isDark) listOf(NeumorphDarkHighlight.copy(alpha = 0.38f), Color.Transparent, Color.Black.copy(alpha = 0.28f))
+                else listOf(Color.White.copy(alpha = 0.72f), Color.Transparent, NeumorphDarkShadow.copy(alpha = 0.34f))
+            ),
+            shape
+        )
+}
+
+/** Concave/inset state for selected controls and fields. */
+@Composable
+fun Modifier.neumorphicInset(
+    shape: Shape = RoundedCornerShape(14.dp),
+    depth: Dp = 5.dp
+): Modifier {
+    val isDark = MaterialTheme.colorScheme.background.red < 0.2f
+    val surface = MaterialTheme.colorScheme.surface
+    val upperEdge = if (isDark) Color.Black.copy(alpha = 0.42f) else NeumorphDarkShadow.copy(alpha = 0.72f)
+    val lowerEdge = if (isDark) NeumorphDarkHighlight.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.88f)
+    return this
+        .clip(shape)
+        .background(surface)
+        .border(
+            depth.coerceIn(1.dp, 8.dp) / 2,
+            Brush.linearGradient(listOf(upperEdge, Color.Transparent, lowerEdge)),
+            shape
+        )
 }
 
 @Composable
@@ -108,7 +103,7 @@ fun Modifier.liquidGlassTvFocusable(
     return this.scale(scale).focusable(interactionSource = interactionSource).then(
         if (isFocused) Modifier.border(
             1.5.dp,
-            Brush.linearGradient(listOf(focusedBorderColor, CyanPrimary.copy(alpha = 0.55f), Color.White.copy(alpha = 0.55f))),
+            Brush.linearGradient(listOf(focusedBorderColor, CyanPrimary.copy(alpha = 0.55f))),
             shape
         ) else Modifier
     )
