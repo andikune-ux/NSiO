@@ -78,6 +78,24 @@ class CloudMediaRepository(
     }
 
     /**
+     * Deletes cloud metadata for one playlist only. Legacy documents without
+     * profileId are considered part of the default profile.
+     */
+    suspend fun deletePlaylistItems(userId: String, profileId: String, playlistId: String): Int {
+        val mediaCollection = usersCollection.document(userId).collection("media")
+        val snapshot = mediaCollection.whereEqualTo("playlistId", playlistId).get().await()
+        val ownedDocuments = snapshot.documents.filter { document ->
+            (document.getString("profileId") ?: DEFAULT_PROFILE_ID) == profileId
+        }
+        ownedDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
+        return ownedDocuments.size
+    }
+
+    /**
      * Fetches all media items for the user from Firestore.
      */
     suspend fun fetchMediaItems(userId: String): List<MediaItem> =
@@ -185,8 +203,6 @@ class CloudMediaRepository(
         require(items.all { it.profileId == profileId && it.playlistId == playlistId }) {
             "Item sinkronisasi harus berasal dari playlist dan profil yang sama."
         }
-        if (items.isEmpty()) return 0
-
         val mediaCollection = usersCollection.document(userId).collection("media")
         val uniqueItems = items.distinctBy { it.id }
         uniqueItems.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
