@@ -72,8 +72,8 @@ class VideoDownloadManager private constructor(private val context: Context) {
     suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
         val item = downloadDao.getDownloadById(id)
         WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
-        item?.localPath?.takeIf { it.isNotBlank() }?.let { File("$it.part").delete() }
-        downloadDao.updateProgress(id, "PAUSED", 0, 0, 0, item?.localPath.orEmpty())
+        // Keep partial bytes so a later worker attempt can resume.
+        downloadDao.updateProgress(id, "PAUSED", 0, item?.localPath?.let { File("$it.part").length() } ?: 0L, 0, item?.localPath.orEmpty())
         _activeDownloads.value = _activeDownloads.value - id
     }
 
@@ -117,6 +117,8 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     requestBuilder.header(key, value)
                 }
             }
+            val existingBytes = if (partial.exists()) partial.length() else 0L
+            if (existingBytes > 0L) requestBuilder.header("Range", "bytes=$existingBytes-")
             val response = client.newCall(requestBuilder.build()).execute()
             if (!response.isSuccessful) {
                 val responseCode = response.code
@@ -130,15 +132,21 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 response.close()
                 throw IOException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
             }
+            val append = existingBytes > 0L && response.code == 206
+            if (existingBytes > 0L && response.code != 206 && response.code != 200) {
+                response.close()
+                throw IOException("Server tidak mendukung kelanjutan unduhan")
+            }
             val body = response.body ?: run {
                 response.close()
                 throw IOException("Respons unduhan kosong")
             }
-            val total = body.contentLength()
-            db.updateProgress(id, "DOWNLOADING", 0, 0, total, target.absolutePath)
-            var downloaded = 0L
+            val bodyLength = body.contentLength()
+            val total = if (append && bodyLength > 0L) existingBytes + bodyLength else bodyLength
+            var downloaded = if (append) existingBytes else 0L
+            db.updateProgress(id, "DOWNLOADING", if (total > 0L) ((downloaded * 100) / total).toInt() else 0, downloaded, total, target.absolutePath)
             body.byteStream().use { input ->
-                partial.outputStream().buffered().use { output ->
+                (if (append) partial.appendingOutputStream() else partial.outputStream()).buffered().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var read: Int
                     while (input.read(buffer).also { read = it } >= 0) {
@@ -164,9 +172,12 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             manager.updateProgress(id, 100)
             Result.success()
         } catch (e: Exception) {
-            partial.delete()
             manager.updateProgress(id, 0)
-            if (isStopped) return@withContext Result.retry()
+            if (isStopped || e is IOException) {
+                db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
+                return@withContext Result.retry()
+            }
+            partial.delete()
             db.updateProgress(id, "FAILED", 0, 0, 0, target.absolutePath)
             Result.failure(Data.Builder().putString("error", e.message ?: "Unduhan gagal").build())
         }
