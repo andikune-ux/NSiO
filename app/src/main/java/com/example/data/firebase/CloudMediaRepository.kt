@@ -311,9 +311,12 @@ class CloudMediaRepository(
         }
 
         val keepIds = uniqueItems.mapTo(mutableSetOf()) { it.id }
-        val existingSnapshot = mediaCollection.whereEqualTo("profileId", profileId).get().await()
+        // Include legacy documents without profileId: older app versions wrote
+        // them before profile scoping existed, and they belong to the default profile.
+        val existingSnapshot = mediaCollection.get().await()
         val staleDocuments = existingSnapshot.documents.filter { document ->
-            document.id !in keepIds
+            val documentProfileId = document.getString("profileId") ?: DEFAULT_PROFILE_ID
+            documentProfileId == profileId && document.id !in keepIds
         }
 
         staleDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
@@ -353,12 +356,15 @@ class CloudMediaRepository(
         }
 
         val keepIds = uniqueItems.mapTo(mutableSetOf()) { it.id }
-        val existingSnapshot = mediaCollection
-            .whereEqualTo("profileId", profileId)
-            .whereEqualTo("playlistId", playlistId)
-            .get()
-            .await()
-        val staleDocuments = existingSnapshot.documents.filter { it.id !in keepIds }
+        // Read legacy rows too; absent profileId means the default profile.
+        // Filter in memory so another profile's media is never deleted.
+        val existingSnapshot = mediaCollection.get().await()
+        val staleDocuments = existingSnapshot.documents.filter { document ->
+            val documentProfileId = document.getString("profileId") ?: DEFAULT_PROFILE_ID
+            documentProfileId == profileId &&
+                document.getString("playlistId") == playlistId &&
+                document.id !in keepIds
+        }
         staleDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
             val batch = firestore.batch()
             chunk.forEach { batch.delete(it.reference) }
