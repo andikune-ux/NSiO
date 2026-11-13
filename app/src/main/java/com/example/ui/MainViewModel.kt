@@ -49,6 +49,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing.asStateFlow()
     private val _isUploadingServerMedia = MutableStateFlow(false)
     val isUploadingServerMedia: StateFlow<Boolean> = _isUploadingServerMedia.asStateFlow()
+    private val _isImportingLocalFile = MutableStateFlow(false)
+    val isImportingLocalFile: StateFlow<Boolean> = _isImportingLocalFile.asStateFlow()
 
     // Profiles state
     private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
@@ -508,11 +510,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- File Source (B2) ---
-    fun addLocalFileMedia(title: String, fileUri: String, isPhoto: Boolean) {
-        val currentProfileId = _activeProfile.value?.id ?: return
+    fun addLocalFileMedia(
+        title: String,
+        fileUri: String,
+        isPhoto: Boolean,
+        onFinished: (Boolean) -> Unit = {}
+    ) {
+        val currentProfileId = _activeProfile.value?.id ?: run {
+            showStatus("Profil aktif tidak ditemukan")
+            onFinished(false)
+            return
+        }
         val rawUri = fileUri.trim()
         if (rawUri.isBlank()) {
             showStatus("Pilih file terlebih dahulu")
+            onFinished(false)
             return
         }
         val parsedUri = Uri.parse(rawUri)
@@ -523,21 +535,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (normalizedUri == null) {
             showStatus("Sumber file harus berupa URI lokal atau path perangkat, bukan URL internet")
+            onFinished(false)
+            return
+        }
+        if (_isImportingLocalFile.value) {
+            showStatus("Impor file sedang berjalan. Tunggu sampai selesai.")
+            onFinished(false)
             return
         }
 
         viewModelScope.launch {
+            _isImportingLocalFile.value = true
+            var success = false
             try {
                 val playlist = ensureSourcePlaylist(
                     normalizedUri,
-                    title.ifEmpty { "File Lokal" },
+                    title.ifBlank { "File Lokal" },
                     "FILE",
                     currentProfileId
                 )
                 val newItem = MediaItem(
                     id = UUID.randomUUID().toString(),
                     profileId = currentProfileId,
-                    title = title.ifEmpty { "File Lokal" },
+                    title = title.ifBlank { "File Lokal" },
                     url = normalizedUri,
                     thumbnailUrl = if (isPhoto) normalizedUri else "",
                     type = if (isPhoto) "PHOTO" else "VIDEO",
@@ -548,6 +568,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 mediaDao.insertMedia(newItem)
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
+                success = true
                 val cloudFailed = authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.saveMediaItem(user.uid, newItem) }.isFailure
                 } ?: false
@@ -557,6 +578,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } catch (e: Exception) {
                 showStatus("Gagal menambahkan file: ${e.localizedMessage ?: "URI tidak dapat dibaca"}")
+            } finally {
+                _isImportingLocalFile.value = false
+                onFinished(success)
             }
         }
     }
