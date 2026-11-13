@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import android.widget.Toast
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.KeyboardOptions
@@ -726,7 +727,14 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .clickable {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                    context.startActivity(intent)
+                                    runCatching { context.startActivity(intent) }
+                                        .onFailure {
+                                            Toast.makeText(
+                                                context,
+                                                "Tidak dapat membuka tautan. Periksa aplikasi browser atau koneksi.",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                 }
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
