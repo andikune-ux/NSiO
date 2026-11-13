@@ -75,8 +75,8 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(settings.displayMode) {
                 requestedOrientation = when (settings.displayMode) {
                     "TV" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    "HP" -> ActivityInfo.SCREEN_ORIENTATION_USER
-                    else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    "HP" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 }
             }
 
