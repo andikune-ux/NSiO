@@ -2,6 +2,7 @@ package com.example.data.security
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
@@ -32,7 +33,7 @@ object PinVault {
 
     fun decrypt(context: Context, value: String): String {
         if (value.isBlank() || !isEncrypted(value)) return value
-        return runCatching {
+        return try {
             val payload = Base64.decode(value.removePrefix(PREFIX), Base64.NO_WRAP)
             require(payload.size > 12) { "PIN terenkripsi tidak valid" }
             val iv = payload.copyOfRange(0, 12)
@@ -40,7 +41,17 @@ object PinVault {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        }.getOrDefault("")
+        } catch (_: KeyPermanentlyInvalidatedException) {
+            // Android invalidated the device-bound key (for example after a lock-screen
+            // security change). The ciphertext cannot be recovered; remove the dead alias
+            // so the app can create a fresh key and explicitly reset affected local PINs.
+            runCatching {
+                KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }.deleteEntry(KEY_ALIAS)
+            }
+            ""
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun getOrCreateKey(): SecretKey {
