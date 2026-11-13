@@ -181,6 +181,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addProfile(name: String, avatar: String, pin: String, isPinEnabled: Boolean) {
+        if (name.isBlank() || (isPinEnabled && !pin.matches(Regex("\\d{4}")))) {
+            showStatus(if (name.isBlank()) "Nama profil wajib diisi" else "PIN profil harus tepat 4 digit")
+            return
+        }
         viewModelScope.launch {
             val newProfile = Profile(
                 id = UUID.randomUUID().toString(),
@@ -253,7 +257,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showStatus("Silakan login Google terlebih dahulu untuk sinkronisasi cloud")
             return
         }
-        val profileId = _activeProfile.value?.id ?: "profile_utama"
         viewModelScope.launch {
             _isCloudSyncing.value = true
             try {
@@ -263,11 +266,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     displayName = user.displayName,
                     photoUrl = user.photoUrl?.toString()
                 )
-                // Read from Room at execution time instead of relying on a possibly
-                // stale StateFlow emission after a profile switch.
-                val localItems = mediaDao.getMediaListForProfile(profileId)
-                val count = cloudRepository.syncLocalListToCloud(user.uid, profileId, localItems)
-                showStatus("$count item profil berhasil disinkronkan ke Cloud Firestore!")
+                val allProfiles = profileDao.getAllProfilesList()
+                var totalSynced = 0
+                allProfiles.forEach { profile ->
+                    val localItems = mediaDao.getMediaListForProfile(profile.id)
+                    totalSynced += cloudRepository.syncLocalListToCloud(user.uid, profile.id, localItems)
+                }
+                showStatus("$totalSynced item dari ${allProfiles.size} profil berhasil disinkronkan ke Cloud Firestore!")
             } catch (e: Exception) {
                 showStatus("Gagal sinkronisasi: ${e.localizedMessage ?: "periksa koneksi"}")
             } finally {
@@ -289,8 +294,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (cloudItems.isEmpty()) {
                     showStatus("Tidak ada data cloud untuk profil ini")
                 } else {
-                    mediaDao.insertAll(cloudItems)
-                    showStatus("${cloudItems.size} item berhasil dipulihkan ke profil aktif!")
+                    val restoredItems = restoreSourcePlaylistsForItems(cloudItems)
+                    mediaDao.insertAll(restoredItems)
+                    showStatus("${restoredItems.size} item berhasil dipulihkan beserta sumber playlist!")
                 }
             } catch (e: Exception) {
                 showStatus("Gagal memulihkan: ${e.localizedMessage}")
@@ -298,6 +304,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _isCloudSyncing.value = false
             }
         }
+    }
+
+    private suspend fun restoreSourcePlaylistsForItems(items: List<MediaItem>): List<MediaItem> {
+        val normalized = items.toMutableList()
+        items.filter { it.sourceUrl.isNotBlank() }
+            .groupBy { it.playlistId.ifBlank { it.sourceUrl } }
+            .values.forEach { group ->
+                val first = group.first()
+                val existing = sourcePlaylistDao.findByUrl(first.profileId, first.sourceUrl)
+                val playlistId = existing?.id ?: first.playlistId.ifBlank { UUID.randomUUID().toString() }
+                val playlist = existing ?: SourcePlaylist(
+                    id = playlistId,
+                    profileId = first.profileId,
+                    name = first.sourceUrl.substringAfter("//").substringBefore("/").ifBlank { first.title },
+                    url = first.sourceUrl,
+                    sourceType = first.sourceType,
+                    itemCount = group.size,
+                    createdAt = group.minOfOrNull { it.createdAt } ?: System.currentTimeMillis()
+                )
+                sourcePlaylistDao.insert(playlist.copy(itemCount = group.size, updatedAt = System.currentTimeMillis()))
+                val ids = group.mapTo(hashSetOf()) { it.id }
+                normalized.indices.forEach { index ->
+                    val item = normalized[index]
+                    if (item.id in ids) normalized[index] = item.copy(playlistId = playlistId)
+                }
+            }
+        return normalized
     }
 
     // --- Link Parsing (B1) ---
@@ -624,9 +657,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- Player Management ---
     fun playMedia(item: MediaItem) {
-        _currentlyPlaying.value = item
         val isGoogleDrivePreview = item.url.startsWith("https://drive.google.com/file/d/") &&
             item.url.endsWith("/preview")
+        if (item.type == "PHOTO" || isGoogleDrivePreview) player.stop()
+        _currentlyPlaying.value = item
         if (item.type != "PHOTO" && !isGoogleDrivePreview) {
             val headers = item.extraInfo.split('&')
                 .mapNotNull { entry ->
@@ -653,8 +687,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closePlayer() {
         val current = _currentlyPlaying.value
-        if (current != null) {
-            val pos = player.playerState.value.currentPositionMs
+        val isPlayableVideo = current != null && current.type != "PHOTO" &&
+            !(current.url.startsWith("https://drive.google.com/file/d/") && current.url.endsWith("/preview"))
+        if (current != null && isPlayableVideo) {
+            val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
             viewModelScope.launch {
                 mediaDao.updateProgress(current.id, pos)
                 authManager.currentUser?.let { user ->
@@ -662,7 +698,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-        player.pause()
+        player.stop()
         _currentlyPlaying.value = null
     }
 
