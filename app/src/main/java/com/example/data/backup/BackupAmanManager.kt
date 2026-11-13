@@ -94,7 +94,8 @@ object BackupAmanManager {
         val rootObj = JSONObject()
         rootObj.put("backupType", "FULL_BACKUP_AMAN")
         rootObj.put("appVersion", BuildConfig.VERSION_NAME)
-        rootObj.put("version", 1)
+        rootObj.put("version", 2)
+        rootObj.put("securityCredentialsExcluded", true)
         rootObj.put("timestamp", System.currentTimeMillis())
 
         val profilesArr = JSONArray()
@@ -103,8 +104,8 @@ object BackupAmanManager {
                 put("id", p.id)
                 put("name", p.name)
                 put("avatarEmoji", p.avatarEmoji)
-                put("pin", p.pin)
-                put("isPinEnabled", p.isPinEnabled)
+                // PINs are device-local credentials; never include them in portable backups.
+                put("isPinEnabled", false)
                 put("isDefault", p.isDefault)
                 put("createdAt", p.createdAt)
             })
@@ -119,7 +120,7 @@ object BackupAmanManager {
                 put("themeMode", s.themeMode)
                 put("displayMode", s.displayMode)
                 put("gridColumns", s.gridColumns)
-                put("serverPin", s.serverPin)
+                // Server PIN is intentionally excluded from portable backups.
             })
         }
         rootObj.put("settings", settingsArr)
