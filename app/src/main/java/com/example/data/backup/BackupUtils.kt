@@ -189,6 +189,8 @@ object BackupUtils {
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
                                 gridColumns = s.optInt("gridColumns", 4).coerceIn(1, 8),
+                            gridColumnsPhone = s.optInt("gridColumnsPhone", 2).coerceIn(1, 8),
+                            gridColumnsTv = s.optInt("gridColumnsTv", 4).coerceIn(1, 8),
                                 gridColumnsPhone = s.optInt("gridColumnsPhone", 2).coerceIn(1, 8),
                                 gridColumnsTv = s.optInt("gridColumnsTv", 4).coerceIn(1, 8),
                                 serverPin = if (credentialsExcluded) {
