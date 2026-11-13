@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -294,7 +293,7 @@ fun PlayerScreen(
                                     .liquidGlassTvFocusable(shape = CircleShape)
                             ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.List,
+                                    Icons.Filled.List,
                                     contentDescription = "Daftar video",
                                     tint = Color.White,
                                     modifier = Modifier.size(21.dp)
