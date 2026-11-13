@@ -85,7 +85,7 @@ fun ExtensionScreen(
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var isServerUnlocked by remember { mutableStateOf(false) }
+    val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
     var showServerPinDialog by remember { mutableStateOf(false) }
 
     val tabs = listOf("Sumber Link", "Sumber File", "Sumber Server (PIN)", "Plugin & Repo")
@@ -365,6 +365,13 @@ private fun FileSourceTab(
     var titleInput by remember { mutableStateOf("") }
     var filePathInput by remember { mutableStateOf("") }
     var isPhoto by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        filePathInput = uri?.toString().orEmpty()
+        if (uri != null) {
+            isPhoto = context.contentResolver.getType(uri)?.startsWith("image/") == true
+        }
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -436,6 +443,25 @@ private fun FileSourceTab(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    Button(
+                        onClick = { filePicker.launch(if (isPhoto) "image/*" else "video/*") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.14f),
+                            contentColor = CyanPrimary
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            if (filePathInput.isBlank()) "Pilih file dari perangkat"
+                            else "File dipilih: ${filePathInput.substringAfterLast('/').take(28)}",
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Type selection pills
@@ -480,11 +506,17 @@ private fun FileSourceTab(
 
                     Button(
                         onClick = {
-                            val finalTitle = titleInput.ifBlank { "Media Lokal ${System.currentTimeMillis() % 1000}" }
-                            viewModel.addLocalFileMedia(finalTitle, filePathInput, isPhoto)
-                            titleInput = ""
-                            onNavigateToHome()
+                            if (filePathInput.isBlank()) {
+                                viewModel.showStatus("Pilih file terlebih dahulu")
+                            } else {
+                                val finalTitle = titleInput.ifBlank { "Media Lokal ${System.currentTimeMillis() % 1000}" }
+                                viewModel.addLocalFileMedia(finalTitle, filePathInput, isPhoto)
+                                titleInput = ""
+                                filePathInput = ""
+                                onNavigateToHome()
+                            }
                         },
+                        enabled = filePathInput.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
