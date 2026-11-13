@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.data.backup.BackupResult
 import com.example.data.backup.BackupUtils
 import com.example.data.download.VideoDownloadManager
