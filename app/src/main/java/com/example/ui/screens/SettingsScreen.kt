@@ -557,13 +557,14 @@ fun SettingsScreen(
 
                     Button(
                         onClick = {
-                            if (serverPinInput.length == 4) {
-                                viewModel.updateSettings(settings.copy(serverPin = serverPinInput))
-                            }
+                            viewModel.updateSettings(settings.copy(serverPin = serverPinInput))
                         },
+                        enabled = serverPinInput.length == 4,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
-                            contentColor = Color.Black
+                            contentColor = Color.Black,
+                            disabledContainerColor = CyanPrimary.copy(alpha = 0.35f),
+                            disabledContentColor = Color.Black.copy(alpha = 0.55f)
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.height(48.dp)
