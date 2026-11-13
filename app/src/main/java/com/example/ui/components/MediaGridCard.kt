@@ -73,9 +73,9 @@ fun MediaGridCard(
             )
             .liquidGlass(
                 shape = RoundedCornerShape(18.dp),
-                alpha = 0.10f,
-                borderAlpha = 0.35f,
-                elevation = 8.dp
+                alpha = 0.12f,
+                borderAlpha = 0.24f,
+                elevation = 11.dp
             )
             .clip(RoundedCornerShape(18.dp))
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
@@ -88,7 +88,7 @@ fun MediaGridCard(
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF0F1522))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (item.thumbnailUrl.isNotEmpty()) {
                     AsyncImage(
@@ -150,7 +150,7 @@ fun MediaGridCard(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.45f))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
                     ) {
                         Icon(
                             imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
@@ -236,7 +236,7 @@ fun MediaGridCard(
                                 modifier = Modifier
                                     .size(26.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Download,
