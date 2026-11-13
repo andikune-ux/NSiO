@@ -170,12 +170,33 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 requestBuilder.header("If-Range", savedEtag.ifBlank { savedLastModified })
             }
             val response = client.newCall(requestBuilder.build()).execute()
+            if (response.code == 416 && existingBytes > 0L) {
+                val unsatisfiedRange = response.header("Content-Range").orEmpty()
+                val serverTotal = Regex("^bytes\\s+\\*/(\\d+)$", RegexOption.IGNORE_CASE)
+                    .matchEntire(unsatisfiedRange)?.groupValues?.get(1)?.toLongOrNull()
+                response.close()
+                if (serverTotal != null && serverTotal == existingBytes && partial.isFile) {
+                    if (!partial.renameTo(target)) throw IOException("Gagal menyimpan file hasil resume")
+                    db.updateProgress(id, "COMPLETED", 100, existingBytes, serverTotal, target.absolutePath)
+                    manager.updateProgress(id, 100)
+                    return@withContext Result.success()
+                }
+                // The saved partial is stale or the server no longer has that range.
+                // Clear its validators and retry once from byte zero.
+                partial.delete()
+                db.updateValidators(id, "", "")
+                throw IOException("Rentang unduhan lama sudah tidak tersedia; unduhan dimulai ulang")
+            }
             if (!response.isSuccessful) {
                 val responseCode = response.code
                 response.close()
                 throw DownloadHttpException(responseCode)
             }
             val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim().lowercase()
+            if (contentType == "text/html" || contentType == "application/json" || contentType.endsWith("+json")) {
+                response.close()
+                throw DownloadPermanentException("Server mengirim halaman web atau data JSON, bukan file media. Periksa tautan dan akses sumber.")
+            }
             val finalPath = response.request.url.encodedPath.lowercase()
             if (contentType.contains("mpegurl") || contentType.contains("vnd.apple.mpegurl") ||
                 finalPath.endsWith(".m3u8") || finalPath.endsWith(".m3u")) {
@@ -237,7 +258,8 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             val total = when {
                 append && rangeTotalBytes != null -> rangeTotalBytes!!
                 append && bodyLength > 0L -> existingBytes + bodyLength
-                else -> bodyLength
+                bodyLength > 0L -> bodyLength
+                else -> 0L // Unknown length: show indeterminate progress, then store actual size at EOF.
             }
             var downloaded = if (append) existingBytes else 0L
             db.updateProgress(id, "DOWNLOADING", if (total > 0L) ((downloaded * 100) / total).toInt() else 0, downloaded, total, target.absolutePath)
@@ -264,11 +286,14 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     }
                 }
             }
+            if (downloaded <= 0L) {
+                throw DownloadPermanentException("File yang diterima kosong; periksa tautan unduhan.")
+            }
             if (total > 0L && downloaded != total) {
                 throw IOException("Unduhan tidak lengkap: ${downloaded} dari ${total} byte diterima")
             }
             if (!partial.renameTo(target)) throw IOException("Gagal menyimpan file hasil unduhan")
-            db.updateProgress(id, "COMPLETED", 100, downloaded, total, target.absolutePath)
+            db.updateProgress(id, "COMPLETED", 100, downloaded, downloaded, target.absolutePath)
             manager.updateProgress(id, 100)
             Result.success()
         } catch (e: Exception) {
