@@ -72,11 +72,20 @@ class PluginManager(private val context: Context) {
         val normalized = url.trim()
         val uri = try { URI(normalized) } catch (_: Exception) { null }
         require(uri?.scheme in listOf("http", "https") && !uri?.host.isNullOrBlank()) { "URL repository tidak valid" }
-        val newRepo = RepoManifest(name.trim().ifEmpty { "Repositori Eksternal" }, "Repositori pengguna: $normalized", 1, listOf(normalized))
-        if (_repositories.value.none { it.pluginLists == newRepo.pluginLists }) {
-            _repositories.value = _repositories.value + newRepo
-            saveRepositories()
+        val canonicalUrl = uri!!.normalize().let {
+            URI(it.scheme.lowercase(), it.userInfo, it.host.lowercase(), it.port, it.path, it.query, it.fragment).toASCIIString()
         }
+        require(_repositories.value.none { repo ->
+            repo.pluginLists.any { savedUrl ->
+                runCatching {
+                    val saved = URI(savedUrl.trim()).normalize()
+                    URI(saved.scheme?.lowercase(), saved.userInfo, saved.host?.lowercase(), saved.port, saved.path, saved.query, saved.fragment).toASCIIString() == canonicalUrl
+                }.getOrDefault(savedUrl.trim() == normalized)
+            }
+        }) { "Repository ini sudah tersimpan." }
+        val newRepo = RepoManifest(name.trim().ifEmpty { "Repositori Eksternal" }, "Repositori pengguna: $normalized", 1, listOf(normalized))
+        _repositories.value = _repositories.value + newRepo
+        saveRepositories()
     }
 
     suspend fun installPluginFromManifest(manifest: PluginManifest) = withContext(Dispatchers.IO) {
