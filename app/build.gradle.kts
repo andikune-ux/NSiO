@@ -8,13 +8,51 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+// Keep local builds aligned with the same Asia/Jakarta + mainline-commit
+// version policy used by GitHub Actions. CI-provided values still take priority.
+val computedNsioFallback = run {
+  val stateFile = rootProject.file(".versioning/nsio-version-state.json")
+  if (!stateFile.isFile) {
+    throw GradleException("Missing NSiO version state: ${stateFile.path}")
+  }
+  val state = stateFile.readText()
+  fun stateInt(key: String): Int =
+    Regex("\"$key\"\\s*:\\s*(\\d+)")
+      .find(state)?.groupValues?.get(1)?.toIntOrNull()
+      ?: throw GradleException("Invalid NSiO version state field: $key")
+
+  val baselineText = Regex("\"baseline_month\"\\s*:\\s*\"(\\d{4}-\\d{2})\"")
+    .find(state)?.groupValues?.get(1)
+    ?: throw GradleException("Invalid NSiO baseline_month")
+  val baseline = java.time.YearMonth.parse(baselineText)
+  val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))
+  val monthDelta = (today.year - baseline.year) * 12 + today.monthValue - baseline.monthValue
+  if (monthDelta < 0) throw GradleException("NSiO version baseline is later than the current Jakarta date")
+
+  val git = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+    .directory(rootProject.projectDir)
+    .redirectErrorStream(true)
+    .start()
+  val gitOutput = git.inputStream.bufferedReader().use { it.readText().trim() }
+  if (git.waitFor() != 0) throw GradleException("Cannot calculate NSiO commit ordinal: $gitOutput")
+  val commitOrdinal = gitOutput.toIntOrNull()
+    ?: throw GradleException("Invalid NSiO commit ordinal: $gitOutput")
+  if (commitOrdinal !in 1..99999) throw GradleException("NSiO commit ordinal outside supported range: $commitOrdinal")
+
+  val major = stateInt("base_major") + monthDelta + stateInt("major_overhaul_count")
+  val versionName = "$major.${today.dayOfMonth}.$commitOrdinal"
+  val versionCode = major * 50_000_000 + today.dayOfYear * 100_000 + commitOrdinal
+  if (versionCode > 2_100_000_000) throw GradleException("NSiO versionCode exceeds Android's safe integer limit")
+  versionName to versionCode
+}
+
 val nsioVersionName = providers.gradleProperty("nsioVersionName")
   .orElse(providers.environmentVariable("NSIO_VERSION_NAME"))
-  .orElse("1.0.2")
+  .orElse(computedNsioFallback.first)
 val nsioVersionCode = providers.gradleProperty("nsioVersionCode")
   .orElse(providers.environmentVariable("NSIO_VERSION_CODE"))
   .map { it.toInt() }
-  .orElse(3)
+  .orElse(computedNsioFallback.second)
 
 android {
   namespace = "com.example"
