@@ -118,7 +118,11 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 }
             }
             val response = client.newCall(requestBuilder.build()).execute()
-            if (!response.isSuccessful) throw IOException("Server mengembalikan HTTP ${response.code}")
+            if (!response.isSuccessful) {
+                val responseCode = response.code
+                response.close()
+                throw IOException("Server mengembalikan HTTP $responseCode")
+            }
             val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim().lowercase()
             val finalPath = response.request.url.encodedPath.lowercase()
             if (contentType.contains("mpegurl") || contentType.contains("vnd.apple.mpegurl") ||
@@ -126,7 +130,10 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 response.close()
                 throw IOException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
             }
-            val body = response.body ?: throw IOException("Respons unduhan kosong")
+            val body = response.body ?: run {
+                response.close()
+                throw IOException("Respons unduhan kosong")
+            }
             val total = body.contentLength()
             db.updateProgress(id, "DOWNLOADING", 0, 0, total, target.absolutePath)
             var downloaded = 0L
@@ -148,6 +155,9 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                         db.updateProgress(id, "DOWNLOADING", percent, downloaded, total, target.absolutePath)
                     }
                 }
+            }
+            if (total > 0L && downloaded != total) {
+                throw IOException("Unduhan tidak lengkap: ${downloaded} dari ${total} byte diterima")
             }
             if (!partial.renameTo(target)) throw IOException("Gagal menyimpan file hasil unduhan")
             db.updateProgress(id, "COMPLETED", 100, downloaded, total, target.absolutePath)
