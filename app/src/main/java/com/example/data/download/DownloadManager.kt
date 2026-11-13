@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -155,7 +156,7 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             var downloaded = if (append) existingBytes else 0L
             db.updateProgress(id, "DOWNLOADING", if (total > 0L) ((downloaded * 100) / total).toInt() else 0, downloaded, total, target.absolutePath)
             body.byteStream().use { input ->
-                (if (append) partial.appendingOutputStream() else partial.outputStream()).buffered().use { output ->
+                (if (append) FileOutputStream(partial, true) else partial.outputStream()).buffered().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var read: Int
                     while (input.read(buffer).also { read = it } >= 0) {
