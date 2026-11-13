@@ -21,6 +21,12 @@ class FirebaseStorageRepository {
         return ref.downloadUrl.await()
     }
 
+    fun isFirebaseStorageUrl(downloadUrl: String): Boolean {
+        val uri = Uri.parse(downloadUrl)
+        return uri.scheme.equals("https", ignoreCase = true) &&
+            uri.host in setOf("firebasestorage.googleapis.com", "storage.googleapis.com")
+    }
+
     /**
      * Deletes only files inside this Firebase project's users/{userId}/media/ folder.
      * External URLs and files belonging to another account are deliberately rejected.
