@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.font.FontWeight
@@ -366,9 +367,15 @@ private fun FileSourceTab(
     var filePathInput by remember { mutableStateOf("") }
     var isPhoto by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         filePathInput = uri?.toString().orEmpty()
         if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             isPhoto = context.contentResolver.getType(uri)?.startsWith("image/") == true
         }
     }
@@ -444,7 +451,7 @@ private fun FileSourceTab(
                     )
 
                     Button(
-                        onClick = { filePicker.launch(if (isPhoto) "image/*" else "video/*") },
+                        onClick = { filePicker.launch(arrayOf(if (isPhoto) "image/*" else "video/*")) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.White.copy(alpha = 0.14f),
                             contentColor = CyanPrimary
