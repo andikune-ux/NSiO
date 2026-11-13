@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -76,7 +78,7 @@ fun SettingsScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
-    var serverPinInput by remember { mutableStateOf(settings.serverPin) }
+    var serverPinInput by remember(settings.profileId) { mutableStateOf(settings.serverPin) }
 
     LazyColumn(
         modifier = modifier
@@ -469,9 +471,10 @@ fun SettingsScreen(
                 ) {
                     OutlinedTextField(
                         value = serverPinInput,
-                        onValueChange = { if (it.length <= 4) serverPinInput = it },
+                        onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) serverPinInput = value },
                         placeholder = { Text("PIN 4 Digit", fontSize = 12.sp) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,
@@ -484,7 +487,7 @@ fun SettingsScreen(
 
                     Button(
                         onClick = {
-                            if (serverPinInput.length >= 4) {
+                            if (serverPinInput.length == 4) {
                                 viewModel.updateSettings(settings.copy(serverPin = serverPinInput))
                             }
                         },
