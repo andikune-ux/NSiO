@@ -3,9 +3,12 @@ package com.example.data.download
 import android.content.Context
 import android.net.Uri
 import org.json.JSONObject
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.Data
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -81,8 +84,13 @@ class VideoDownloadManager private constructor(private val context: Context) {
             .putString(KEY_TITLE, title).putString(KEY_URL, url)
             .putString(KEY_PATH, item.localPath)
             .putString(KEY_HEADERS, JSONObject(requestHeaders).toString()).build()
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
         val request = OneTimeWorkRequestBuilder<DownloadFileWorkManager>()
             .setInputData(input)
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag("DOWNLOAD_${item.id}")
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
