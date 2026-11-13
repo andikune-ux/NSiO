@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -13,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +52,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -58,6 +66,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -87,7 +97,9 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 @OptIn(UnstableApi::class)
@@ -103,6 +115,12 @@ fun PlayerScreen(
     var showQueue by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
+    var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
+    var activeGesture by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val activity = remember(context) { context.findPlayerActivity() }
+    val originalBrightness = remember(activity) { activity?.window?.attributes?.screenBrightness ?: -1f }
+    var brightnessLevel by remember(activity) { mutableStateOf(if (originalBrightness < 0f) 0.5f else originalBrightness.coerceIn(0.05f, 1f)) }
     val isPhoto = media.type == "PHOTO"
     val usesNativePlayer = !isPhoto
     // Player controls sit on frosted-glass panels; follow the active theme so
@@ -117,11 +135,59 @@ fun PlayerScreen(
         showQueue = false
         isSeeking = false
         seekPreviewMs = media.progressMs.coerceAtLeast(0L)
+        previewFrame = null
+        activeGesture = null
     }
 
     // Keep the scrubber in sync with playback, but never overwrite the user's drag preview.
     LaunchedEffect(playerState.currentPositionMs, isSeeking) {
         if (!isSeeking) seekPreviewMs = playerState.currentPositionMs.coerceAtLeast(0L)
+    }
+
+    // Restore the user's original window brightness when leaving the player.
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.window?.let { window ->
+                val attributes = window.attributes
+                attributes.screenBrightness = originalBrightness
+                window.attributes = attributes
+            }
+        }
+    }
+
+    // Extract a real frame near the requested seek timestamp off the UI thread.
+    // Some protected/HLS sources do not expose frames through MediaMetadataRetriever;
+    // in that case the UI falls back to the media poster when available.
+    LaunchedEffect(isSeeking, seekPreviewMs, media.url) {
+        if (!isSeeking || !usesNativePlayer) {
+            previewFrame = null
+        } else {
+            delay(220)
+            val extracted = withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    val uri = Uri.parse(media.url)
+                    if (uri.scheme == "content" || uri.scheme == "file" || uri.scheme == "android.resource") {
+                        retriever.setDataSource(context, uri)
+                    } else {
+                        retriever.setDataSource(media.url, emptyMap())
+                    }
+                    retriever.getFrameAtTime(seekPreviewMs.coerceAtLeast(0L) * 1_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    try { retriever.release() } catch (_: Exception) { }
+                }
+            }
+            if (extracted != null) previewFrame = extracted
+        }
+    }
+
+    LaunchedEffect(activeGesture) {
+        if (activeGesture != null) {
+            delay(900)
+            activeGesture = null
+        }
     }
 
     // Handle Android system back
@@ -189,6 +255,80 @@ fun PlayerScreen(
                         interactionSource = remember { MutableInteractionSource() }, indication = null
                     ) { showControls = !showControls }
                 )
+            }
+        }
+
+
+        // Gesture zones: left adjusts display brightness, right adjusts player volume.
+        if (usesNativePlayer) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth(0.28f)
+                    .fillMaxSize()
+                    .pointerInput(media.id) {
+                        var currentBrightness = brightnessLevel
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                currentBrightness = (currentBrightness - dragAmount / size.height.toFloat()).coerceIn(0.05f, 1f)
+                                brightnessLevel = currentBrightness
+                                activity?.window?.let { window ->
+                                    val attributes = window.attributes
+                                    attributes.screenBrightness = currentBrightness
+                                    window.attributes = attributes
+                                }
+                                activeGesture = "brightness"
+                                showControls = true
+                            }
+                        )
+                    }
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxWidth(0.28f)
+                    .fillMaxSize()
+                    .pointerInput(media.id, playerState.volume) {
+                        var currentVolume = playerState.volume
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                currentVolume = (currentVolume - dragAmount / size.height.toFloat()).coerceIn(0f, 1f)
+                                viewModel.player.setVolume(currentVolume)
+                                activeGesture = "volume"
+                                showControls = true
+                            }
+                        )
+                    }
+            )
+        }
+
+        if (activeGesture != null) {
+            val isBrightness = activeGesture == "brightness"
+            Box(
+                modifier = Modifier
+                    .align(if (isBrightness) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 22.dp)
+                    .width(76.dp)
+                    .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.36f, borderAlpha = 0.22f, elevation = 12.dp)
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(
+                        imageVector = if (isBrightness) Icons.Default.Brightness6 else if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = if (isBrightness) "${(brightnessLevel * 100).toInt()}%" else "${(playerState.volume * 100).toInt()}%",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
@@ -362,7 +502,7 @@ fun PlayerScreen(
                         enabled = playerState.isSeekable,
                         modifier = Modifier
                             .size(56.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
+                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.24f)
                             .liquidGlassTvFocusable(shape = CircleShape)
                     ) {
                         Icon(
@@ -385,7 +525,7 @@ fun PlayerScreen(
                                 )
                             )
                             .border(
-                                1.5.dp,
+                                1.dp,
                                 Brush.linearGradient(listOf(Color.White, Color.Transparent)),
                                 CircleShape
                             )
@@ -424,7 +564,7 @@ fun PlayerScreen(
                     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp).fillMaxWidth()
-                            .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.22f, borderAlpha = 0.42f, elevation = 10.dp)
+                            .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.20f, borderAlpha = 0.22f, elevation = 8.dp)
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -447,22 +587,20 @@ fun PlayerScreen(
                         IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor)
                         }
-                        androidx.compose.material3.Slider(value = playerState.volume, onValueChange = { viewModel.player.setVolume(it) },
-                            modifier = Modifier.width(74.dp), colors = SliderDefaults.colors(thumbColor = controlAccentColor, activeTrackColor = controlAccentColor))
                         IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor)
                         }
                     }
                 }
 
-                // Floating seek preview: source thumbnail + target timestamp while dragging.
+                // Floating frame preview: extract the actual video frame at the seek timestamp.
                 if (isSeeking && usesNativePlayer && playerState.durationMs > 0L) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 184.dp)
                             .width(132.dp)
-                            .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.32f, borderAlpha = 0.55f, elevation = 14.dp)
+                            .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -470,14 +608,14 @@ fun PlayerScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(72.dp)
+                                .height(76.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color.Black.copy(alpha = 0.65f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (media.thumbnailUrl.isNotBlank()) {
+                            if (previewFrame != null || media.thumbnailUrl.isNotBlank()) {
                                 AsyncImage(
-                                    model = media.thumbnailUrl,
+                                    model = previewFrame ?: media.thumbnailUrl,
                                     contentDescription = "Thumbnail video",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -496,7 +634,6 @@ fun PlayerScreen(
                                     .padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
-                        Text("PRATINJAU POSISI", color = controlAccentColor, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -506,12 +643,12 @@ fun PlayerScreen(
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .liquidGlass(
-                            shape = RoundedCornerShape(20.dp),
-                            alpha = 0.18f,
-                            borderAlpha = 0.4f,
-                            elevation = 12.dp
+                            shape = RoundedCornerShape(16.dp),
+                            alpha = 0.16f,
+                            borderAlpha = 0.18f,
+                            elevation = 9.dp
                         )
-                        .padding(horizontal = 20.dp, vertical = 13.dp)
+                        .padding(horizontal = 18.dp, vertical = 9.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -559,7 +696,8 @@ fun PlayerScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidGlassTvFocusable(shape = RoundedCornerShape(10.dp))
+                                .height(28.dp)
+                                .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
                         )
                     }
                 }
@@ -728,4 +866,14 @@ private fun formatMs(ms: Long): String {
     } else {
         String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
+}
+
+
+private fun Context.findPlayerActivity(): Activity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return current as? Activity
 }
