@@ -321,18 +321,13 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 // transient HTTP/network failures so the next attempt can resume cleanly.
                 val saved = db.getDownloadById(id)
                 val partialBytes = if (partial.isFile) partial.length() else 0L
-                val knownTotal = saved?.totalBytes?.coerceAtLeast(0L) ?: 0L
-                val retryPercent = if (knownTotal > 0L) {
-                    ((partialBytes * 100L) / knownTotal).toInt().coerceIn(0, 99)
-                } else {
-                    0
-                }
+                val retryProgress = calculateRetryProgress(partialBytes, saved?.totalBytes ?: 0L)
                 db.updateProgress(
                     id,
                     "PAUSED",
-                    retryPercent,
-                    partialBytes,
-                    knownTotal,
+                    retryProgress.percent,
+                    retryProgress.downloadedBytes,
+                    retryProgress.totalBytes,
                     target.absolutePath
                 )
                 Result.retry()
@@ -374,4 +369,22 @@ internal fun isVerifiedCompletedRange(
         else -> false
     }
     return total == existingBytes && validatorMatches
+}
+
+
+internal data class DownloadRetryProgress(
+    val percent: Int,
+    val downloadedBytes: Long,
+    val totalBytes: Long
+)
+
+internal fun calculateRetryProgress(partialBytes: Long, knownTotalBytes: Long): DownloadRetryProgress {
+    val downloaded = partialBytes.coerceAtLeast(0L)
+    val total = knownTotalBytes.coerceAtLeast(0L)
+    val percent = if (total > 0L) {
+        ((downloaded * 100L) / total).toInt().coerceIn(0, 99)
+    } else {
+        0
+    }
+    return DownloadRetryProgress(percent, downloaded, total)
 }
