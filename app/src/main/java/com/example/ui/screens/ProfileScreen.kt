@@ -46,6 +46,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -758,6 +761,8 @@ private fun AddProfileDialog(
                         value = pin,
                         onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) pin = value },
                         placeholder = { Text("PIN 4 Digit", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -842,6 +847,8 @@ private fun PinResetDialog(
                     value = pin,
                     onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pin = it },
                     label = { Text("PIN baru") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -850,6 +857,8 @@ private fun PinResetDialog(
                     value = confirmation,
                     onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) confirmation = it },
                     label = { Text("Ulangi PIN baru") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
