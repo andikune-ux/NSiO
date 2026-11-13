@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalAppLanguage provides settings.language) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // 1. iOS 26 Ambient Fluid Glow Canvas
-                    val isDark = settings.themeMode != "LIGHT"
+                    val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                     AmbientFluidBackground(isDark = isDark)
 
                     // 2. Fullscreen Video Player or Main App Navigation
