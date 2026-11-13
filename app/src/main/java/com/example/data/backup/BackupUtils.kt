@@ -157,7 +157,7 @@ object BackupUtils {
                                 id = profileId,
                                 name = p.getString("name"),
                                 avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                                pin = if (credentialsExcluded) existing?.pin.orEmpty() else PinVault.encrypt(context, p.optString("pin", "")),
+                                pin = if (credentialsExcluded) PinVault.encrypt(context, existing?.pin.orEmpty()) else PinVault.encrypt(context, p.optString("pin", "")),
                                 isPinEnabled = if (credentialsExcluded) existing?.isPinEnabled ?: false else p.optBoolean("isPinEnabled", false),
                                 isDefault = makeDefault,
                                 createdAt = existing?.createdAt ?: p.optLong("createdAt", System.currentTimeMillis())
@@ -183,7 +183,7 @@ object BackupUtils {
                                 displayMode = s.optString("displayMode", "TV"),
                                 gridColumns = s.optInt("gridColumns", 4).coerceIn(3, 8),
                                 serverPin = if (credentialsExcluded) {
-                                    existingSettings?.serverPin
+                                    existingSettings?.serverPin?.let { PinVault.encrypt(context, it) }
                                         ?: PinVault.encrypt(context, ProfileSettings(profileId = profileId).serverPin)
                                 } else {
                                     PinVault.encrypt(context, s.optString("serverPin", ""))
@@ -238,7 +238,7 @@ object BackupUtils {
                         id = profileId,
                         name = p.getString("name"),
                         avatarEmoji = p.optString("avatarEmoji", "🎬"),
-                        pin = if (credentialsExcluded) existingProfile?.pin.orEmpty() else PinVault.encrypt(context, p.optString("pin", "")),
+                        pin = if (credentialsExcluded) PinVault.encrypt(context, existingProfile?.pin.orEmpty()) else PinVault.encrypt(context, p.optString("pin", "")),
                         isPinEnabled = if (credentialsExcluded) existingProfile?.isPinEnabled ?: false else p.optBoolean("isPinEnabled", false),
                         isDefault = existingProfile?.isDefault ?: false,
                         createdAt = existingProfile?.createdAt ?: p.optLong("createdAt", System.currentTimeMillis())
