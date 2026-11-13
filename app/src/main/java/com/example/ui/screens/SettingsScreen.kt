@@ -519,42 +519,45 @@ fun SettingsScreen(
             }
         }
 
-        // 5. Grid Size Setting (1–8 kolom; default 4)
+        // 5. Independent phone and TV grid sizes (1–8 columns)
         item {
             SettingsGlassCard(
                 icon = Icons.Default.GridOn,
-                title = "Pengaturan Ukuran Grid Beranda",
-                subtitle = "Jumlah kolom kartu video di beranda: ${settings.gridColumns} kolom"
+                title = "Pengaturan Ukuran Grid",
+                subtitle = "Default HP 2 kolom • Default TV 4 kolom"
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    (1..8).forEach { cols ->
-                        val isSelected = settings.gridColumns == cols
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
-                                .border(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable { viewModel.updateSettings(settings.copy(gridColumns = cols)) }
-                                .tvFocusable(shape = RoundedCornerShape(12.dp), borderWidth = 1.5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "$cols",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    listOf(
+                        Triple("Grid HP", settings.gridColumnsPhone, true),
+                        Triple("Grid TV", settings.gridColumnsTv, false)
+                    ).forEach { (label, selected, isPhone) ->
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("$label • $selected kolom", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                (1..8).forEach { cols ->
+                                    val isSelected = selected == cols
+                                    Box(
+                                        modifier = Modifier.size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
+                                            .border(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                if (isPhone) viewModel.updateSettings(settings.copy(gridColumnsPhone = cols))
+                                                else viewModel.updateSettings(settings.copy(gridColumnsTv = cols))
+                                            }
+                                            .tvFocusable(shape = RoundedCornerShape(12.dp), borderWidth = 1.5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("$cols", fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                                            color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

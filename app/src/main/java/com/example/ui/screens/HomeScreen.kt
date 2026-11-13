@@ -156,8 +156,13 @@ fun HomeScreen(
         val isNarrow = containerWidth < 600.dp
         val isVeryNarrow = containerWidth < 420.dp
         val showHeaderLabels = containerWidth >= 460.dp
-        // Respect the user's explicit grid setting on phones and TV alike.
-        val columns = settings.gridColumns.coerceIn(1, 8)
+        // Separate phone/TV grid settings; AUTO follows available width.
+        val isPhoneLayout = when (settings.displayMode) {
+            "HP" -> true
+            "TV" -> false
+            else -> containerWidth < 600.dp
+        }
+        val columns = (if (isPhoneLayout) settings.gridColumnsPhone else settings.gridColumnsTv).coerceIn(1, 8)
 
         Column(modifier = Modifier.fillMaxSize()) {
             // ==========================================

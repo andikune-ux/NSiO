@@ -53,7 +53,9 @@ data class ProfileSettings(
     val language: String = "ID", // "ID", "EN"
     val themeMode: String = "DARK", // "AUTO", "DARK", "LIGHT"
     val displayMode: String = "TV", // "AUTO", "TV", "HP"
-    val gridColumns: Int = 4, // 1..8; 4 remains the default
+    val gridColumns: Int = 4, // Legacy compatibility
+    val gridColumnsPhone: Int = 2,
+    val gridColumnsTv: Int = 4,
     val serverPin: String = generateDefaultServerPin()
 )
 

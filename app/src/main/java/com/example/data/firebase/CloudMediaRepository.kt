@@ -85,7 +85,9 @@ class CloudMediaRepository(
                     "language" to setting.language,
                     "themeMode" to setting.themeMode,
                     "displayMode" to setting.displayMode,
-                    "gridColumns" to setting.gridColumns
+                    "gridColumns" to setting.gridColumns,
+                    "gridColumnsPhone" to setting.gridColumnsPhone,
+                    "gridColumnsTv" to setting.gridColumnsTv
                 )
                 batch.set(userDocument.collection("profile_settings").document(setting.profileId), payload, SetOptions.merge())
             }
@@ -120,7 +122,9 @@ class CloudMediaRepository(
                 language = document.getString("language") ?: "ID",
                 themeMode = document.getString("themeMode") ?: "DARK",
                 displayMode = document.getString("displayMode") ?: "TV",
-                gridColumns = (document.getLong("gridColumns") ?: 4L).toInt().coerceIn(1, 8)
+                gridColumns = (document.getLong("gridColumns") ?: 4L).toInt().coerceIn(1, 8),
+                gridColumnsPhone = (document.getLong("gridColumnsPhone") ?: 2L).toInt().coerceIn(1, 8),
+                gridColumnsTv = (document.getLong("gridColumnsTv") ?: 4L).toInt().coerceIn(1, 8)
             )
         }
         return profiles to settings

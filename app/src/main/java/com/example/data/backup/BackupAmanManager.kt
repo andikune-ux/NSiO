@@ -120,6 +120,8 @@ object BackupAmanManager {
                 put("themeMode", s.themeMode)
                 put("displayMode", s.displayMode)
                 put("gridColumns", s.gridColumns)
+                put("gridColumnsPhone", s.gridColumnsPhone)
+                put("gridColumnsTv", s.gridColumnsTv)
                 // Server PIN is intentionally excluded from portable backups.
             })
         }
@@ -180,7 +182,8 @@ object BackupAmanManager {
                 sb.appendLine("- Bahasa       : ${s.language}")
                 sb.appendLine("- Tema         : ${s.themeMode}")
                 sb.appendLine("- Mode Tampil  : ${s.displayMode}")
-                sb.appendLine("- Kolom Grid   : ${s.gridColumns}")
+                sb.appendLine("- Kolom Grid HP: ${s.gridColumnsPhone}")
+                sb.appendLine("- Kolom Grid TV: ${s.gridColumnsTv}")
             }
             sb.appendLine("- Jumlah Media : ${media.count { it.profileId == p.id }}")
             sb.appendLine()
