@@ -505,7 +505,7 @@ private fun FileSourceTab(
                         Button(
                             onClick = { isPhoto = false },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isPhoto) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
+                                containerColor = if (!isPhoto) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
@@ -521,7 +521,7 @@ private fun FileSourceTab(
                         Button(
                             onClick = { isPhoto = true },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isPhoto) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
+                                containerColor = if (isPhoto) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
