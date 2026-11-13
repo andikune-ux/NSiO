@@ -1,6 +1,7 @@
 package com.example.data.backup
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
@@ -135,10 +136,11 @@ object BackupUtils {
         try {
             val root = JSONObject(BackupAmanManager.extractJson(jsonContent))
             val backupType = root.optString("backupType", "UNKNOWN")
-            val profileDao = database.profileDao()
-            val mediaDao = database.mediaDao()
+            val result = database.withTransaction {
+                val profileDao = database.profileDao()
+                val mediaDao = database.mediaDao()
 
-            if (backupType == "FULL_BACKUP_AMAN") {
+                if (backupType == "FULL_BACKUP_AMAN") {
                 // Restore all profiles
                 val profArr = root.optJSONArray("profiles")
                 if (profArr != null) {
@@ -202,15 +204,15 @@ object BackupUtils {
                             )
                         )
                     }
-                    mediaDao.insertAll(restoredItems)
-                    restoreSourcePlaylists(database, restoredItems)
+                    val normalizedItems = restoreSourcePlaylists(database, restoredItems)
+                    mediaDao.insertAll(normalizedItems)
                 }
 
-                return@withContext BackupResult(
+                return@withTransaction BackupResult(
                     isSuccess = true,
                     message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Demi keamanan, PIN profil perlu dibuat ulang dan PIN server kembali ke nilai default." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
                 )
-            } else if (backupType == "PROFILE_BACKUP") {
+                } else if (backupType == "PROFILE_BACKUP") {
                 // Restore single profile
                 val p = root.getJSONObject("profile")
                 val profileId = p.getString("id")
@@ -264,37 +266,55 @@ object BackupUtils {
                             )
                         )
                     }
-                    mediaDao.insertAll(items)
-                    restoreSourcePlaylists(database, items)
+                    val normalizedItems = restoreSourcePlaylists(database, items)
+                    mediaDao.insertAll(normalizedItems)
                 }
 
-                return@withContext BackupResult(
+                return@withTransaction BackupResult(
                     isSuccess = true,
                     message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN profil tidak disertakan; buat PIN baru dari menu Profil." else "Restore Profil berhasil!"
                 )
             }
 
-            BackupResult(isSuccess = false, message = "Format file backup tidak dikenali")
+                BackupResult(isSuccess = false, message = "Format file backup tidak dikenali")
+            }
+            return@withContext result
         } catch (e: Exception) {
             BackupResult(isSuccess = false, message = "Gagal memulihkan backup: ${e.localizedMessage}")
         }
     }
 
-    private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>) {
+    /**
+     * Reuses an existing source playlist by profile + URL so a locally edited
+     * title survives restore. Media IDs are remapped to the retained playlist ID.
+     */
+    private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>): List<MediaItem> {
         val playlistDao = database.sourcePlaylistDao()
-        media.filter { it.sourceUrl.isNotBlank() }.groupBy { it.playlistId.ifBlank { it.sourceUrl } }
-            .forEach { (key, items) ->
+        val normalized = media.toMutableList()
+        media.filter { it.sourceUrl.isNotBlank() }
+            .groupBy { it.profileId to it.sourceUrl }
+            .forEach { (_, items) ->
                 val first = items.first()
-                playlistDao.insert(
-                    SourcePlaylist(
-                        id = if (first.playlistId.isNotBlank()) first.playlistId else key,
-                        profileId = first.profileId,
-                        name = first.sourceUrl.substringAfter("//").substringBefore("/").ifBlank { first.title },
-                        url = first.sourceUrl,
-                        sourceType = first.sourceType,
-                        itemCount = items.size
-                    )
+                val existing = playlistDao.findByUrl(first.profileId, first.sourceUrl)
+                val playlistId = existing?.id ?: first.playlistId.ifBlank { first.sourceUrl }
+                val playlist = existing?.copy(
+                    itemCount = items.size,
+                    updatedAt = System.currentTimeMillis()
+                ) ?: SourcePlaylist(
+                    id = playlistId,
+                    profileId = first.profileId,
+                    name = first.sourceUrl.substringAfter("//").substringBefore("/").ifBlank { first.title },
+                    url = first.sourceUrl,
+                    sourceType = first.sourceType,
+                    itemCount = items.size
                 )
+                playlistDao.insert(playlist)
+                val itemIds = items.mapTo(hashSetOf()) { it.id }
+                normalized.indices.forEach { index ->
+                    val item = normalized[index]
+                    if (item.id in itemIds) normalized[index] = item.copy(playlistId = playlistId)
+                }
             }
+        return normalized
     }
 }
