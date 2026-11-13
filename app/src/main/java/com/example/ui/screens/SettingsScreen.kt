@@ -142,7 +142,7 @@ fun SettingsScreen(
             updateProgress = state.progress
             when (state.status) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
-                    if (AppUpdateManager.isDownloadedApkValid(context, version)) {
+                    if (AppUpdateManager.finalizeDownloadedApk(context, version) && AppUpdateManager.isDownloadedApkValid(context, version)) {
                         readyToInstallVersion = version
                         updateMessage = "APK v$version selesai diunduh dan lolos validasi."
                     } else {
@@ -647,7 +647,7 @@ fun SettingsScreen(
                                 modifier = Modifier.height(34.dp), shape = RoundedCornerShape(10.dp)) {
                                 Icon(Icons.Default.SystemUpdate, contentDescription = "Instal APK", modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Instal", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(if (apk.isInstallable) "Instal" else "Rusak", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             IconButton(onClick = {
                                 if (AppUpdateManager.deleteDownloadedApk(context, apk.fileName)) {

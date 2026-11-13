@@ -37,7 +37,7 @@ object AppUpdateManager {
         val error: String? = null
     )
 
-    data class DownloadedApk(val fileName: String, val version: String, val sizeBytes: Long, val lastModified: Long)
+    data class DownloadedApk(val fileName: String, val version: String, val sizeBytes: Long, val lastModified: Long, val isInstallable: Boolean)
 
     data class DownloadState(
         val status: Int,
@@ -65,14 +65,14 @@ object AppUpdateManager {
             .filter { it.isFile && it.name.startsWith("NSiO-update-") && it.extension.equals("apk", true) }
             .mapNotNull { file ->
                 val version = file.name.removePrefix("NSiO-update-").removeSuffix(".apk")
-                if (version.isBlank() || !isInstallableDownloadedApk(context, file)) null
-                else DownloadedApk(file.name, version, file.length(), file.lastModified())
+                if (version.isBlank()) null
+                else DownloadedApk(file.name, version, file.length(), file.lastModified(), isInstallableDownloadedApk(context, file))
             }.sortedByDescending { it.lastModified }.toList()
     }
 
     fun deleteDownloadedApk(context: Context, fileName: String): Boolean {
         if (!hasUpdateStorageAccess(context) || !fileName.startsWith("NSiO-update-") ||
-            !fileName.endsWith(".apk", true) || fileName.contains('/') || fileName.contains('\\\\')) return false
+            !fileName.endsWith(".apk", true) || fileName.contains('/')) return false
         val directory = updateDirectory(context).canonicalFile
         val file = File(directory, fileName).canonicalFile
         return file.parentFile == directory && file.isFile && file.delete()
@@ -158,16 +158,21 @@ object AppUpdateManager {
         val directory = updateDirectory(context)
         if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Folder NSiO/Pembaruan Aplikasi tidak dapat dibuat")
         migrateLegacyDownloads(context, directory)
-        val destination = File(directory, fileName)
-        destination.takeIf { it.exists() }?.delete()
+        val temporaryDirectory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: throw IllegalStateException("Folder sementara unduhan aplikasi tidak tersedia")
+        if (!temporaryDirectory.exists() && !temporaryDirectory.mkdirs()) {
+            throw IllegalStateException("Folder sementara unduhan tidak dapat dibuat")
+        }
+        val temporaryFile = File(temporaryDirectory, fileName)
+        temporaryFile.takeIf { it.exists() }?.delete()
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("Pembaruan NSiO $version")
-            setDescription("Mengunduh ke Penyimpanan Internal/NSiO/Pembaruan Aplikasi")
+            setDescription("Mengunduh paket instalasi NSiO")
             setMimeType("application/vnd.android.package-archive")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setAllowedOverMetered(true)
             setAllowedOverRoaming(false)
-            setDestinationUri(Uri.fromFile(destination))
+            setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
         }
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val id = manager.enqueue(request)
@@ -202,6 +207,22 @@ object AppUpdateManager {
             val progress = if (total > 0L) ((downloaded * 100L) / total).toInt().coerceIn(0, 100) else 0
             return DownloadState(status, progress, reason)
         }
+    }
+
+    fun finalizeDownloadedApk(context: Context, version: String): Boolean {
+        if (!hasUpdateStorageAccess(context)) return false
+        val fileName = "NSiO-update-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
+        val temporaryFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+        val destinationDirectory = updateDirectory(context)
+        if (!destinationDirectory.exists() && !destinationDirectory.mkdirs()) return false
+        val destination = File(destinationDirectory, fileName)
+        if (!temporaryFile.isFile || temporaryFile.length() < 256 * 1024L || temporaryFile.length() > MAX_APK_SIZE) return false
+        return runCatching {
+            temporaryFile.copyTo(destination, overwrite = true)
+            val copied = destination.isFile && destination.length() == temporaryFile.length()
+            if (copied) temporaryFile.delete()
+            copied
+        }.getOrDefault(false)
     }
 
     fun isDownloadedApkValid(context: Context, version: String): Boolean {
