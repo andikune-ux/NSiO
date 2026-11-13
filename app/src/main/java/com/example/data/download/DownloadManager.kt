@@ -114,7 +114,8 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             headersJson.keys().forEach { key ->
                 val value = headersJson.optString(key)
                 if (key.isNotBlank() && value.isNotBlank() && !key.equals("Host", true) &&
-                    !key.equals("Content-Length", true) && !key.equals("Connection", true)) {
+                    !key.equals("Content-Length", true) && !key.equals("Connection", true) &&
+                    !key.equals("Range", true) && !key.equals("If-Range", true)) {
                     requestBuilder.header(key, value)
                 }
             }
@@ -146,6 +147,10 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 throw DownloadPermanentException("Server mengirim playlist HLS, bukan file video langsung. Unduhan HLS belum didukung.")
             }
             val append = existingBytes > 0L && response.code == 206
+            if (existingBytes == 0L && response.code == 206) {
+                response.close()
+                throw DownloadPermanentException("Server mengirim potongan file tanpa permintaan resume; unduhan dibatalkan agar file tidak terpotong.")
+            }
             if (existingBytes > 0L && response.code != 206 && response.code != 200) {
                 response.close()
                 throw DownloadPermanentException("Server tidak mendukung kelanjutan unduhan")
