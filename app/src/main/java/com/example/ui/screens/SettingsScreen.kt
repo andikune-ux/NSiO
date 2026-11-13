@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -540,6 +541,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = serverPinInput,
                         onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) serverPinInput = value },
+                        visualTransformation = PasswordVisualTransformation(),
                         placeholder = { Text("PIN 4 Digit", fontSize = 12.sp) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
