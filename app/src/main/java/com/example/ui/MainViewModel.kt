@@ -433,24 +433,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- File Source (B2) ---
     fun addLocalFileMedia(title: String, fileUri: String, isPhoto: Boolean) {
         val currentProfileId = _activeProfile.value?.id ?: return
+        val rawUri = fileUri.trim()
+        if (rawUri.isBlank()) {
+            showStatus("Pilih file terlebih dahulu")
+            return
+        }
+        val parsedUri = Uri.parse(rawUri)
+        val normalizedUri = when (parsedUri.scheme?.lowercase()) {
+            "content", "file" -> parsedUri.toString()
+            null -> if (rawUri.startsWith("/")) Uri.fromFile(java.io.File(rawUri)).toString() else null
+            else -> null
+        }
+        if (normalizedUri == null) {
+            showStatus("Sumber file harus berupa URI lokal atau path perangkat, bukan URL internet")
+            return
+        }
+
         viewModelScope.launch {
-            val playlist = ensureSourcePlaylist(fileUri, title.ifEmpty { "File Lokal" }, "FILE", currentProfileId)
-            val newItem = MediaItem(
-                id = UUID.randomUUID().toString(),
-                profileId = currentProfileId,
-                title = title.ifEmpty { "File Lokal" },
-                url = fileUri,
-                thumbnailUrl = if (isPhoto) fileUri else "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-                type = if (isPhoto) "PHOTO" else "VIDEO",
-                sourceType = "FILE",
-                category = "Penyimpanan Lokal", playlistId = playlist.id, sourceUrl = fileUri
-            )
-            mediaDao.insertMedia(newItem)
-            sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
-            authManager.currentUser?.let { user ->
-                try { cloudRepository.saveMediaItem(user.uid, newItem) } catch (_: Exception) {}
+            try {
+                val playlist = ensureSourcePlaylist(
+                    normalizedUri,
+                    title.ifEmpty { "File Lokal" },
+                    "FILE",
+                    currentProfileId
+                )
+                val newItem = MediaItem(
+                    id = UUID.randomUUID().toString(),
+                    profileId = currentProfileId,
+                    title = title.ifEmpty { "File Lokal" },
+                    url = normalizedUri,
+                    thumbnailUrl = if (isPhoto) normalizedUri else "",
+                    type = if (isPhoto) "PHOTO" else "VIDEO",
+                    sourceType = "FILE",
+                    category = "Penyimpanan Lokal",
+                    playlistId = playlist.id,
+                    sourceUrl = normalizedUri
+                )
+                mediaDao.insertMedia(newItem)
+                sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
+                val cloudFailed = authManager.currentUser?.let { user ->
+                    runCatching { cloudRepository.saveMediaItem(user.uid, newItem) }.isFailure
+                } ?: false
+                showStatus(
+                    if (cloudFailed) "File ditambahkan ke perangkat, tetapi metadata Cloud gagal disinkronkan"
+                    else "File lokal berhasil ditambahkan ke beranda"
+                )
+            } catch (e: Exception) {
+                showStatus("Gagal menambahkan file: ${e.localizedMessage ?: "URI tidak dapat dibaca"}")
             }
-            showStatus("File lokal berhasil ditambahkan ke beranda!")
         }
     }
 
