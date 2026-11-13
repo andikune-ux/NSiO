@@ -244,7 +244,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(newSettings: ProfileSettings) {
         viewModelScope.launch {
-            profileDao.updateSettings(newSettings.copy(serverPin = PinVault.encrypt(getApplication(), newSettings.serverPin)))
+            profileDao.insertSettings(newSettings.copy(serverPin = PinVault.encrypt(getApplication(), newSettings.serverPin)))
             _settings.value = newSettings
             showStatus("Pengaturan berhasil disimpan")
         }
