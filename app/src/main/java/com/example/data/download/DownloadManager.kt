@@ -63,9 +63,11 @@ class VideoDownloadManager private constructor(private val context: Context) {
             val partial = File("${existing.localPath}.part")
             val bytes = if (partial.exists()) partial.length() else 0L
             if (existing.status != "DOWNLOADING") {
+                val percent = if (existing.totalBytes > 0L) {
+                    ((bytes * 100L) / existing.totalBytes).toInt().coerceIn(0, 99)
+                } else existing.progressPercent.coerceIn(0, 99)
                 downloadDao.updateProgress(
-                    existing.id, "PENDING", existing.progressPercent.coerceIn(0, 99),
-                    bytes, existing.totalBytes, existing.localPath
+                    existing.id, "PENDING", percent, bytes, existing.totalBytes, existing.localPath
                 )
             }
             existing
@@ -103,8 +105,12 @@ class VideoDownloadManager private constructor(private val context: Context) {
     suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
         val item = downloadDao.getDownloadById(id)
         WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
-        // Keep partial bytes so a later worker attempt can resume.
-        downloadDao.updateProgress(id, "PAUSED", 0, item?.localPath?.let { File("$it.part").length() } ?: 0L, 0, item?.localPath.orEmpty())
+        // Preserve byte totals so the paused row still shows truthful progress.
+        val bytes = item?.localPath?.let { File("$it.part").length() } ?: 0L
+        val total = item?.totalBytes ?: 0L
+        val percent = if (total > 0L) ((bytes * 100L) / total).toInt().coerceIn(0, 99)
+            else item?.progressPercent?.coerceIn(0, 99) ?: 0
+        downloadDao.updateProgress(id, "PAUSED", percent, bytes, total, item?.localPath.orEmpty())
         _activeDownloads.value = _activeDownloads.value - id
     }
 
@@ -243,7 +249,9 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                         if (isStopped) {
                             // Keep partial bytes when WorkManager stops this worker so it can resume later.
                             manager.updateProgress(id, 0)
-                            db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
+                            val pausedBytes = partial.length()
+                            val pausedPercent = if (total > 0L) ((pausedBytes * 100L) / total).toInt().coerceIn(0, 99) else 0
+                            db.updateProgress(id, "PAUSED", pausedPercent, pausedBytes, total, target.absolutePath)
                             return@withContext Result.retry()
                         }
                         if (read == 0) continue
@@ -265,7 +273,10 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
         } catch (e: Exception) {
             manager.updateProgress(id, 0)
             if (isStopped) {
-                db.updateProgress(id, "PAUSED", 0, partial.length(), 0, target.absolutePath)
+                val pausedBytes = partial.length()
+                val pausedTotal = db.getDownloadById(id)?.totalBytes ?: 0L
+                val pausedPercent = if (pausedTotal > 0L) ((pausedBytes * 100L) / pausedTotal).toInt().coerceIn(0, 99) else 0
+                db.updateProgress(id, "PAUSED", pausedPercent, pausedBytes, pausedTotal, target.absolutePath)
                 return@withContext Result.retry()
             }
             val retryable = when (e) {
