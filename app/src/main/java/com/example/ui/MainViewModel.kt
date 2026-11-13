@@ -439,7 +439,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- Player Management ---
     fun playMedia(item: MediaItem) {
         _currentlyPlaying.value = item
-        if (item.type != "PHOTO") {
+        val isGoogleDrivePreview = item.url.startsWith("https://drive.google.com/file/d/") &&
+            item.url.endsWith("/preview")
+        if (item.type != "PHOTO" && !isGoogleDrivePreview) {
             val headers = item.extraInfo.split('&')
                 .mapNotNull { entry ->
                     val separator = entry.indexOf('=')
@@ -458,6 +460,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             player.play(item.url, item.title, item.progressMs, headers)
+        } else {
+            player.clearError()
         }
     }
 
