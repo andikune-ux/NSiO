@@ -326,12 +326,14 @@ fun ProfileScreen(
                     .clip(RoundedCornerShape(18.dp))
                     .clickable {
                         if (!isActive) {
-                            if (p.isPinEnabled && p.pin.isNotEmpty()) {
-                                pendingSwitchProfile = p
-                                showPinDialogForSwitch = true
-                            } else {
-                                viewModel.switchProfile(p)
-                            }
+                            if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                    pendingSwitchProfile = p
+                                    showPinDialogForSwitch = true
+                                } else if (p.isPinEnabled) {
+                                    viewModel.showStatus("PIN profil ini belum valid. Atur ulang PIN sebelum beralih.")
+                                } else {
+                                    viewModel.switchProfile(p)
+                                }
                         }
                     }
             ) {
@@ -416,9 +418,11 @@ fun ProfileScreen(
                     if (!isActive) {
                         Button(
                             onClick = {
-                                if (p.isPinEnabled && p.pin.isNotEmpty()) {
+                                if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
                                     pendingSwitchProfile = p
                                     showPinDialogForSwitch = true
+                                } else if (p.isPinEnabled) {
+                                    viewModel.showStatus("PIN profil ini belum valid. Atur ulang PIN sebelum beralih.")
                                 } else {
                                     viewModel.switchProfile(p)
                                 }
@@ -712,9 +716,14 @@ private fun AddProfileDialog(
                 }
 
                 if (isPinEnabled) {
+                    Text(
+                        text = "PIN wajib tepat 4 digit angka.",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     OutlinedTextField(
                         value = pin,
-                        onValueChange = { if (it.length <= 4) pin = it },
+                        onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) pin = value },
                         placeholder = { Text("PIN 4 Digit", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -743,10 +752,11 @@ private fun AddProfileDialog(
 
                     Button(
                         onClick = {
-                            if (name.isNotBlank()) {
-                                onConfirm(name, selectedAvatar, pin, isPinEnabled)
+                            if (name.isNotBlank() && (!isPinEnabled || pin.matches(Regex("\\d{4}")))) {
+                                onConfirm(name.trim(), selectedAvatar, pin, isPinEnabled)
                             }
                         },
+                        enabled = name.isNotBlank() && (!isPinEnabled || pin.matches(Regex("\\d{4}"))),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
