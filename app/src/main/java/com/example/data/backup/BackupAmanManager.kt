@@ -141,6 +141,7 @@ object BackupAmanManager {
                 put("progressMs", m.progressMs)
                 put("isFavorite", m.isFavorite)
                 put("createdAt", m.createdAt)
+                put("extraInfo", m.extraInfo)
             })
         }
         rootObj.put("mediaItems", mediaArr)
