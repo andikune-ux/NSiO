@@ -92,6 +92,9 @@ object BackupUtils {
                     put("sourceUrl", m.sourceUrl)
                     put("durationMs", m.durationMs)
                     put("progressMs", m.progressMs)
+                    put("isFavorite", m.isFavorite)
+                    put("createdAt", m.createdAt)
+                    put("extraInfo", m.extraInfo)
                 }
                 mediaArray.put(mObj)
             }
@@ -192,6 +195,10 @@ object BackupUtils {
                                 sourceUrl = m.optString("sourceUrl", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L),
+                                isFavorite = m.optBoolean("isFavorite", false),
+                                createdAt = m.optLong("createdAt", System.currentTimeMillis()),
+                                extraInfo = m.optString("extraInfo", ""),
+                                extraInfo = m.optString("extraInfo", ""),
                                 isFavorite = m.optBoolean("isFavorite", false),
                                 createdAt = m.optLong("createdAt", System.currentTimeMillis())
                             )
