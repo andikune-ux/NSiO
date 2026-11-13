@@ -46,6 +46,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -98,6 +99,11 @@ fun PlayerScreen(
         media.url.startsWith("https://drive.google.com/file/d/") &&
         media.url.endsWith("/preview")
     val usesNativePlayer = !isPhoto && !isGoogleDriveVideo
+    // Player controls sit on frosted-glass panels; follow the active theme so
+    // labels remain readable when light mode renders those panels in white.
+    val controlTextColor = MaterialTheme.colorScheme.onSurface
+    val controlMutedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val controlAccentColor = MaterialTheme.colorScheme.primary
 
     // Reset transient controls when the queue switches to another media item.
     LaunchedEffect(media.id) {
@@ -199,7 +205,7 @@ fun PlayerScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = CyanPrimary,
+                        color = controlAccentColor,
                         modifier = Modifier.size(44.dp),
                         strokeWidth = 3.5.dp
                     )
@@ -251,7 +257,7 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Kembali",
-                                tint = Color.White,
+                                tint = controlTextColor,
                                 modifier = Modifier.size(21.dp)
                             )
                         }
@@ -263,7 +269,7 @@ fun PlayerScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = controlTextColor
                             )
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -281,7 +287,7 @@ fun PlayerScreen(
                                     fontSize = 10.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = Color(0xFFCBD5E1)
+                                    color = controlMutedColor
                                 )
                             }
                         }
@@ -295,7 +301,7 @@ fun PlayerScreen(
                                 Icon(
                                     Icons.Filled.List,
                                     contentDescription = "Daftar video",
-                                    tint = Color.White,
+                                    tint = controlTextColor,
                                     modifier = Modifier.size(21.dp)
                                 )
                             }
@@ -321,12 +327,12 @@ fun PlayerScreen(
                     ) {
                         val queueItems = mediaList.filter { it.type != "PHOTO" }.take(20)
                         if (queueItems.isEmpty()) {
-                            Text("Belum ada video di antrean", color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp, modifier = Modifier.padding(12.dp))
+                            Text("Belum ada video di antrean", color = controlMutedColor, fontSize = 11.sp, modifier = Modifier.padding(12.dp))
                         }
                         queueItems.forEach { next ->
                             Text(
                                 text = next.title,
-                                color = if (next.id == media.id) CyanPrimary else Color.White,
+                                color = if (next.id == media.id) controlAccentColor else controlTextColor,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -348,7 +354,7 @@ fun PlayerScreen(
                 if (isGoogleDriveVideo) {
                     Text(
                         text = "Gunakan kontrol di pemutar Google Drive untuk putar, jeda, dan pencarian waktu",
-                        color = Color.White.copy(alpha = 0.82f),
+                        color = controlMutedColor,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
@@ -373,7 +379,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.Replay10,
                             contentDescription = "Mundur 10 Detik",
-                            tint = Color.White,
+                            tint = controlTextColor,
                             modifier = Modifier.size(29.dp)
                         )
                     }
@@ -416,7 +422,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.Forward10,
                             contentDescription = "Maju 10 Detik",
-                            tint = Color.White,
+                            tint = controlTextColor,
                             modifier = Modifier.size(29.dp)
                         )
                     }
@@ -447,14 +453,14 @@ fun PlayerScreen(
                                 text = "$currentFormatted / $totalFormatted",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = controlTextColor
                             )
 
                             Text(
                                 text = if (playerState.isSeekable) "GESER UNTUK MENCARI POSISI" else "LIVE / TIDAK DAPAT DI-SEEK",
                                 fontSize = 9.sp,
                                 maxLines = 1,
-                                color = CyanPrimary,
+                                color = controlAccentColor,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -475,9 +481,9 @@ fun PlayerScreen(
                                 isSeeking = false
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = CyanPrimary,
-                                activeTrackColor = CyanPrimary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                thumbColor = controlAccentColor,
+                                activeTrackColor = controlAccentColor,
+                                inactiveTrackColor = MaterialTheme.colorScheme.outline
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
