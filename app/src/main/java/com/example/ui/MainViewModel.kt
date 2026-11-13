@@ -205,6 +205,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateProfilePin(profile: Profile, newPin: String) {
+        if (!newPin.matches(Regex("\\d{4}"))) {
+            showStatus("PIN harus tepat 4 digit angka")
+            return
+        }
+        viewModelScope.launch {
+            val latest = profileDao.getProfileById(profile.id) ?: run {
+                showStatus("Profil tidak ditemukan")
+                return@launch
+            }
+            val updated = latest.copy(pin = newPin, isPinEnabled = true)
+            profileDao.updateProfile(updated)
+            _profiles.value = profileDao.getAllProfilesList()
+            if (_activeProfile.value?.id == updated.id) _activeProfile.value = updated
+            showStatus("PIN profil berhasil diperbarui")
+        }
+    }
+
     fun updateSettings(newSettings: ProfileSettings) {
         viewModelScope.launch {
             profileDao.updateSettings(newSettings)
