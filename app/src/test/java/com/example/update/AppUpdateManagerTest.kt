@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.example.data.download.isVerifiedCompletedRange
+import com.example.data.download.calculateRetryProgress
 import org.junit.Test
 
 class AppUpdateManagerTest {
@@ -48,6 +49,29 @@ class AppUpdateManagerTest {
             "https://github.com:444/andikune-ux/NSiO/releases/download/v1.0.2/app.apk"
         ))
     }
+    @Test
+    fun preservesKnownDownloadSizeAndProgressWhenRetrying() {
+        val half = calculateRetryProgress(500L, 1_000L)
+        assertEquals(50, half.percent)
+        assertEquals(500L, half.downloadedBytes)
+        assertEquals(1_000L, half.totalBytes)
+
+        val unknownSize = calculateRetryProgress(500L, 0L)
+        assertEquals(0, unknownSize.percent)
+        assertEquals(500L, unknownSize.downloadedBytes)
+        assertEquals(0L, unknownSize.totalBytes)
+
+        val oversizedPartial = calculateRetryProgress(1_200L, 1_000L)
+        assertEquals(99, oversizedPartial.percent)
+        assertEquals(1_200L, oversizedPartial.downloadedBytes)
+        assertEquals(1_000L, oversizedPartial.totalBytes)
+
+        val negativeInput = calculateRetryProgress(-1L, -1L)
+        assertEquals(0, negativeInput.percent)
+        assertEquals(0L, negativeInput.downloadedBytes)
+        assertEquals(0L, negativeInput.totalBytes)
+    }
+
     @Test
     fun acceptsHttp416AsCompleteOnlyWhenSizeAndValidatorMatch() {
         assertTrue(
