@@ -95,20 +95,9 @@ object LinkExtractor {
             val content = try {
                 fetchText(trimmed)
             } catch (e: Exception) {
-                if (lower.substringBefore('?').contains(".m3u")) {
-                    return@withContext ParseResult.Error("Gagal mengambil playlist dari server: ${e.localizedMessage ?: "respons tidak dapat dibaca"}")
-                }
-                // If fetch fails but looks like a direct link, treat as Single Stream
-                val fallbackItem = MediaItem(
-                    id = UUID.randomUUID().toString(),
-                    profileId = profileId,
-                    title = extractFilename(trimmed, "Media Stream"),
-                    url = trimmed,
-                    thumbnailUrl = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=500",
-                    type = if (lower.contains(".m3u8")) "STREAM" else "VIDEO",
-                    sourceType = "LINK"
+                return@withContext ParseResult.Error(
+                    "Sumber tidak dapat diperiksa: ${e.localizedMessage ?: "server tidak merespons"}. Pastikan URL aktif dan dapat diakses."
                 )
-                return@withContext ParseResult.Single(fallbackItem)
             }
 
             // Case 4: M3U playlist (contains #EXTM3U)
@@ -149,17 +138,21 @@ object LinkExtractor {
                 }
             }
 
-            // Default fallback: Single Video
-            val fallback = MediaItem(
-                id = UUID.randomUUID().toString(),
-                profileId = profileId,
-                title = extractFilename(trimmed, "Media Link"),
-                url = trimmed,
-                thumbnailUrl = "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=500",
-                type = "VIDEO",
-                sourceType = "LINK"
+            // A successful HTTP response is not proof that the URL is playable media.
+            // Reject HTML pages and unknown payloads instead of saving broken video entries.
+            val normalizedContent = content.trimStart().lowercase()
+            if (normalizedContent.startsWith("<!doctype html") ||
+                normalizedContent.startsWith("<html") ||
+                normalizedContent.startsWith("<head") ||
+                normalizedContent.startsWith("<body")) {
+                return@withContext ParseResult.Error(
+                    "Link membuka halaman web, bukan file media atau playlist yang didukung."
+                )
+            }
+
+            ParseResult.Error(
+                "Format sumber belum didukung. Gunakan link video/foto langsung, HLS (.m3u8), playlist M3U, JSON media, atau Google Drive publik."
             )
-            ParseResult.Single(fallback)
         } catch (e: Exception) {
             ParseResult.Error("Gagal mengurai link: ${e.localizedMessage ?: "Unknown error"}")
         }
