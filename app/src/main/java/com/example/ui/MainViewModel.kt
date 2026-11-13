@@ -333,7 +333,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mediaDao.replacePlaylist(playlist.id, listOf(item))
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 authManager.currentUser?.let { user ->
-                    runCatching { cloudRepository.saveMediaItem(user.uid, item) }
+                    runCatching {
+                        cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, listOf(item))
+                    }
                 }
                 "Berhasil menambahkan: ${result.item.title}"
             }
@@ -351,7 +353,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mediaDao.replacePlaylist(playlist.id, items)
                 sourcePlaylistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
                 authManager.currentUser?.let { user ->
-                    runCatching { cloudRepository.syncLocalListToCloud(user.uid, items) }
+                    runCatching {
+                        cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, items)
+                    }
                 }
                 "${items.size} item berhasil ditambahkan (${result.title})"
             }
