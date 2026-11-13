@@ -41,7 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "net_stream_io.db"
-                ).addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build()
+                ).addMigrations(MIGRATION_1_2).build()
                 INSTANCE = instance
                 instance
             }
