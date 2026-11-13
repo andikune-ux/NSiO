@@ -724,6 +724,7 @@ private fun PluginRepoTab(
     var repoUrlInput by remember { mutableStateOf("") }
     var editingPlaylist by remember { mutableStateOf<SourcePlaylist?>(null) }
     var editedName by remember { mutableStateOf("") }
+    var repoFeedback by remember { mutableStateOf<String?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
@@ -803,15 +804,30 @@ private fun PluginRepoTab(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    repoFeedback?.let { message ->
+                        Text(
+                            text = message,
+                            fontSize = 11.sp,
+                            color = if (message.startsWith("Repository berhasil")) CyanPrimary else AccentRed
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
                             if (repoUrlInput.isNotBlank()) {
-                                val url = repoUrlInput
-                                repoUrlInput = ""
+                                val url = repoUrlInput.trim()
                                 scope.launch {
-                                    viewModel.pluginManager.addRepository(name = "Koleksi Eksternal", url = url)
+                                    runCatching {
+                                        viewModel.pluginManager.addRepository(name = "Koleksi Eksternal", url = url)
+                                    }.onSuccess {
+                                        repoUrlInput = ""
+                                        repoFeedback = "Repository berhasil disimpan."
+                                    }.onFailure { error ->
+                                        repoFeedback = error.message ?: "URL repository tidak valid."
+                                    }
                                 }
                             }
                         },
