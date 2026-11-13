@@ -501,13 +501,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val user = authManager.currentUser
             var storageMessage: String? = null
             var cloudMessage: String? = null
+            var storageDeleted = false
+            val isFirebaseFile = item.sourceType == "SERVER" &&
+                storageRepository.isFirebaseStorageUrl(item.url)
 
-            if (item.sourceType == "SERVER" && storageRepository.isFirebaseStorageUrl(item.url)) {
+            if (isFirebaseFile) {
                 if (user == null) {
                     storageMessage = "file Firebase tidak dihapus karena akun penyimpanan tidak aktif"
                 } else {
                     try {
                         storageRepository.deleteOwnedMedia(user.uid, item.url)
+                        storageDeleted = true
                     } catch (e: Exception) {
                         storageMessage = e.localizedMessage ?: "file Firebase tidak dapat dihapus"
                     }
@@ -534,8 +538,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 cloudMessage?.let { "Cloud: $it" }
             )
             if (details.isEmpty()) {
-                showStatus("Media '${item.title}' dihapus dari perangkat" +
-                    if (item.sourceType == "SERVER") " dan Firebase Storage" else "")
+                val remoteNote = when {
+                    storageDeleted -> " dan Firebase Storage"
+                    item.sourceType == "SERVER" && !isFirebaseFile -> ". File eksternal tetap berada di server asal"
+                    else -> ""
+                }
+                showStatus("Media '${item.title}' dihapus dari perangkat$remoteNote")
             } else {
                 showStatus("Media '${item.title}' dihapus dari perangkat. " + details.joinToString("; "))
             }
