@@ -169,20 +169,111 @@ class CloudMediaRepository(
     }
 
     /**
-     * Uploads all local items to Cloud Firestore in bulk.
+     * Synchronizes one local profile to Firestore.
+     *
+     * Existing documents belonging to other profiles are preserved. Stale
+     * documents for this profile are deleted only after every current item
+     * has been written successfully, preventing an interrupted upload from
+     * erasing the last complete cloud copy.
      */
-    suspend fun syncLocalListToCloud(userId: String, items: List<MediaItem>): Int {
-        var count = 0
-        for (item in items) {
-            // Do not silently report a partial sync as a complete success.
-            // Let the caller surface the first failure and allow a safe retry.
-            saveMediaItem(userId, item)
-            count++
+    suspend fun syncLocalListToCloud(
+        userId: String,
+        profileId: String,
+        items: List<MediaItem>
+    ): Int {
+        require(items.all { it.profileId == profileId }) {
+            "Semua item sinkronisasi harus berasal dari profil yang sama."
         }
-        return count
+
+        val mediaCollection = usersCollection.document(userId).collection("media")
+        val uniqueItems = items.distinctBy { it.id }
+
+        // Firestore batches allow at most 500 operations; keep a safety margin.
+        uniqueItems.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { item ->
+                val payload = mediaPayload(item)
+                batch.set(mediaCollection.document(item.id), payload, SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+
+        val keepIds = uniqueItems.mapTo(mutableSetOf()) { it.id }
+        val existingSnapshot = mediaCollection.get().await()
+        val staleDocuments = existingSnapshot.documents.filter { document ->
+            val documentProfileId = document.getString("profileId") ?: DEFAULT_PROFILE_ID
+            documentProfileId == profileId && document.id !in keepIds
+        }
+
+        staleDocuments.chunked(MAX_BATCH_OPERATIONS).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { document -> batch.delete(document.reference) }
+            batch.commit().await()
+        }
+
+        return uniqueItems.size
     }
+
+    /**
+     * Returns only the requested profile's media. Documents created by older
+     * app versions without profileId are treated as belonging to the default
+     * profile for backwards compatibility.
+     */
+    suspend fun fetchMediaItems(userId: String, profileId: String? = null): List<MediaItem> {
+        return try {
+            val snapshot = usersCollection.document(userId).collection("media").get().await()
+            snapshot.documents.mapNotNull { doc ->
+                val documentProfileId = doc.getString("profileId") ?: DEFAULT_PROFILE_ID
+                if (profileId != null && documentProfileId != profileId) return@mapNotNull null
+                val id = doc.getString("id") ?: doc.id
+                val title = doc.getString("title") ?: return@mapNotNull null
+                val url = doc.getString("url") ?: return@mapNotNull null
+                MediaItem(
+                    id = id,
+                    profileId = documentProfileId,
+                    title = title,
+                    url = url,
+                    thumbnailUrl = doc.getString("thumbnailUrl") ?: "",
+                    type = doc.getString("type") ?: "VIDEO",
+                    sourceType = doc.getString("sourceType") ?: "LINK",
+                    category = doc.getString("category") ?: "Umum",
+                    playlistId = doc.getString("playlistId") ?: "",
+                    sourceUrl = doc.getString("sourceUrl") ?: "",
+                    durationMs = doc.getLong("durationMs") ?: 0L,
+                    progressMs = doc.getLong("progressMs") ?: 0L,
+                    isFavorite = doc.getBoolean("isFavorite") ?: false,
+                    createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                    extraInfo = doc.getString("extraInfo") ?: ""
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal mengambil media items dari Firestore: ${e.message}", e)
+            throw e
+        }
+    }
+
+    private fun mediaPayload(item: MediaItem): HashMap<String, Any?> = hashMapOf(
+        "id" to item.id,
+        "profileId" to item.profileId,
+        "title" to item.title,
+        "url" to item.url,
+        "thumbnailUrl" to item.thumbnailUrl,
+        "type" to item.type,
+        "sourceType" to item.sourceType,
+        "category" to item.category,
+        "playlistId" to item.playlistId,
+        "sourceUrl" to item.sourceUrl,
+        "durationMs" to item.durationMs,
+        "progressMs" to item.progressMs,
+        "isFavorite" to item.isFavorite,
+        "createdAt" to item.createdAt,
+        "extraInfo" to item.extraInfo,
+        "syncedAt" to FieldValue.serverTimestamp()
+    )
 
     companion object {
         private const val TAG = "CloudMediaRepository"
+        private const val MAX_BATCH_OPERATIONS = 450
+        private const val DEFAULT_PROFILE_ID = "profile_utama"
     }
 }
