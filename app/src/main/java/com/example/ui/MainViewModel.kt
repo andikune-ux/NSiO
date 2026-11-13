@@ -905,6 +905,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Pause native playback and persist its last position when the host activity
+     * loses the foreground. Playback intentionally does not auto-resume on return.
+     */
+    fun pausePlaybackForBackground() {
+        val current = _currentlyPlaying.value ?: return
+        val isNativeVideo = current.type != "PHOTO" &&
+            !(current.url.startsWith("https://drive.google.com/file/d/") && current.url.endsWith("/preview"))
+        if (!isNativeVideo) return
+
+        player.pause()
+        val positionMs = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
+        viewModelScope.launch {
+            runCatching { mediaDao.updateProgress(current.id, positionMs) }
+            authManager.currentUser?.let { user ->
+                runCatching {
+                    cloudRepository.saveMediaItem(user.uid, current.copy(progressMs = positionMs))
+                }
+            }
+        }
+    }
+
     fun closePlayer() {
         val current = _currentlyPlaying.value
         val isPlayableVideo = current != null && current.type != "PHOTO" &&
