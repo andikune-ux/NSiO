@@ -27,9 +27,8 @@ import com.example.ui.theme.CyanPrimary
 import com.example.ui.theme.FocusHighlight
 
 /**
- * iOS 26 Liquid Glass Modifier
- * Implements fluid translucency, refraction border highlights, ambient light sheen,
- * and dynamic TV D-pad focus interaction.
+ * Tactile neumorphic surface fused with OS 26 Liquid Glass:
+ * paired soft shadows, a restrained inset/specular rim and translucent acrylic.
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -41,91 +40,58 @@ fun Modifier.liquidGlass(
     hasSheen: Boolean = true
 ): Modifier {
     val isDark = MaterialTheme.colorScheme.background.run { (red + green + blue) < 1.5f }
-
-    // Surface brush: Sleek translucent in dark mode, creamy frosted glass in light mode
+    val surface = MaterialTheme.colorScheme.surface
+    val glassAlpha = if (isDark) (alpha * 0.72f).coerceIn(0.045f, 0.22f) else (0.56f + alpha * 0.5f).coerceIn(0.58f, 0.82f)
     val surfaceBrush = if (isDark) {
-        val baseAlpha = alpha
-        Brush.verticalGradient(
-            colors = listOf(
-                tint.copy(alpha = (baseAlpha * 1.4f).coerceAtMost(0.4f)),
-                tint.copy(alpha = (baseAlpha * 0.8f).coerceAtMost(0.25f)),
-                tint.copy(alpha = (baseAlpha * 1.1f).coerceAtMost(0.35f))
-            )
-        )
+        Brush.verticalGradient(listOf(
+            Color(0xFF272B32).copy(alpha = glassAlpha),
+            Color(0xFF15171C).copy(alpha = glassAlpha + 0.05f),
+            Color(0xFF1C1F25).copy(alpha = glassAlpha)
+        ))
     } else {
-        // Light mode: Clean, high-contrast milky frosted acrylic with subtle tint
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.90f),
-                Color(0xFFF8FAFC).copy(alpha = 0.82f),
-                Color(0xFFF1F5F9).copy(alpha = 0.86f)
-            )
-        )
+        Brush.verticalGradient(listOf(
+            Color.White.copy(alpha = glassAlpha),
+            surface.copy(alpha = 0.94f),
+            Color(0xFFDDE3EC).copy(alpha = 0.92f)
+        ))
     }
-
-    // Specular refraction border: top-left catches light, bottom-right drops off
-    val borderBrush = if (isDark) {
-        Brush.linearGradient(
-            colors = listOf(
-                tint.copy(alpha = (borderAlpha * 1.5f).coerceAtMost(0.9f)),
-                tint.copy(alpha = (borderAlpha * 0.4f).coerceAtMost(0.5f)),
-                tint.copy(alpha = (borderAlpha * 0.1f).coerceAtMost(0.2f)),
-                tint.copy(alpha = (borderAlpha * 0.6f).coerceAtMost(0.7f))
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-        )
+    val rim = if (isDark) {
+        Brush.linearGradient(listOf(
+            Color.White.copy(alpha = (borderAlpha * 0.72f).coerceAtMost(0.42f)),
+            Color(0xFF59616D).copy(alpha = 0.22f),
+            Color.Black.copy(alpha = 0.30f)
+        ))
     } else {
-        Brush.linearGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.95f),
-                Color(0xFFCBD5E1).copy(alpha = 0.65f),
-                Color(0xFFE2E8F0).copy(alpha = 0.40f),
-                Color.White.copy(alpha = 0.80f)
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-        )
+        Brush.linearGradient(listOf(
+            Color.White.copy(alpha = 0.96f),
+            Color(0xFFB7C1CE).copy(alpha = 0.62f),
+            Color.White.copy(alpha = 0.42f)
+        ))
     }
-
-    val shadowAmbient = if (isDark) Color.Black.copy(alpha = 0.4f) else Color(0xFF64748B).copy(alpha = 0.14f)
-    val shadowSpot = if (isDark) CyanPrimary.copy(alpha = 0.15f) else Color(0xFF0F172A).copy(alpha = 0.08f)
+    val ambient = if (isDark) Color.Black.copy(alpha = 0.78f) else Color(0xFF8793A3).copy(alpha = 0.25f)
+    val spot = if (isDark) Color(0xFF343A44).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.88f)
 
     return this
-        .shadow(
-            elevation = elevation,
-            shape = shape,
-            ambientColor = shadowAmbient,
-            spotColor = shadowSpot
-        )
+        .shadow(elevation, shape, ambientColor = ambient, spotColor = spot)
         .clip(shape)
         .background(surfaceBrush)
-        .border(width = 1.dp, brush = borderBrush, shape = shape)
-        .then(
-            if (hasSheen) {
-                Modifier.drawBehind {
-                    // Subtle light refraction highlight on the top edge
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                if (isDark) tint.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.6f),
-                                Color.Transparent
-                            ),
-                            startY = 0f,
-                            endY = size.height * 0.35f
-                        )
-                    )
-                }
-            } else {
-                Modifier
+        .border(0.8.dp, rim, shape)
+        .then(if (hasSheen) Modifier.drawBehind {
+            val highlight = if (isDark) Color.White.copy(alpha = 0.045f) else Color.White.copy(alpha = 0.72f)
+            drawLine(highlight, Offset(size.width * 0.12f, 1f), Offset(size.width * 0.88f, 1f), strokeWidth = 1.dp.toPx())
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(highlight, Color.Transparent),
+                    startY = 0f,
+                    endY = size.height * 0.28f
+                )
+            )
+            if (isDark) {
+                drawLine(Color.Black.copy(alpha = 0.24f), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), strokeWidth = 1.dp.toPx())
             }
-        )
+        } else Modifier)
 }
 
-/**
- * Liquid Glass with TV Remote Focus support:
- * Pulsing refraction border and smooth 1.05x magnification on D-pad navigation.
- */
 @Composable
 fun Modifier.liquidGlassTvFocusable(
     shape: Shape = RoundedCornerShape(16.dp),
@@ -134,32 +100,16 @@ fun Modifier.liquidGlassTvFocusable(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
 ): Modifier {
     val isFocused by interactionSource.collectIsFocusedAsState()
-
     val scale by animateFloatAsState(
         targetValue = if (isFocused) scaleFocused else 1.0f,
         animationSpec = spring(stiffness = 400f, dampingRatio = 0.75f),
         label = "glassFocusScale"
     )
-
-    return this
-        .scale(scale)
-        .focusable(interactionSource = interactionSource)
-        .then(
-            if (isFocused) {
-                Modifier.border(
-                    width = 2.dp,
-                    brush = Brush.horizontalGradient(
-                        listOf(
-                            focusedBorderColor,
-                            Color(0xFF38BDF8),
-                            Color(0xFFA855F7),
-                            focusedBorderColor
-                        )
-                    ),
-                    shape = shape
-                )
-            } else {
-                Modifier
-            }
-        )
+    return this.scale(scale).focusable(interactionSource = interactionSource).then(
+        if (isFocused) Modifier.border(
+            1.5.dp,
+            Brush.linearGradient(listOf(focusedBorderColor, CyanPrimary.copy(alpha = 0.55f), Color.White.copy(alpha = 0.55f))),
+            shape
+        ) else Modifier
+    )
 }
