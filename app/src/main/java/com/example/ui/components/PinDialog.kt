@@ -176,7 +176,7 @@ fun PinDialog(
                                                     val next = enteredPin + digit
                                                     enteredPin = next
                                                     if (next.length == pinLength) {
-                                                        if (expectedPin.length == 4 && next == expectedPin) {
+                                                        if (expectedPin.length == pinLength && next == expectedPin) {
                                                             onSuccess()
                                                         } else {
                                                             errorMessage = "PIN salah! Silakan coba lagi."
