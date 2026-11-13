@@ -77,6 +77,7 @@ fun ProfileScreen(
     var showPinDialogForSwitch by remember { mutableStateOf(false) }
     var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isBackupInProgress by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -502,10 +503,15 @@ fun ProfileScreen(
 
                     Button(
                         onClick = {
-                            viewModel.runProfileBackup { res ->
-                                backupStatusMessage = res.message
+                            if (!isBackupInProgress) {
+                                isBackupInProgress = true
+                                viewModel.runProfileBackup { res ->
+                                    backupStatusMessage = res.message
+                                    isBackupInProgress = false
+                                }
                             }
                         },
+                        enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
@@ -514,7 +520,7 @@ fun ProfileScreen(
                         modifier = Modifier.height(42.dp)
                     ) {
                         Text(
-                            "Mulai Backup Profil Ini",
+                            if (isBackupInProgress) "Backup sedang berjalan..." else "Mulai Backup Profil Ini",
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -564,10 +570,15 @@ fun ProfileScreen(
 
                     Button(
                         onClick = {
-                            viewModel.runFullBackupAman { res ->
-                                backupStatusMessage = res.message
+                            if (!isBackupInProgress) {
+                                isBackupInProgress = true
+                                viewModel.runFullBackupAman { res ->
+                                    backupStatusMessage = res.message
+                                    isBackupInProgress = false
+                                }
                             }
                         },
+                        enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyanPrimary,
                             contentColor = Color.Black
@@ -576,7 +587,7 @@ fun ProfileScreen(
                         modifier = Modifier.height(42.dp)
                     ) {
                         Text(
-                            "Buat Full Backup Terpadu",
+                            if (isBackupInProgress) "Backup sedang berjalan..." else "Buat Full Backup Terpadu",
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
