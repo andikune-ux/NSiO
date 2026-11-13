@@ -35,8 +35,8 @@ class FirebaseStorageRepository {
         val ref = storage.getReferenceFromUrl(downloadUrl)
         val expectedPrefix = "users/$userId/media/"
         require(ref.bucket == storage.reference.bucket &&
-            ref.fullPath.startsWith(expectedPrefix) &&
-            ref.fullPath.length > expectedPrefix.length
+            ref.path.startsWith(expectedPrefix) &&
+            ref.path.length > expectedPrefix.length
         ) { "File bukan milik akun penyimpanan aktif" }
 
         ref.delete().await()
