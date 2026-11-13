@@ -29,7 +29,11 @@ data class PlayerState(
     val isSeekable: Boolean = false,
     val title: String = "",
     val error: String? = null,
-    val isFallbackAvailable: Boolean = true
+    val isFallbackAvailable: Boolean = true,
+    val playbackSpeed: Float = 1f,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val shuffleEnabled: Boolean = false,
+    val volume: Float = 1f
 )
 
 interface IPlayer {
@@ -41,6 +45,11 @@ interface IPlayer {
     fun seekTo(positionMs: Long)
     fun seekForward(offsetMs: Long = 10000L)
     fun seekBackward(offsetMs: Long = 10000L)
+    fun setPlaybackSpeed(speed: Float)
+    fun toggleRepeatMode()
+    fun toggleShuffle()
+    fun setVolume(volume: Float)
+    fun toggleMute()
     fun retry()
     fun playFallback(customTitle: String? = null)
     fun clearError()
@@ -64,6 +73,7 @@ class CS3IPlayer(
     private var lastTitle: String = ""
     private var lastPositionMs: Long = 0L
     private var lastHeaders: Map<String, String> = emptyMap()
+    private var lastNonZeroVolume: Float = 1f
     private lateinit var httpDataSourceFactory: DefaultHttpDataSource.Factory
 
     companion object {
@@ -201,9 +211,13 @@ class CS3IPlayer(
                     title = title,
                     currentPositionMs = startPositionMs.coerceAtLeast(0L),
                     isBuffering = true,
-                    isFallbackAvailable = true
+                    isFallbackAvailable = true,
+                    playbackSpeed = player.playbackParameters.speed,
+                    repeatMode = player.repeatMode,
+                    shuffleEnabled = player.shuffleModeEnabled,
+                    volume = player.volume
                 )
-                val mediaItem = ExoMediaItem.fromUri(url.trim())
+                val mediaItem = ExoMediaItem.fromUri(normalizePlaybackUrl(url.trim()))
                 player.setMediaItem(mediaItem)
                 if (startPositionMs > 0) {
                     player.seekTo(startPositionMs)
@@ -301,6 +315,42 @@ class CS3IPlayer(
             lastPositionMs = target
             _playerState.value = _playerState.value.copy(currentPositionMs = target)
         }
+    }
+
+    override fun setPlaybackSpeed(speed: Float) {
+        val player = exoPlayer ?: return
+        if (speed <= 0f) return
+        player.setPlaybackSpeed(speed)
+        _playerState.value = _playerState.value.copy(playbackSpeed = speed)
+    }
+    override fun toggleRepeatMode() {
+        val player = exoPlayer ?: return
+        val nextMode = when (player.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+            else -> Player.REPEAT_MODE_OFF
+        }
+        player.repeatMode = nextMode
+        _playerState.value = _playerState.value.copy(repeatMode = nextMode)
+    }
+    override fun toggleShuffle() {
+        val player = exoPlayer ?: return
+        player.shuffleModeEnabled = !player.shuffleModeEnabled
+        _playerState.value = _playerState.value.copy(shuffleEnabled = player.shuffleModeEnabled)
+    }
+    override fun setVolume(volume: Float) {
+        val safeVolume = volume.coerceIn(0f, 1f)
+        exoPlayer?.volume = safeVolume
+        if (safeVolume > 0f) lastNonZeroVolume = safeVolume
+        _playerState.value = _playerState.value.copy(volume = safeVolume)
+    }
+    override fun toggleMute() {
+        val player = exoPlayer ?: return
+        if (player.volume > 0f) {
+            lastNonZeroVolume = player.volume
+            player.volume = 0f
+        } else player.volume = lastNonZeroVolume.coerceIn(0.05f, 1f)
+        _playerState.value = _playerState.value.copy(volume = player.volume)
     }
 
     override fun release() {

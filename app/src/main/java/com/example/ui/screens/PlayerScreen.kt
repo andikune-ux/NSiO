@@ -2,8 +2,6 @@ package com.example.ui.screens
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -41,6 +39,13 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -95,10 +100,7 @@ fun PlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     val isPhoto = media.type == "PHOTO"
-    val isGoogleDriveVideo = !isPhoto &&
-        media.url.startsWith("https://drive.google.com/file/d/") &&
-        media.url.endsWith("/preview")
-    val usesNativePlayer = !isPhoto && !isGoogleDriveVideo
+    val usesNativePlayer = !isPhoto
     // Player controls sit on frosted-glass panels; follow the active theme so
     // labels remain readable when light mode renders those panels in white.
     val controlTextColor = MaterialTheme.colorScheme.onSurface
@@ -143,38 +145,6 @@ fun PlayerScreen(
             AsyncImage(
                 model = media.url,
                 contentDescription = media.title,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (isGoogleDriveVideo) {
-            // Drive's /preview endpoint is an HTML player, not a raw MP4 stream.
-            // Use WebView so Google's own public-file player can handle playback.
-            AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        setBackgroundColor(android.graphics.Color.BLACK)
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.mediaPlaybackRequiresUserGesture = false
-                        webViewClient = WebViewClient()
-                        // Track the requested URL separately: Google may redirect the
-                        // WebView URL, and comparing webView.url causes reload loops.
-                        tag = media.url
-                        loadUrl(media.url)
-                    }
-                },
-                update = { webView ->
-                    if (webView.tag != media.url) {
-                        webView.tag = media.url
-                        webView.loadUrl(media.url)
-                    }
-                },
-                onRelease = { webView ->
-                    webView.stopLoading()
-                    webView.loadUrl("about:blank")
-                    webView.clearHistory()
-                    webView.removeAllViews()
-                    webView.destroy()
-                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -351,17 +321,6 @@ fun PlayerScreen(
                 }
 
                 // Center Liquid Glass Orb Controls
-                if (isGoogleDriveVideo) {
-                    Text(
-                        text = "Gunakan kontrol di pemutar Google Drive untuk putar, jeda, dan pencarian waktu",
-                        color = controlMutedColor,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
-                            .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.2f, borderAlpha = 0.35f)
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
-                    )
-                }
                 if (usesNativePlayer) Row(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -425,6 +384,44 @@ fun PlayerScreen(
                             tint = controlTextColor,
                             modifier = Modifier.size(29.dp)
                         )
+                    }
+                }
+
+                if (usesNativePlayer) {
+                    val queueIndex = mediaList.indexOfFirst { it.id == media.id }
+                    val previousItem = mediaList.getOrNull(queueIndex - 1)?.takeIf { it.type != "PHOTO" }
+                    val nextItem = mediaList.drop((queueIndex + 1).coerceAtLeast(0)).firstOrNull { it.type != "PHOTO" }
+                    val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp).fillMaxWidth()
+                            .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.22f, borderAlpha = 0.42f, elevation = 10.dp)
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor)
+                        }
+                        IconButton(onClick = {
+                            val currentIndex = speeds.indexOfFirst { kotlin.math.abs(it - playerState.playbackSpeed) < 0.01f }
+                            viewModel.player.setPlaybackSpeed(speeds[(currentIndex + 1).mod(speeds.size)])
+                        }, modifier = Modifier.size(42.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Text("${playerState.playbackSpeed}×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = controlAccentColor)
+                        }
+                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor)
+                        }
+                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor)
+                        }
+                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor)
+                        }
+                        androidx.compose.material3.Slider(value = playerState.volume, onValueChange = { viewModel.player.setVolume(it) },
+                            modifier = Modifier.width(74.dp), colors = SliderDefaults.colors(thumbColor = controlAccentColor, activeTrackColor = controlAccentColor))
+                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor)
+                        }
                     }
                 }
 

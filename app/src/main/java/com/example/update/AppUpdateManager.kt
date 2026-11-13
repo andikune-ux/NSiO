@@ -1,6 +1,7 @@
 package com.example.update
 
 import android.app.DownloadManager
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
@@ -36,6 +37,8 @@ object AppUpdateManager {
         val error: String? = null
     )
 
+    data class DownloadedApk(val fileName: String, val version: String, val sizeBytes: Long, val lastModified: Long)
+
     data class DownloadState(
         val status: Int,
         val progress: Int,
@@ -43,6 +46,54 @@ object AppUpdateManager {
     )
 
     enum class InstallResult { OPENED, PERMISSION_REQUIRED, INVALID_APK, FAILED }
+
+    internal const val UPDATE_DIRECTORY_RELATIVE_PATH = "NSiO/Pembaruan Aplikasi"
+    fun hasUpdateStorageAccess(context: Context): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+
+    fun storagePermissionIntent(context: Context): Intent = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+        Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+    else Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS))
+        .setData(Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    fun updateDirectory(context: Context): File = File(Environment.getExternalStorageDirectory(), UPDATE_DIRECTORY_RELATIVE_PATH)
+
+    fun listDownloadedApks(context: Context): List<DownloadedApk> {
+        if (!hasUpdateStorageAccess(context)) return emptyList()
+        return updateDirectory(context).listFiles().orEmpty().asSequence()
+            .filter { it.isFile && it.name.startsWith("NSiO-update-") && it.extension.equals("apk", true) }
+            .mapNotNull { file ->
+                val version = file.name.removePrefix("NSiO-update-").removeSuffix(".apk")
+                if (version.isBlank() || !isInstallableDownloadedApk(context, file)) null
+                else DownloadedApk(file.name, version, file.length(), file.lastModified())
+            }.sortedByDescending { it.lastModified }.toList()
+    }
+
+    fun deleteDownloadedApk(context: Context, fileName: String): Boolean {
+        if (!hasUpdateStorageAccess(context) || !fileName.startsWith("NSiO-update-") ||
+            !fileName.endsWith(".apk", true) || fileName.contains('/') || fileName.contains('\\\\')) return false
+        val directory = updateDirectory(context).canonicalFile
+        val file = File(directory, fileName).canonicalFile
+        return file.parentFile == directory && file.isFile && file.delete()
+    }
+
+    private fun isInstallableDownloadedApk(context: Context, file: File): Boolean {
+        if (!file.isFile || file.length() < 256 * 1024L || file.length() > MAX_APK_SIZE) return false
+        return runCatching {
+            val header = ByteArray(4)
+            file.inputStream().use { it.read(header) == 4 } && header[0] == 0x50.toByte() &&
+                header[1] == 0x4B.toByte() && header[2] == 0x03.toByte() && header[3] == 0x04.toByte() &&
+                isCompatiblePackage(context, file, file.name.removePrefix("NSiO-update-").removeSuffix(".apk"), false)
+        }.getOrDefault(false)
+    }
+
+    private fun migrateLegacyDownloads(context: Context, destination: File) {
+        val legacy = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
+        if (legacy.canonicalFile == destination.canonicalFile || !legacy.isDirectory) return
+        legacy.listFiles().orEmpty().filter { it.isFile && it.name.startsWith("NSiO-update-") && it.extension.equals("apk", true) }
+            .forEach { old -> val target = File(destination, old.name); if (!target.exists() && runCatching { old.copyTo(target, false) }.isSuccess) old.delete() }
+    }
 
     suspend fun checkLatest(): Release = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val current = BuildConfig.VERSION_NAME
@@ -100,22 +151,23 @@ object AppUpdateManager {
     fun startDownload(context: Context, release: Release): Long {
         val url = release.downloadUrl?.takeIf(::isTrustedReleaseUrl)
             ?: throw IllegalArgumentException("Tautan APK tidak tepercaya")
+        check(hasUpdateStorageAccess(context)) { "Izinkan akses semua file untuk menyimpan APK ke Penyimpanan Internal/NSiO/Pembaruan Aplikasi." }
+        check(Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) { "Penyimpanan internal tidak tersedia." }
         val version = release.latestVersion
         val fileName = "NSiO-update-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
-        val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: throw IllegalStateException("Penyimpanan aplikasi tidak tersedia")
-        if (!directory.exists() && !directory.mkdirs()) {
-            throw IllegalStateException("Folder unduhan tidak dapat dibuat")
-        }
-        File(directory, fileName).takeIf { it.exists() }?.delete()
+        val directory = updateDirectory(context)
+        if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("Folder NSiO/Pembaruan Aplikasi tidak dapat dibuat")
+        migrateLegacyDownloads(context, directory)
+        val destination = File(directory, fileName)
+        destination.takeIf { it.exists() }?.delete()
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("Pembaruan NSiO $version")
-            setDescription("Mengunduh paket instalasi NSiO")
+            setDescription("Mengunduh ke Penyimpanan Internal/NSiO/Pembaruan Aplikasi")
             setMimeType("application/vnd.android.package-archive")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setAllowedOverMetered(true)
             setAllowedOverRoaming(false)
-            setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+            setDestinationUri(Uri.fromFile(destination))
         }
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val id = manager.enqueue(request)
@@ -160,18 +212,16 @@ object AppUpdateManager {
             file.inputStream().use { it.read(header) == 4 } &&
                 header[0] == 0x50.toByte() && header[1] == 0x4B.toByte() &&
                 header[2] == 0x03.toByte() && header[3] == 0x04.toByte() &&
-                isCompatiblePackage(context, file, version)
+                isCompatiblePackage(context, file, version, true)
         }.getOrDefault(false)
     }
 
     private fun downloadedFile(context: Context, version: String): File {
         val fileName = "NSiO-update-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
-        val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: File(context.filesDir, "Download")
-        return File(directory, fileName)
+        return File(updateDirectory(context), fileName)
     }
 
-    private fun isCompatiblePackage(context: Context, apk: File, expectedVersion: String): Boolean {
+    private fun isCompatiblePackage(context: Context, apk: File, expectedVersion: String, requireNewer: Boolean): Boolean {
         val pm = context.packageManager
         @Suppress("DEPRECATION")
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
@@ -187,7 +237,7 @@ object AppUpdateManager {
         }
         val archiveCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else archive.versionCode.toLong()
         val installedCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) installed.longVersionCode else installed.versionCode.toLong()
-        if (archiveCode <= installedCode) return false
+        if (requireNewer && archiveCode <= installedCode) return false
         return signerHashes(archive) == signerHashes(installed) && signerHashes(archive).isNotEmpty()
     }
 
@@ -205,9 +255,15 @@ object AppUpdateManager {
         }.toSet()
     }
 
-    fun install(context: Context, version: String): InstallResult {
-        val file = downloadedFile(context, version)
-        if (!isDownloadedApkValid(context, version)) return InstallResult.INVALID_APK
+    fun install(context: Context, version: String): InstallResult =
+        installDownloadedApk(context, "NSiO-update-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk")
+
+    fun installDownloadedApk(context: Context, fileName: String): InstallResult {
+        if (!hasUpdateStorageAccess(context) || !fileName.startsWith("NSiO-update-") ||
+            !fileName.endsWith(".apk", true) || fileName.contains('/') || fileName.contains('\\\\')) return InstallResult.INVALID_APK
+        val directory = updateDirectory(context).canonicalFile
+        val file = File(directory, fileName).canonicalFile
+        if (file.parentFile != directory || !isInstallableDownloadedApk(context, file)) return InstallResult.INVALID_APK
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
             val permissionIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
                 .setData(Uri.parse("package:${context.packageName}"))

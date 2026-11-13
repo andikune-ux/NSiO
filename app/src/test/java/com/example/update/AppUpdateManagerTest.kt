@@ -9,6 +9,7 @@ import com.example.data.download.isStrongEntityTag
 import com.example.data.download.selectResumeValidator
 import com.example.data.download.calculateRetryProgress
 import com.example.player.shouldUseNativePlayer
+import com.example.player.normalizePlaybackUrl
 import org.junit.Test
 
 class AppUpdateManagerTest {
@@ -95,7 +96,8 @@ class AppUpdateManagerTest {
         assertTrue(shouldUseNativePlayer("STREAM", "https://cdn.example/live.m3u8"))
         assertFalse(shouldUseNativePlayer("PHOTO", "https://cdn.example/poster.jpg"))
         assertFalse(shouldUseNativePlayer("PHOTO", "https://drive.google.com/file/d/id/preview"))
-        assertFalse(shouldUseNativePlayer("VIDEO", "https://drive.google.com/file/d/id/preview"))
+        assertTrue(shouldUseNativePlayer("VIDEO", "https://drive.google.com/file/d/id/preview"))
+        assertEquals("https://drive.usercontent.google.com/download?id=abc_123-xyz&export=download&confirm=t", normalizePlaybackUrl("https://drive.google.com/file/d/abc_123-xyz/preview"))
         assertFalse(shouldUseNativePlayer("VIDEO", "   "))
     }
 

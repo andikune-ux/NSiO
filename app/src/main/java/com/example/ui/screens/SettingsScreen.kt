@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -40,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -94,6 +96,8 @@ fun SettingsScreen(
     var updateVersion by remember { mutableStateOf(AppUpdateManager.pendingVersion(context)) }
     var updateProgress by remember { mutableStateOf(0) }
     var readyToInstallVersion by remember { mutableStateOf<String?>(null) }
+    var updateStorageAllowed by remember { mutableStateOf(AppUpdateManager.hasUpdateStorageAccess(context)) }
+    var updateHistory by remember { mutableStateOf(AppUpdateManager.listDownloadedApks(context)) }
 
     LaunchedEffect(Unit) {
         updateChecking = true
@@ -109,7 +113,9 @@ fun SettingsScreen(
         updateChecking = false
     }
 
-    LaunchedEffect(updateDownloadId, updateVersion) {
+    LaunchedEffect(updateDownloadId, updateVersion, readyToInstallVersion) {
+        updateStorageAllowed = AppUpdateManager.hasUpdateStorageAccess(context)
+        updateHistory = AppUpdateManager.listDownloadedApks(context)
         val id = updateDownloadId ?: return@LaunchedEffect
         val version = updateVersion ?: return@LaunchedEffect
         // After a successful installation Android restarts NSiO with the new
@@ -600,6 +606,59 @@ fun SettingsScreen(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text("Lokasi APK: Penyimpanan internal/NSiO/Pembaruan Aplikasi", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!updateStorageAllowed) {
+                        Button(onClick = { runCatching { context.startActivity(AppUpdateManager.storagePermissionIntent(context)) }.onFailure { updateMessage = "Tidak dapat membuka pengaturan izin penyimpanan." } },
+                            modifier = Modifier.fillMaxWidth().height(42.dp), shape = RoundedCornerShape(14.dp)) {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Izinkan akses folder NSiO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Riwayat unduhan APK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("${updateHistory.size} file", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(onClick = {
+                        updateStorageAllowed = AppUpdateManager.hasUpdateStorageAccess(context)
+                        updateHistory = AppUpdateManager.listDownloadedApks(context)
+                        updateMessage = if (updateStorageAllowed) "Riwayat unduhan diperbarui." else "Aktifkan izin akses semua file terlebih dahulu."
+                    }, modifier = Modifier.fillMaxWidth().height(38.dp), shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)) {
+                        Text("Muat ulang riwayat", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (updateHistory.isEmpty()) {
+                        Text(if (updateStorageAllowed) "Belum ada APK pembaruan yang tersimpan." else "Riwayat akan tampil setelah izin penyimpanan diberikan.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else updateHistory.forEach { apk ->
+                        Row(modifier = Modifier.fillMaxWidth().liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.08f, borderAlpha = 0.2f, elevation = 1.dp).padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("NSiO v${apk.version}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${android.text.format.Formatter.formatShortFileSize(context, apk.sizeBytes)} • ${java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(apk.lastModified))}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Button(onClick = {
+                                when (AppUpdateManager.installDownloadedApk(context, apk.fileName)) {
+                                    AppUpdateManager.InstallResult.OPENED -> updateMessage = "Installer Android dibuka untuk v${apk.version}."
+                                    AppUpdateManager.InstallResult.PERMISSION_REQUIRED -> updateMessage = "Izinkan NSiO memasang aplikasi tidak dikenal, lalu tekan Instal lagi."
+                                    AppUpdateManager.InstallResult.INVALID_APK -> updateMessage = "APK tidak valid atau tanda tangan aplikasi tidak cocok."
+                                    AppUpdateManager.InstallResult.FAILED -> updateMessage = "Gagal membuka installer APK."
+                                }
+                            }, enabled = updateStorageAllowed, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier.height(34.dp), shape = RoundedCornerShape(10.dp)) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = "Instal APK", modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Instal", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            IconButton(onClick = {
+                                if (AppUpdateManager.deleteDownloadedApk(context, apk.fileName)) {
+                                    updateHistory = AppUpdateManager.listDownloadedApks(context)
+                                    updateMessage = "APK v${apk.version} dihapus dari riwayat."
+                                } else updateMessage = "APK tidak dapat dihapus. Periksa izin penyimpanan."
+                            }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.Delete, contentDescription = "Hapus APK v${apk.version}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
                     if (updateRelease?.available == true) {
                         val release = updateRelease!!
                         Text(
