@@ -174,7 +174,7 @@ object BackupAmanManager {
         profiles.forEach { p ->
             val defaultTag = if (p.isDefault) " (default)" else ""
             sb.appendLine("PROFIL : ${p.avatarEmoji} ${p.name}$defaultTag")
-            sb.appendLine("- PIN Profil   : ${if (p.isPinEnabled) "Aktif" else "Nonaktif"}")
+            sb.appendLine("- PIN Profil   : ${if (p.isPinEnabled) "Aktif (tidak disertakan dalam backup)" else "Nonaktif"}")
             val s = settings.firstOrNull { it.profileId == p.id }
             if (s != null) {
                 sb.appendLine("- Bahasa       : ${s.language}")
