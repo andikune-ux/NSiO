@@ -63,7 +63,6 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentGreen
-import com.example.ui.theme.CyanPrimary
 
 @Composable
 fun ProfileScreen(
@@ -113,7 +112,7 @@ fun ProfileScreen(
                 Button(
                     onClick = { showAddDialog = true },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = CyanPrimary,
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.Black
                     ),
                     shape = RoundedCornerShape(18.dp),
@@ -157,13 +156,13 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(CyanPrimary.copy(alpha = 0.2f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.CloudSync,
                                 contentDescription = null,
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -199,14 +198,14 @@ fun ProfileScreen(
                                         modifier = Modifier
                                             .size(42.dp)
                                             .clip(CircleShape)
-                                            .border(1.5.dp, CyanPrimary, CircleShape)
+                                            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                     )
                                 } else {
                                     Box(
                                         modifier = Modifier
                                             .size(42.dp)
                                             .clip(CircleShape)
-                                            .background(CyanPrimary),
+                                            .background(MaterialTheme.colorScheme.primary),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -236,7 +235,7 @@ fun ProfileScreen(
                                     onClick = { viewModel.syncToCloud() },
                                     enabled = !isSyncing,
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = CyanPrimary,
+                                        containerColor = MaterialTheme.colorScheme.primary,
                                         contentColor = Color.Black
                                     ),
                                     shape = RoundedCornerShape(16.dp),
@@ -267,13 +266,13 @@ fun ProfileScreen(
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = CyanPrimary,
+                                    color = MaterialTheme.colorScheme.primary,
                                     strokeWidth = 2.dp
                                 )
                                 Text(
                                     "Menghubungkan ke akun Google...",
                                     fontSize = 11.sp,
-                                    color = CyanPrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -281,7 +280,7 @@ fun ProfileScreen(
                             Button(
                                 onClick = { viewModel.signInWithGoogle() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = CyanPrimary,
+                                    containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = Color.Black
                                 ),
                                 shape = RoundedCornerShape(18.dp),
@@ -358,10 +357,10 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (isActive) CyanPrimary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
+                                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
                                 .border(
                                     1.dp,
-                                    if (isActive) CyanPrimary else Color.White.copy(alpha = 0.2f),
+                                    if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
                                     CircleShape
                                 ),
                             contentAlignment = Alignment.Center
@@ -405,10 +404,10 @@ fun ProfileScreen(
                                     Icon(
                                         Icons.Default.Lock,
                                         contentDescription = "PIN",
-                                        tint = CyanPrimary,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(12.dp)
                                     )
-                                    Text("PIN Dilindungi", fontSize = 10.sp, color = CyanPrimary)
+                                    Text("PIN Dilindungi", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
                                     Text(
                                         "Bebas PIN",
@@ -424,7 +423,7 @@ fun ProfileScreen(
                         if (p.isPinEnabled && !p.pin.matches(Regex("\\d{4}"))) {
                             Button(
                                 onClick = { pinResetProfile = p },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
@@ -447,7 +446,7 @@ fun ProfileScreen(
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.height(38.dp)
                             ) {
-                                Text("Beralih", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Beralih", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -486,7 +485,7 @@ fun ProfileScreen(
                         Icon(
                             Icons.Default.Backup,
                             contentDescription = null,
-                            tint = CyanPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
@@ -516,7 +515,7 @@ fun ProfileScreen(
                         },
                         enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = Color.Black
                         ),
                         shape = RoundedCornerShape(16.dp),
@@ -553,7 +552,7 @@ fun ProfileScreen(
                         Icon(
                             Icons.Default.Security,
                             contentDescription = null,
-                            tint = CyanPrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
@@ -583,7 +582,7 @@ fun ProfileScreen(
                         },
                         enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = Color.Black
                         ),
                         shape = RoundedCornerShape(16.dp),
@@ -605,7 +604,7 @@ fun ProfileScreen(
                 Text(
                     text = backupStatusMessage ?: "",
                     fontSize = 11.sp,
-                    color = CyanPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -688,14 +687,14 @@ private fun AddProfileDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    placeholder = { Text("Nama Profil...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                    placeholder = { Text("Nama Profil...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                        focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -717,10 +716,10 @@ private fun AddProfileDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isSelected) CyanPrimary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f))
                                 .border(
                                     1.dp,
-                                    if (isSelected) CyanPrimary else Color.White.copy(alpha = 0.2f),
+                                    if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
                                     CircleShape
                                 )
                                 .clickable { selectedAvatar = emoji },
@@ -746,7 +745,7 @@ private fun AddProfileDialog(
                         onCheckedChange = { isPinEnabled = it },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.Black,
-                            checkedTrackColor = CyanPrimary
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
                         )
                     )
                 }
@@ -760,16 +759,16 @@ private fun AddProfileDialog(
                     OutlinedTextField(
                         value = pin,
                         onValueChange = { value -> if (value.length <= 4 && value.all(Char::isDigit)) pin = value },
-                        placeholder = { Text("PIN 4 Digit", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("PIN 4 Digit", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                            focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.04f)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -796,7 +795,7 @@ private fun AddProfileDialog(
                         },
                         enabled = name.isNotBlank() && (!isPinEnabled || pin.matches(Regex("\\d{4}"))),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CyanPrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = Color.Black
                         ),
                         shape = RoundedCornerShape(16.dp),
@@ -873,7 +872,7 @@ private fun PinResetDialog(
                         onClick = { onSave(pin) },
                         enabled = pin.matches(Regex("\\d{4}")) && pin == confirmation,
                         modifier = Modifier.weight(1f).height(42.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) { Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold) }
                 }
             }
