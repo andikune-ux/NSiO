@@ -75,6 +75,7 @@ fun ProfileScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
     var showPinDialogForSwitch by remember { mutableStateOf(false) }
+    var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
@@ -415,25 +416,35 @@ fun ProfileScreen(
                         }
                     }
 
-                    if (!isActive) {
-                        Button(
-                            onClick = {
-                                if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
-                                    pendingSwitchProfile = p
-                                    showPinDialogForSwitch = true
-                                } else if (p.isPinEnabled) {
-                                    viewModel.showStatus("PIN profil ini belum valid. Atur ulang PIN sebelum beralih.")
-                                } else {
-                                    viewModel.switchProfile(p)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.14f)
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.height(38.dp)
-                        ) {
-                            Text("Beralih", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (p.isPinEnabled && !p.pin.matches(Regex("\\d{4}"))) {
+                            Button(
+                                onClick = { pinResetProfile = p },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.height(34.dp)
+                            ) {
+                                Text("Atur PIN", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (!isActive) {
+                            Button(
+                                onClick = {
+                                    if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                        pendingSwitchProfile = p
+                                        showPinDialogForSwitch = true
+                                    } else if (p.isPinEnabled) {
+                                        pinResetProfile = p
+                                    } else {
+                                        viewModel.switchProfile(p)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.height(38.dp)
+                            ) {
+                                Text("Beralih", color = CyanPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -594,6 +605,17 @@ fun ProfileScreen(
             onConfirm = { name, avatar, pin, isPinEnabled ->
                 viewModel.addProfile(name, avatar, pin, isPinEnabled)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (pinResetProfile != null) {
+        PinResetDialog(
+            profileName = pinResetProfile?.name.orEmpty(),
+            onDismiss = { pinResetProfile = null },
+            onSave = { pin ->
+                pinResetProfile?.let { viewModel.updateProfilePin(it, pin) }
+                pinResetProfile = null
             }
         )
     }
@@ -766,6 +788,73 @@ private fun AddProfileDialog(
                     ) {
                         Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun PinResetDialog(
+    profileName: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .liquidGlass(
+                    shape = RoundedCornerShape(24.dp),
+                    alpha = 0.18f,
+                    borderAlpha = 0.45f,
+                    elevation = 16.dp
+                )
+                .padding(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Atur Ulang PIN",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Buat PIN baru untuk profil '$profileName'.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pin = it },
+                    label = { Text("PIN baru") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirmation,
+                    onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) confirmation = it },
+                    label = { Text("Ulangi PIN baru") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).height(42.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f))
+                    ) { Text("Batal", color = MaterialTheme.colorScheme.onSurface) }
+                    Button(
+                        onClick = { onSave(pin) },
+                        enabled = pin.matches(Regex("\\\\d{4}")) && pin == confirmation,
+                        modifier = Modifier.weight(1f).height(42.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary)
+                    ) { Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold) }
                 }
             }
         }
