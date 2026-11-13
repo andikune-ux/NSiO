@@ -120,7 +120,7 @@ class CloudMediaRepository(
                 language = document.getString("language") ?: "ID",
                 themeMode = document.getString("themeMode") ?: "DARK",
                 displayMode = document.getString("displayMode") ?: "TV",
-                gridColumns = (document.getLong("gridColumns") ?: 4L).toInt()
+                gridColumns = (document.getLong("gridColumns") ?: 4L).toInt().coerceIn(1, 8)
             )
         }
         return profiles to settings
