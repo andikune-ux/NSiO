@@ -744,7 +744,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runCatching {
                         val source = java.net.URI(item.sourceUrl)
                         if (!headers.containsKey("Origin") && !source.host.isNullOrBlank()) {
-                            headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ": ${source.port}".replace(" ", "") else ""}"
+                            headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":${source.port}" else ""}"
                         }
                     }
                 }
