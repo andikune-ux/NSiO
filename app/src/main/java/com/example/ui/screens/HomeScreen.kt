@@ -144,7 +144,8 @@ fun HomeScreen(
     ) {
         val containerWidth = maxWidth
         val isNarrow = containerWidth < 600.dp
-        val isVeryNarrow = containerWidth < 390.dp
+        val isVeryNarrow = containerWidth < 420.dp
+        val showHeaderLabels = containerWidth >= 460.dp
         val columns = when {
             containerWidth < 440.dp -> 2
             containerWidth < 720.dp -> 3
@@ -201,8 +202,8 @@ fun HomeScreen(
                 // Memakai space yang tersisa tanpa terpotong
                 Box(
                     modifier = Modifier
-                        .weight(1f, fill = false)
-                        .widthIn(min = if (isVeryNarrow) 72.dp else 120.dp, max = 360.dp)
+                        .weight(1f)
+                        .widthIn(min = 48.dp, max = 360.dp)
                         .height(36.dp)
                         .padding(horizontal = 6.dp)
                         .liquidGlass(
@@ -299,7 +300,8 @@ fun HomeScreen(
                                 text = settings.displayMode,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1
                             )
                         }
                     }
@@ -351,7 +353,7 @@ fun HomeScreen(
                                 is AuthState.Loading -> "Menghubungkan..."
                                 else -> "Login Cloud"
                             }
-                            if (!isVeryNarrow) {
+                            if (showHeaderLabels) {
                                 Text(
                                     text = cloudLabel,
                                     fontSize = 11.sp,
