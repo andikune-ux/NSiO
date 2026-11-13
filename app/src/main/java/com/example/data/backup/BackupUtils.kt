@@ -197,10 +197,7 @@ object BackupUtils {
                                 progressMs = m.optLong("progressMs", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
                                 createdAt = m.optLong("createdAt", System.currentTimeMillis()),
-                                extraInfo = m.optString("extraInfo", ""),
-                                extraInfo = m.optString("extraInfo", ""),
-                                isFavorite = m.optBoolean("isFavorite", false),
-                                createdAt = m.optLong("createdAt", System.currentTimeMillis())
+                                extraInfo = m.optString("extraInfo", "")
                             )
                         )
                     }
@@ -259,7 +256,10 @@ object BackupUtils {
                                 playlistId = m.optString("playlistId", ""),
                                 sourceUrl = m.optString("sourceUrl", ""),
                                 durationMs = m.optLong("durationMs", 0L),
-                                progressMs = m.optLong("progressMs", 0L)
+                                progressMs = m.optLong("progressMs", 0L),
+                                isFavorite = m.optBoolean("isFavorite", false),
+                                createdAt = m.optLong("createdAt", System.currentTimeMillis()),
+                                extraInfo = m.optString("extraInfo", "")
                             )
                         )
                     }
