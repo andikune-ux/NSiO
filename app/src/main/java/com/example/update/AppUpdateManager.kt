@@ -212,7 +212,8 @@ object AppUpdateManager {
     fun finalizeDownloadedApk(context: Context, version: String): Boolean {
         if (!hasUpdateStorageAccess(context)) return false
         val fileName = "NSiO-update-${version.replace(Regex("[^A-Za-z0-9._-]"), "_")}.apk"
-        val temporaryFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+        val temporaryDirectory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return false
+        val temporaryFile = File(temporaryDirectory, fileName)
         val destinationDirectory = updateDirectory(context)
         if (!destinationDirectory.exists() && !destinationDirectory.mkdirs()) return false
         val destination = File(destinationDirectory, fileName)
@@ -281,7 +282,7 @@ object AppUpdateManager {
 
     fun installDownloadedApk(context: Context, fileName: String): InstallResult {
         if (!hasUpdateStorageAccess(context) || !fileName.startsWith("NSiO-update-") ||
-            !fileName.endsWith(".apk", true) || fileName.contains('/') || fileName.contains('\\\\')) return InstallResult.INVALID_APK
+            !fileName.endsWith(".apk", true) || fileName.contains('/')) return InstallResult.INVALID_APK
         val directory = updateDirectory(context).canonicalFile
         val file = File(directory, fileName).canonicalFile
         if (file.parentFile != directory || !isInstallableDownloadedApk(context, file)) return InstallResult.INVALID_APK
