@@ -159,15 +159,17 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             var existingBytes = if (partial.exists()) partial.length() else 0L
             val savedEtag = downloadItem?.etag.orEmpty()
             val savedLastModified = downloadItem?.lastModified.orEmpty()
+            val resumeValidator = selectResumeValidator(savedEtag, savedLastModified)
 
-            // A partial file without a validator cannot safely be joined to a later response.
-            if (existingBytes > 0L && savedEtag.isBlank() && savedLastModified.isBlank()) {
+            // A partial file without a strong ETag or Last-Modified validator cannot
+            // safely be joined to a later response.
+            if (existingBytes > 0L && resumeValidator.isBlank()) {
                 partial.delete()
                 existingBytes = 0L
             }
             if (existingBytes > 0L) {
                 requestBuilder.header("Range", "bytes=$existingBytes-")
-                requestBuilder.header("If-Range", savedEtag.ifBlank { savedLastModified })
+                requestBuilder.header("If-Range", resumeValidator)
             }
             val response = client.newCall(requestBuilder.build()).execute()
             if (response.code == 416 && existingBytes > 0L) {
@@ -236,7 +238,7 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 val responseEtag = response.header("ETag").orEmpty()
                 val responseLastModified = response.header("Last-Modified").orEmpty()
                 val validatorMatches = when {
-                    savedEtag.isNotBlank() -> responseEtag.isNotBlank() && savedEtag == responseEtag
+                    savedEtag.isNotBlank() -> isStrongEntityTag(responseEtag) && savedEtag == responseEtag
                     savedLastModified.isNotBlank() -> responseLastModified.isNotBlank() && savedLastModified == responseLastModified
                     else -> false
                 }
@@ -250,7 +252,13 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
 
             val responseEtag = response.header("ETag").orEmpty()
             val responseLastModified = response.header("Last-Modified").orEmpty()
-            db.updateValidators(id, responseEtag, responseLastModified)
+            // RFC-compliant If-Range requires a strong entity-tag. If the server
+            // only supplies a weak ETag, fall back to Last-Modified when available.
+            db.updateValidators(
+                id,
+                responseEtag.takeIf(::isStrongEntityTag).orEmpty(),
+                responseLastModified.takeIf { responseEtag.isBlank() || !isStrongEntityTag(responseEtag) }.orEmpty()
+            )
             val body = response.body ?: run {
                 response.close()
                 throw IOException("Respons unduhan kosong")
@@ -352,6 +360,16 @@ private class DownloadPermanentException(message: String) : Exception(message)
  * Accept that case only when the server confirms the exact byte total and the
  * same entity validator used for the original partial download.
  */
+internal fun isStrongEntityTag(value: String): Boolean {
+    val tag = value.trim()
+    return tag.length >= 2 && tag.startsWith('"') && tag.endsWith('"') &&
+        !tag.startsWith("W/", ignoreCase = true)
+}
+
+internal fun selectResumeValidator(etag: String, lastModified: String): String =
+    etag.takeIf(::isStrongEntityTag)?.trim()
+        ?: lastModified.trim().takeIf { it.isNotEmpty() }.orEmpty()
+
 internal fun isVerifiedCompletedRange(
     contentRange: String,
     existingBytes: Long,
@@ -364,8 +382,9 @@ internal fun isVerifiedCompletedRange(
     val total = Regex("^bytes\\s+\\*/(\\d+)$", RegexOption.IGNORE_CASE)
         .matchEntire(contentRange.trim())?.groupValues?.get(1)?.toLongOrNull() ?: return false
     val validatorMatches = when {
-        savedEtag.isNotBlank() -> responseEtag.isNotBlank() && savedEtag == responseEtag
-        savedLastModified.isNotBlank() -> responseLastModified.isNotBlank() && savedLastModified == responseLastModified
+        isStrongEntityTag(savedEtag) -> isStrongEntityTag(responseEtag) && savedEtag == responseEtag
+        savedEtag.isBlank() && savedLastModified.isNotBlank() ->
+            responseLastModified.isNotBlank() && savedLastModified == responseLastModified
         else -> false
     }
     return total == existingBytes && validatorMatches
