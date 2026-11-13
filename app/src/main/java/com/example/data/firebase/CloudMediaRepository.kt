@@ -124,7 +124,7 @@ class CloudMediaRepository(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Gagal mengambil media items dari Firestore: ${e.message}", e)
-            emptyList()
+            throw e
         }
     }
 
