@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text as Material3Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -193,10 +194,17 @@ fun AppText(
     style: TextStyle = LocalTextStyle.current
 ) {
     val readableFontSize = if (fontSize != TextUnit.Unspecified && fontSize.value < 10f) 10.sp else fontSize
+    // Resolve unspecified text to the active theme's primary text role while
+    // preserving explicit component/style colors for semantic labels.
+    val resolvedColor = when {
+        color != Color.Unspecified -> color
+        style.color != Color.Unspecified -> style.color
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Material3Text(
         text = translateAppText(text, LocalAppLanguage.current),
         modifier = modifier,
-        color = color,
+        color = resolvedColor,
         fontSize = readableFontSize,
         fontStyle = fontStyle,
         fontWeight = fontWeight,
