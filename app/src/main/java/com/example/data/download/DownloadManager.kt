@@ -70,13 +70,20 @@ class VideoDownloadManager private constructor(private val context: Context) {
     }
 
     suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
+        val item = downloadDao.getDownloadById(id)
         WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
-        downloadDao.updateProgress(id, "PAUSED", 0, 0, 0, "")
+        item?.localPath?.takeIf { it.isNotBlank() }?.let { File("$it.part").delete() }
+        downloadDao.updateProgress(id, "PAUSED", 0, 0, 0, item?.localPath.orEmpty())
         _activeDownloads.value = _activeDownloads.value - id
     }
 
     suspend fun cancelDownload(id: String) = withContext(Dispatchers.IO) {
+        val item = downloadDao.getDownloadById(id)
         WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
+        item?.localPath?.takeIf { it.isNotBlank() }?.let { path ->
+            File("$path.part").delete()
+            if (item.status != "COMPLETED") File(path).delete()
+        }
         downloadDao.deleteById(id)
         _activeDownloads.value = _activeDownloads.value - id
     }
@@ -128,7 +135,11 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var read: Int
                     while (input.read(buffer).also { read = it } >= 0) {
-                        if (isStopped) return@withContext Result.retry()
+                        if (isStopped) {
+                            partial.delete()
+                            manager.updateProgress(id, 0)
+                            return@withContext Result.retry()
+                        }
                         if (read == 0) continue
                         output.write(buffer, 0, read)
                         downloaded += read
@@ -143,6 +154,8 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             manager.updateProgress(id, 100)
             Result.success()
         } catch (e: Exception) {
+            partial.delete()
+            manager.updateProgress(id, 0)
             if (isStopped) return@withContext Result.retry()
             db.updateProgress(id, "FAILED", 0, 0, 0, target.absolutePath)
             Result.failure(Data.Builder().putString("error", e.message ?: "Unduhan gagal").build())
