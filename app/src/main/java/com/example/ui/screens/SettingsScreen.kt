@@ -110,7 +110,7 @@ fun SettingsScreen(
         while (true) {
             updateStorageAllowed = AppUpdateManager.hasUpdateStorageAccess(context)
             updateHistory = AppUpdateManager.listDownloadedApks(context)
-            delay(2_000)
+            delay(5_000)
         }
     }
 
@@ -603,14 +603,6 @@ fun SettingsScreen(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Riwayat unduhan APK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text("${updateHistory.size} file", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Button(onClick = {
-                        updateStorageAllowed = AppUpdateManager.hasUpdateStorageAccess(context)
-                        updateHistory = AppUpdateManager.listDownloadedApks(context)
-                        updateMessage = if (updateStorageAllowed) "Riwayat unduhan diperbarui." else "Aktifkan izin akses semua file terlebih dahulu."
-                    }, modifier = Modifier.fillMaxWidth().height(38.dp), shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)) {
-                        Text("Muat ulang riwayat", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                     if (updateHistory.isEmpty()) {
                         Text(if (updateStorageAllowed) "Belum ada APK pembaruan yang tersimpan." else "Riwayat akan tampil setelah izin penyimpanan diberikan.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
