@@ -451,7 +451,8 @@ fun HomeScreen(
                             MediaGridCard(
                                 item = item,
                                 onClick = { viewModel.playMedia(item) },
-                                onLongClick = { viewModel.toggleFavorite(item) }
+                                onLongClick = { viewModel.toggleFavorite(item) },
+                                onDownload = { viewModel.downloadMedia(item) }
                             )
                         }
                     }
