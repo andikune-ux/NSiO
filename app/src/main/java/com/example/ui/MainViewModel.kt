@@ -308,12 +308,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     photoUrl = user.photoUrl?.toString()
                 )
                 val allProfiles = profileDao.getAllProfilesList()
+                val allSettings = profileDao.getAllSettingsList()
+                cloudRepository.syncProfileMetadata(user.uid, allProfiles, allSettings)
                 var totalSynced = 0
                 allProfiles.forEach { profile ->
                     val localItems = mediaDao.getMediaListForProfile(profile.id)
                     totalSynced += cloudRepository.syncLocalListToCloud(user.uid, profile.id, localItems)
                 }
-                showStatus("$totalSynced item dari ${allProfiles.size} profil berhasil disinkronkan ke Cloud Firestore!")
+                showStatus("$totalSynced item dan metadata ${allProfiles.size} profil berhasil disinkronkan ke Cloud Firestore!")
             } catch (e: Exception) {
                 showStatus("Gagal sinkronisasi: ${e.localizedMessage ?: "periksa koneksi"}")
             } finally {
@@ -330,17 +332,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isCloudSyncing.value = true
             try {
-                val currentProfileId = _activeProfile.value?.id ?: "profile_utama"
-                val cloudItems = cloudRepository.fetchMediaItems(user.uid, currentProfileId)
-                if (cloudItems.isEmpty()) {
-                    showStatus("Tidak ada data cloud untuk profil ini")
+                // Restore portable profile metadata first so media never points
+                // to profiles that do not exist on this device.
+                val (cloudProfiles, cloudSettings) = cloudRepository.fetchProfileMetadata(user.uid)
+                cloudProfiles.forEach { cloudProfile ->
+                    val localProfile = profileDao.getProfileById(cloudProfile.id)
+                    if (localProfile == null) {
+                        profileDao.insertProfile(cloudProfile.copy(pin = "", isPinEnabled = false))
+                    }
+                }
+                cloudSettings.forEach { cloudSetting ->
+                    if (profileDao.getSettings(cloudSetting.profileId) == null) {
+                        // Server PIN is device-local and intentionally regenerated.
+                        profileDao.insertSettings(cloudSetting)
+                    }
+                }
+
+                val cloudItems = cloudRepository.fetchMediaItems(user.uid)
+                if (cloudItems.isEmpty() && cloudProfiles.isEmpty()) {
+                    showStatus("Belum ada data profil atau media di Cloud")
                 } else {
                     val restoredItems = restoreSourcePlaylistsForItems(cloudItems)
-                    mediaDao.insertAll(restoredItems)
-                    showStatus("${restoredItems.size} item berhasil dipulihkan beserta sumber playlist!")
+                    if (restoredItems.isNotEmpty()) mediaDao.insertAll(restoredItems)
+                    _profiles.value = profileDao.getAllProfilesList().map { stored ->
+                        stored.copy(pin = PinVault.decrypt(getApplication(), stored.pin))
+                    }
+                    showStatus(
+                        "${cloudProfiles.size} profil dan ${restoredItems.size} item berhasil dipulihkan. " +
+                            "PIN profil dan PIN server harus diatur ulang pada perangkat ini."
+                    )
                 }
             } catch (e: Exception) {
-                showStatus("Gagal memulihkan: ${e.localizedMessage}")
+                showStatus("Gagal memulihkan: ${e.localizedMessage ?: "periksa koneksi dan coba lagi"}")
             } finally {
                 _isCloudSyncing.value = false
             }
