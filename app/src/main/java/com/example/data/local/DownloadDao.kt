@@ -20,6 +20,9 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE id = :id LIMIT 1")
     suspend fun getDownloadById(id: String): DownloadItem?
 
+    @Query("SELECT * FROM downloads WHERE mediaId = :mediaId AND status IN ('PENDING', 'DOWNLOADING', 'PAUSED') ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getResumableDownloadForMedia(mediaId: String): DownloadItem?
+
     @Update
     suspend fun updateDownload(item: DownloadItem)
 
