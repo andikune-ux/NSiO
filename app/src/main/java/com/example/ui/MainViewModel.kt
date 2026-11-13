@@ -309,7 +309,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val item = result.item.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
                     mediaDao.clearPlaylist(playlist.id)
                     mediaDao.insertMedia(item)
-                    sourcePlaylistDao.updateCount(playlist.id, _mediaList.value.count { it.playlistId == playlist.id } + 1)
+                    sourcePlaylistDao.updateCount(playlist.id, 1)
                     // If user is authenticated, sync to cloud
                     authManager.currentUser?.let { user ->
                         try { cloudRepository.saveMediaItem(user.uid, item) } catch (_: Exception) {}
@@ -323,7 +323,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val items = result.items.map { it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url) }
                     mediaDao.clearPlaylist(playlist.id)
                     mediaDao.insertAll(items)
-                    sourcePlaylistDao.updateCount(playlist.id, _mediaList.value.count { it.playlistId == playlist.id } + items.size)
+                    sourcePlaylistDao.updateCount(playlist.id, items.size)
                     authManager.currentUser?.let { user ->
                         try { cloudRepository.syncLocalListToCloud(user.uid, items) } catch (_: Exception) {}
                     }
