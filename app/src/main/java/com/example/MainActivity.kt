@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.material3.Text as Material3Text
+import com.example.ui.components.AppText as Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,6 +46,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ui.MainViewModel
 import com.example.ui.components.AmbientFluidBackground
+import com.example.ui.components.LocalAppLanguage
+import com.example.ui.components.translateAppText
 import com.example.ui.components.BottomNavGlassBar
 import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
@@ -84,14 +88,15 @@ class MainActivity : ComponentActivity() {
             var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
             val snackbarHostState = remember { SnackbarHostState() }
 
-            LaunchedEffect(statusMessage) {
+            LaunchedEffect(statusMessage, settings.language) {
                 statusMessage?.let { msg ->
-                    snackbarHostState.showSnackbar(msg)
+                    snackbarHostState.showSnackbar(translateAppText(msg, settings.language))
                     viewModel.clearStatus()
                 }
             }
 
             MyApplicationTheme(themeMode = settings.themeMode) {
+                CompositionLocalProvider(LocalAppLanguage provides settings.language) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // 1. iOS 26 Ambient Fluid Glow Canvas
                     val isDark = settings.themeMode != "LIGHT"
@@ -192,6 +197,7 @@ class MainActivity : ComponentActivity() {
                             }) { Text("Hapus") }
                         }
                     )
+                }
                 }
             }
         }
