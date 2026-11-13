@@ -53,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,7 +86,7 @@ fun ExtensionScreen(
     val repos by viewModel.pluginManager.repositories.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
     var showServerPinDialog by remember { mutableStateOf(false) }
 
@@ -929,7 +930,10 @@ private fun PluginRepoTab(
             )
         }
 
-        items(plugins) { plugin ->
+        items(plugins, key = { plugin ->
+            plugin.manifest?.let { "${it.name}|${it.url}|${it.version}" }
+                ?: plugin.filename.ifBlank { "plugin-${plugins.indexOf(plugin)}" }
+        }) { plugin ->
             val pName = plugin.manifest?.name ?: plugin.filename ?: "Plugin Ekstensi"
             val pDesc = plugin.manifest?.description ?: "Plugin streaming terpasang"
             val pVersion = plugin.manifest?.version ?: 1
