@@ -44,9 +44,9 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const workflowFile = context.workflow_ref
-              .split("/.github/workflows/")[1]
-              .split("@")[0];
+            // Use the stable workflow filename; context.workflow_ref is not
+            // exposed by every github-script runtime version.
+            const workflowFile = "build.yml";
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner,
               repo,
