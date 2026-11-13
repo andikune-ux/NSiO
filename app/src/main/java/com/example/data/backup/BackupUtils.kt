@@ -7,6 +7,7 @@ import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
+import com.example.data.security.PinVault
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -172,7 +173,14 @@ object BackupUtils {
                                 themeMode = s.optString("themeMode", "DARK"),
                                 displayMode = s.optString("displayMode", "TV"),
                                 gridColumns = s.optInt("gridColumns", 4),
-                                serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else s.optString("serverPin", "")
+                                serverPin = PinVault.encrypt(
+                                context,
+                                if (root.optBoolean("securityCredentialsExcluded", false)) {
+                                    ProfileSettings(profileId = s.getString("profileId")).serverPin
+                                } else {
+                                    s.optString("serverPin", "")
+                                }
+                            )
                             )
                         )
                     }
@@ -210,7 +218,7 @@ object BackupUtils {
 
                 return@withTransaction BackupResult(
                     isSuccess = true,
-                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Demi keamanan, PIN profil perlu dibuat ulang dan PIN server kembali ke nilai default." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Demi keamanan, PIN profil perlu dibuat ulang dan PIN server dibuat ulang khusus perangkat ini." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
                 )
                 } else if (backupType == "PROFILE_BACKUP") {
                 // Restore single profile
@@ -236,7 +244,14 @@ object BackupUtils {
                             themeMode = s.optString("themeMode", "DARK"),
                             displayMode = s.optString("displayMode", "TV"),
                             gridColumns = s.optInt("gridColumns", 4),
-                            serverPin = if (root.optBoolean("securityCredentialsExcluded", false)) "" else s.optString("serverPin", "")
+                            serverPin = PinVault.encrypt(
+                            context,
+                            if (root.optBoolean("securityCredentialsExcluded", false)) {
+                                ProfileSettings(profileId = profileId).serverPin
+                            } else {
+                                s.optString("serverPin", "")
+                            }
+                        )
                         )
                     )
                 }
@@ -272,7 +287,7 @@ object BackupUtils {
 
                 return@withTransaction BackupResult(
                     isSuccess = true,
-                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN profil tidak disertakan; buat PIN baru dari menu Profil." else "Restore Profil berhasil!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN profil tidak disertakan; buat PIN baru dari menu Profil. PIN server dibuat ulang khusus perangkat ini." else "Restore Profil berhasil!"
                 )
             }
 
