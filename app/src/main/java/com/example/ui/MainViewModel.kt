@@ -128,16 +128,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 profileDao.insertProfile(defaultProfile)
                 val defaultSettings = ProfileSettings(profileId = defaultProfile.id)
-                profileDao.insertSettings(defaultSettings.copy(serverPin = PinVault.encrypt(application, defaultSettings.serverPin)))
+                profileDao.insertSettings(defaultSettings.copy(serverPin = PinVault.encrypt(getApplication(), defaultSettings.serverPin)))
 
                 _profiles.value = listOf(defaultProfile)
                 _activeProfile.value = defaultProfile
                 _settings.value = defaultSettings
             } else {
                 val decodedProfiles = existingProfiles.map { stored ->
-                    val pin = PinVault.decrypt(application, stored.pin)
+                    val pin = PinVault.decrypt(getApplication(), stored.pin)
                     if (stored.pin.isNotBlank() && !PinVault.isEncrypted(stored.pin)) {
-                        profileDao.updateProfile(stored.copy(pin = PinVault.encrypt(application, pin)))
+                        profileDao.updateProfile(stored.copy(pin = PinVault.encrypt(getApplication(), pin)))
                     }
                     stored.copy(pin = pin)
                 }
