@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import com.example.data.download.isVerifiedCompletedRange
+import com.example.data.download.isStrongEntityTag
+import com.example.data.download.selectResumeValidator
 import com.example.data.download.calculateRetryProgress
 import com.example.player.shouldUseNativePlayer
 import org.junit.Test
@@ -71,6 +73,17 @@ class AppUpdateManagerTest {
         assertEquals(0, negativeInput.percent)
         assertEquals(0L, negativeInput.downloadedBytes)
         assertEquals(0L, negativeInput.totalBytes)
+    }
+
+
+    @Test
+    fun onlyUsesStrongEtagsForIfRangeAndFallsBackToLastModified() {
+        assertTrue(isStrongEntityTag("\"v1\""))
+        assertFalse(isStrongEntityTag("W/\"v1\""))
+        assertFalse(isStrongEntityTag("v1"))
+        assertEquals("\"v1\"", selectResumeValidator(" \"v1\" ", "Wed, 21 Oct 2015 07:28:00 GMT"))
+        assertEquals("Wed, 21 Oct 2015 07:28:00 GMT", selectResumeValidator("W/\"v1\"", "Wed, 21 Oct 2015 07:28:00 GMT"))
+        assertEquals("", selectResumeValidator("W/\"v1\"", ""))
     }
 
     @Test
