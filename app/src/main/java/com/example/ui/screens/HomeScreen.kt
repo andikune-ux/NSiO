@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
+import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
@@ -95,6 +96,7 @@ fun HomeScreen(
 
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
+    var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
@@ -612,7 +614,7 @@ fun HomeScreen(
                                     "FILE" to "File Lokal",
                                     "SERVER" to "Server Upload",
                                     "FAV" to "Favorit"
-                                ).filter { isServerUnlocked || it.first != "SERVER" }
+                                )
                                 val categoryFilters = mediaList
                                     .flatMap { item -> item.category.split("•", ",", "|", ";") }
                                     .map { it.trim() }
@@ -642,7 +644,11 @@ fun HomeScreen(
                                             )
                                             .clip(RoundedCornerShape(18.dp))
                                             .clickable {
-                                                viewModel.selectFilter(key)
+                                                if (key == "SERVER" && !isServerUnlocked) {
+                                                    showServerPinDialog = true
+                                                } else {
+                                                    viewModel.selectFilter(key)
+                                                }
                                             }
                                             .liquidGlassTvFocusable(shape = RoundedCornerShape(18.dp))
                                             .padding(horizontal = 14.dp, vertical = 7.dp)
@@ -681,5 +687,19 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showServerPinDialog) {
+        PinDialog(
+            title = "Akses Server",
+            subtitle = "Masukkan PIN server untuk menampilkan media server",
+            expectedPin = settings.serverPin,
+            onSuccess = {
+                viewModel.unlockServerAccess()
+                viewModel.selectFilter("SERVER")
+                showServerPinDialog = false
+            },
+            onDismiss = { showServerPinDialog = false }
+        )
     }
 }
