@@ -88,6 +88,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    // Set when device-bound encrypted PIN data cannot be recovered and must be reset locally.
+    private var didRecoverLocalPin = false
+
     // Keep only one database observer per active profile.
     private var mediaObserverJob: Job? = null
     private var playlistObserverJob: Job? = null
@@ -136,16 +139,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value = defaultSettings
             } else {
                 val decodedProfiles = existingProfiles.map { stored ->
+                    val wasEncrypted = PinVault.isEncrypted(stored.pin)
                     val pin = PinVault.decrypt(getApplication(), stored.pin)
-                    if (stored.pin.isNotBlank() && !PinVault.isEncrypted(stored.pin)) {
-                        profileDao.updateProfile(stored.copy(pin = PinVault.encrypt(getApplication(), pin)))
+                    val lostProtectedPin = stored.isPinEnabled && wasEncrypted && pin.isBlank()
+                    when {
+                        lostProtectedPin -> {
+                            // A device-bound Keystore key cannot be restored from backup.
+                            // Disable only the unrecoverable local PIN instead of locking the profile.
+                            profileDao.updateProfile(stored.copy(pin = "", isPinEnabled = false))
+                            didRecoverLocalPin = true
+                        }
+                        stored.pin.isNotBlank() && !wasEncrypted -> {
+                            profileDao.updateProfile(stored.copy(pin = PinVault.encrypt(getApplication(), pin)))
+                        }
                     }
-                    stored.copy(pin = pin)
+                    stored.copy(pin = if (lostProtectedPin) "" else pin, isPinEnabled = if (lostProtectedPin) false else stored.isPinEnabled)
                 }
                 _profiles.value = decodedProfiles
                 val active = decodedProfiles.firstOrNull { it.isDefault } ?: decodedProfiles.first()
                 _activeProfile.value = active
                 _settings.value = loadSettingsForProfile(active.id)
+            }
+
+            if (didRecoverLocalPin) {
+                showStatus("Kunci keamanan perangkat berubah. PIN lokal yang tidak dapat dipulihkan telah direset; silakan atur PIN baru di Pengaturan.")
             }
 
             observeActiveProfileMedia()
@@ -236,8 +253,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadSettingsForProfile(profileId: String): ProfileSettings {
         val stored = profileDao.getSettings(profileId) ?: ProfileSettings(profileId = profileId)
+        val wasEncrypted = PinVault.isEncrypted(stored.serverPin)
         val plainPin = PinVault.decrypt(getApplication(), stored.serverPin)
-        if (stored.serverPin.isNotBlank() && !PinVault.isEncrypted(stored.serverPin)) {
+        if (stored.serverPin.isNotBlank() && wasEncrypted && plainPin.isBlank()) {
+            // The previous Keystore key is gone: generate a fresh device-local server PIN.
+            val replacementPin = ProfileSettings(profileId = profileId).serverPin
+            profileDao.insertSettings(stored.copy(serverPin = PinVault.encrypt(getApplication(), replacementPin)))
+            didRecoverLocalPin = true
+            return stored.copy(serverPin = replacementPin)
+        }
+        if (stored.serverPin.isNotBlank() && !wasEncrypted) {
             profileDao.insertSettings(stored.copy(serverPin = PinVault.encrypt(getApplication(), plainPin)))
         }
         return stored.copy(serverPin = plainPin)
