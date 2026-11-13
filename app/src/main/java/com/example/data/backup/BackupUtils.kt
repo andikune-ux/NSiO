@@ -208,7 +208,7 @@ object BackupUtils {
 
                 return@withContext BackupResult(
                     isSuccess = true,
-                    message = "Restore Backup Aman berhasil dipulihkan secara penuh!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Demi keamanan, PIN profil perlu dibuat ulang dan PIN server kembali ke nilai default." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
                 )
             } else if (backupType == "PROFILE_BACKUP") {
                 // Restore single profile
@@ -270,7 +270,7 @@ object BackupUtils {
 
                 return@withContext BackupResult(
                     isSuccess = true,
-                    message = "Restore Profil '${p.getString("name")}' berhasil!"
+                    message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore profil berhasil. PIN profil tidak disertakan; buat PIN baru dari menu Profil." else "Restore Profil berhasil!"
                 )
             }
 
