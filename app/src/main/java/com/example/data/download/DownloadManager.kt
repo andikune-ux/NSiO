@@ -155,14 +155,21 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 response.close()
                 throw DownloadPermanentException("Server tidak mendukung kelanjutan unduhan")
             }
+            var rangeTotalBytes: Long? = null
+            var rangeExpectedBytes: Long? = null
             if (append) {
-                val contentRange = response.header("Content-Range")
-                val rangeStart = Regex("^bytes\\s+(\\d+)-\\d+/(?:\\d+|\\*)$", RegexOption.IGNORE_CASE)
-                    .matchEntire(contentRange.orEmpty())?.groupValues?.get(1)?.toLongOrNull()
-                if (rangeStart != existingBytes) {
+                val contentRange = response.header("Content-Range").orEmpty()
+                val rangeMatch = Regex("^bytes\\s+(\\d+)-(\\d+)/(\\d+|\\*)$", RegexOption.IGNORE_CASE)
+                    .matchEntire(contentRange)
+                val rangeStart = rangeMatch?.groupValues?.get(1)?.toLongOrNull()
+                val rangeEnd = rangeMatch?.groupValues?.get(2)?.toLongOrNull()
+                rangeTotalBytes = rangeMatch?.groupValues?.get(3)?.takeUnless { it == "*" }?.toLongOrNull()
+                if (rangeStart != existingBytes || rangeEnd == null || rangeEnd < existingBytes ||
+                    (rangeTotalBytes != null && rangeEnd >= rangeTotalBytes)) {
                     response.close()
                     throw DownloadPermanentException("Server mengirim rentang byte yang tidak sesuai; unduhan dihentikan agar file tidak rusak.")
                 }
+                rangeExpectedBytes = rangeEnd - existingBytes + 1L
 
                 val responseEtag = response.header("ETag").orEmpty()
                 val responseLastModified = response.header("Last-Modified").orEmpty()
@@ -187,7 +194,15 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 throw IOException("Respons unduhan kosong")
             }
             val bodyLength = body.contentLength()
-            val total = if (append && bodyLength > 0L) existingBytes + bodyLength else bodyLength
+            if (append && bodyLength > 0L && rangeExpectedBytes != bodyLength) {
+                response.close()
+                throw DownloadPermanentException("Ukuran respons tidak cocok dengan Content-Range; unduhan dihentikan agar file tidak rusak.")
+            }
+            val total = when {
+                append && rangeTotalBytes != null -> rangeTotalBytes!!
+                append && bodyLength > 0L -> existingBytes + bodyLength
+                else -> bodyLength
+            }
             var downloaded = if (append) existingBytes else 0L
             db.updateProgress(id, "DOWNLOADING", if (total > 0L) ((downloaded * 100) / total).toInt() else 0, downloaded, total, target.absolutePath)
             body.byteStream().use { input ->
