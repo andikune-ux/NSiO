@@ -111,10 +111,22 @@ fun CalculatorAccessGate(
             "ln", "log" -> append("$key(")
             "!" -> append("!")
             "%" -> append("%")
-            "±" -> append("(-")
-            "M+" -> { memory += currentValue(); result = CalculatorMath.format(memory) }
-            "M-" -> { memory -= currentValue(); result = CalculatorMath.format(memory) }
-            "MS" -> { memory = currentValue(); result = "M = ${CalculatorMath.format(memory)}" }
+            "±" -> {
+                if (expression.isNotBlank()) {
+                    expression = if (expression.startsWith("-(") && expression.endsWith(")")) {
+                        expression.substring(2, expression.length - 1)
+                    } else {
+                        "-($expression)"
+                    }
+                    result = null
+                    hasError = false
+                } else {
+                    append("-")
+                }
+            }
+            "M+" -> runCatching { memory += currentValue() }.onSuccess { result = "M = ${CalculatorMath.format(memory)}" }
+            "M-" -> runCatching { memory -= currentValue() }.onSuccess { result = "M = ${CalculatorMath.format(memory)}" }
+            "MS" -> runCatching { memory = currentValue() }.onSuccess { result = "M = ${CalculatorMath.format(memory)}" }
             "MR" -> append(CalculatorMath.format(memory))
             "=" -> {
                 val value = expression.trim()
