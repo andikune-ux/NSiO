@@ -149,7 +149,13 @@ fun HomeScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            // Keep the home content clear of the floating global navigation controls.
+            .padding(
+                start = if (settings.displayMode == "TV") 84.dp else 12.dp,
+                end = 12.dp,
+                top = 8.dp,
+                bottom = if (settings.displayMode == "HP") 82.dp else 8.dp
+            )
             .testTag("home_screen")
     ) {
         val containerWidth = maxWidth
