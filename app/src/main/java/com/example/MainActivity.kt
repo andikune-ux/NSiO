@@ -338,9 +338,12 @@ private fun appStorageDiagnostics(context: android.content.Context): String {
     val internalFiles = directoryBytes(context.filesDir)
     val cache = directoryBytes(context.cacheDir)
     val noBackup = directoryBytes(context.noBackupFilesDir)
+    val codeCache = directoryBytes(context.codeCacheDir)
     val externalFiles = directoryBytes(context.getExternalFilesDir(null))
     val externalCache = directoryBytes(context.externalCacheDir)
-    val appData = internalFiles + cache + noBackup + externalFiles + externalCache
+    val databaseBytes = context.databaseList().sumOf { directoryBytes(context.getDatabasePath(it)) }
+    val preferencesBytes = directoryBytes(File(context.applicationInfo.dataDir, "shared_prefs"))
+    val appData = internalFiles + cache + noBackup + codeCache + externalFiles + externalCache + databaseBytes + preferencesBytes
     val stat = StatFs(context.filesDir.absolutePath)
     return buildString {
         appendLine("PENYIMPANAN NSiO")
@@ -348,6 +351,9 @@ private fun appStorageDiagnostics(context: android.content.Context): String {
         appendLine("• File internal: ${formatMb(internalFiles)}")
         appendLine("• Cache internal: ${formatMb(cache)}")
         appendLine("• File tanpa backup: ${formatMb(noBackup)}")
+        appendLine("• Code cache: ${formatMb(codeCache)}")
+        appendLine("• Database: ${formatMb(databaseBytes)}")
+        appendLine("• Preferensi: ${formatMb(preferencesBytes)}")
         appendLine("• File eksternal aplikasi: ${formatMb(externalFiles)}")
         appendLine("• Cache eksternal: ${formatMb(externalCache)}")
         appendLine()
@@ -378,6 +384,11 @@ private fun permissionDiagnostics(context: android.content.Context): String {
         ) {
             appendLine("Akses semua file: ${if (Environment.isExternalStorageManager()) "DIIZINKAN" else "BELUM DIIZINKAN"}")
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            "android.permission.REQUEST_INSTALL_PACKAGES" in requested
+        ) {
+            appendLine("Izin memasang paket: ${if (context.packageManager.canRequestPackageInstalls()) "DIIZINKAN" else "BELUM DIIZINKAN"}")
+        }
         appendLine("Internet dan status jaringan: izin normal, tidak memakai dialog runtime.")
         append("Hanya izin yang dideklarasikan aplikasi yang ditampilkan.")
     }
@@ -388,7 +399,7 @@ private fun playerDiagnostics(mediaTitle: String?, state: com.example.player.Pla
         state.error != null -> "ERROR"
         state.isBuffering -> "BUFFERING"
         state.isPlaying -> "PLAYING"
-        mediaTitle != null -> "PAUSED / READY"
+        state.title.isNotBlank() -> "PAUSED / READY"
         else -> "IDLE"
     }
     fun time(ms: Long): String {
