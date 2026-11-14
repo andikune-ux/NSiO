@@ -73,12 +73,6 @@ fun BottomNavGlassBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidGlass(
-                    shape = RoundedCornerShape(22.dp),
-                    alpha = 0.16f,
-                    borderAlpha = 0.18f,
-                    elevation = 8.dp
-                )
                 .padding(horizontal = 5.dp, vertical = 3.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {

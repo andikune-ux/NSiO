@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -200,45 +201,33 @@ class MainActivity : ComponentActivity() {
                                 val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
 
                                 if (isLandscape) {
-                                    // Landscape Layout: Sleek Left Vertical Liquid Glass Capsule
-                                    Row(modifier = Modifier.fillMaxSize()) {
+                                    // TV: navigation floats above full-screen content with no gray backplate.
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        AppNavContent(
+                                            destination = currentNav,
+                                            viewModel = viewModel,
+                                            onNavigate = { currentNav = it }
+                                        )
                                         VerticalNavToolbar(
                                             currentDestination = currentNav,
                                             onNavigate = { dest -> currentNav = dest },
                                             activeProfileName = activeProfile?.name ?: "NSiO",
-                                            activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬"
+                                            activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬",
+                                            modifier = Modifier.align(Alignment.CenterStart)
                                         )
-
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .fillMaxSize()
-                                        ) {
-                                            AppNavContent(
-                                                destination = currentNav,
-                                                viewModel = viewModel,
-                                                onNavigate = { currentNav = it }
-                                            )
-                                        }
                                     }
                                 } else {
-                                    // Portrait Layout: Full Width Content + Floating Bottom Glass Capsule Bar
-                                    Column(modifier = Modifier.fillMaxSize()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .fillMaxSize()
-                                        ) {
-                                            AppNavContent(
-                                                destination = currentNav,
-                                                viewModel = viewModel,
-                                                onNavigate = { currentNav = it }
-                                            )
-                                        }
-
+                                    // HP: bottom navigation floats above full-screen content with no gray backplate.
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        AppNavContent(
+                                            destination = currentNav,
+                                            viewModel = viewModel,
+                                            onNavigate = { currentNav = it }
+                                        )
                                         BottomNavGlassBar(
                                             currentDestination = currentNav,
-                                            onNavigate = { dest -> currentNav = dest }
+                                            onNavigate = { dest -> currentNav = dest },
+                                            modifier = Modifier.align(Alignment.BottomCenter)
                                         )
                                     }
                                 }

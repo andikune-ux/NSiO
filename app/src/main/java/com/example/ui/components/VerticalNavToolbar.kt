@@ -75,12 +75,6 @@ fun VerticalNavToolbar(
             .fillMaxHeight()
             .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)
             .width(68.dp)
-            .liquidGlass(
-                shape = RoundedCornerShape(18.dp),
-                alpha = 0.15f,
-                borderAlpha = 0.18f,
-                elevation = 8.dp
-            )
             .testTag("vertical_nav_toolbar")
     ) {
         Column(
@@ -173,13 +167,6 @@ fun VerticalNavToolbar(
             // Bottom Active Profile Glass Pill
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
-                    .border(
-                        0.8.dp,
-                        Brush.linearGradient(listOf(Color.White.copy(alpha = 0.25f), Color.Transparent)),
-                        RoundedCornerShape(10.dp)
-                    )
                     .padding(horizontal = 6.dp, vertical = 3.dp),
                 contentAlignment = Alignment.Center
             ) {
