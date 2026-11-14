@@ -96,14 +96,14 @@ fun ExtensionScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(14.dp)
+            .padding(10.dp)
             .testTag("extension_screen")
     ) {
         // Header Title
-        Column(modifier = Modifier.padding(bottom = 10.dp)) {
+        Column(modifier = Modifier.padding(bottom = 8.dp)) {
             Text(
                 text = "Menu Extension",
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -119,24 +119,24 @@ fun ExtensionScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .liquidGlass(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(18.dp),
                     alpha = 0.12f,
-                    borderAlpha = 0.35f,
-                    elevation = 6.dp
+                    borderAlpha = 0.22f,
+                    elevation = 3.dp
                 )
-                .padding(4.dp)
+                .padding(3.dp)
         ) {
             ScrollableTabRow(
                 modifier = Modifier.focusGroup(),
                 selectedTabIndex = selectedTabIndex,
-                edgePadding = 6.dp,
+                edgePadding = 3.dp,
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.primary,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
                         color = MaterialTheme.colorScheme.primary,
-                        height = 3.dp
+                        height = 2.dp
                     )
                 },
                 divider = {}
@@ -154,32 +154,32 @@ fun ExtensionScreen(
                         text = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                             ) {
                                 if (index == 2) {
                                     Icon(
                                         imageVector = if (isServerUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
                                         contentDescription = "Status Kunci",
                                         tint = if (isServerUnlocked) MaterialTheme.colorScheme.primary else AccentRed,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(12.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
                                 Text(
                                     text = title,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTabIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
-                        modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Tab Contents
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {

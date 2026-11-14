@@ -73,32 +73,32 @@ fun VerticalNavToolbar(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .padding(start = 10.dp, top = 8.dp, bottom = 8.dp, end = 6.dp)
-            .width(76.dp)
+            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)
+            .width(68.dp)
             .liquidGlass(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(18.dp),
                 alpha = 0.15f,
-                borderAlpha = 0.24f,
-                elevation = 14.dp
+                borderAlpha = 0.18f,
+                elevation = 8.dp
             )
             .testTag("vertical_nav_toolbar")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(vertical = 12.dp, horizontal = 4.dp),
+                .padding(vertical = 8.dp, horizontal = 3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Brand Logo Header (Liquid Crystal Orb)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = 4.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, Color(0xFFA855F7))
@@ -117,7 +117,7 @@ fun VerticalNavToolbar(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "NSiO Logo",
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(3.dp))
@@ -132,7 +132,7 @@ fun VerticalNavToolbar(
 
             // Navigation Items (Top to Bottom: 1. Beranda, 2. Extension, 3. Pengaturan, 4. Profil)
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f, fill = false).focusGroup()
             ) {
@@ -221,14 +221,14 @@ private fun NavToolbarGlassItem(
 
     Column(
         modifier = Modifier
-            .width(66.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .width(60.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(bgBrush)
-            .then(if (isSelected) Modifier.neumorphicInset(RoundedCornerShape(14.dp), depth = 4.dp) else Modifier)
+            .then(if (isSelected) Modifier.neumorphicInset(RoundedCornerShape(12.dp), depth = 3.dp) else Modifier)
             .then(
                 if (isFocused) {
                     Modifier.border(
-                        1.5.dp,
+                        1.dp,
                         Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
                         RoundedCornerShape(14.dp)
                     )
@@ -248,7 +248,7 @@ private fun NavToolbarGlassItem(
                 role = Role.Button
                 selected = isSelected
             }
-            .padding(vertical = 7.dp, horizontal = 2.dp)
+            .padding(vertical = 5.dp, horizontal = 1.dp)
             .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -256,7 +256,7 @@ private fun NavToolbarGlassItem(
         if (avatarEmoji != null && avatarEmoji.isNotEmpty() && title == "Profil") {
             Text(
                 text = avatarEmoji,
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 textAlign = TextAlign.Center
             )
         } else {
@@ -264,10 +264,10 @@ private fun NavToolbarGlassItem(
                 imageVector = icon,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(19.dp)
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(1.dp))
         Text(
             text = title,
             fontSize = 9.sp,

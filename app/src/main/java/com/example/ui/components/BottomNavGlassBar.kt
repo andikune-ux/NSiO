@@ -67,19 +67,19 @@ fun BottomNavGlassBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .liquidGlass(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(22.dp),
                     alpha = 0.16f,
-                    borderAlpha = 0.24f,
-                    elevation = 16.dp
+                    borderAlpha = 0.18f,
+                    elevation = 8.dp
                 )
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 5.dp, vertical = 3.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {
             Row(
@@ -137,7 +137,7 @@ private fun BottomNavItem(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.1f else if (isSelected) 1.04f else 1.0f,
+        targetValue = if (isFocused) 1.04f else if (isSelected) 1.02f else 1.0f,
         label = "bottom_nav_scale"
     )
 
@@ -162,7 +162,7 @@ private fun BottomNavItem(
     Box(
         modifier = Modifier
             .scale(scale)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -180,7 +180,7 @@ private fun BottomNavItem(
                 role = Role.Button
                 selected = isSelected
             }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
@@ -190,7 +190,7 @@ private fun BottomNavItem(
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .then(
                         if (isSelected) Modifier.neumorphicInset(CircleShape, depth = 4.dp)
@@ -202,13 +202,13 @@ private fun BottomNavItem(
                     imageVector = if (isSelected) selectedIcon else unselectedIcon,
                     contentDescription = title,
                     tint = iconColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(1.dp))
             Text(
                 text = title,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = textColor
             )
