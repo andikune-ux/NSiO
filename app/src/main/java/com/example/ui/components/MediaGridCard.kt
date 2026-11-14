@@ -112,54 +112,20 @@ fun MediaGridCard(
                         )
                 )
 
-                // Top Badges
-                Row(
+                // Favorite control: compact icon only, without an outer pill/background.
+                IconButton(
+                    onClick = { onFavorite?.invoke() ?: onLongClick?.invoke() },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(22.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                when (item.type) {
-                                    "STREAM" -> AccentRed.copy(alpha = 0.85f)
-                                    "PHOTO" -> Color(0xFFA855F7).copy(alpha = 0.85f)
-                                    else -> CyanPrimary.copy(alpha = 0.9f)
-                                }
-                            )
-                            .border(
-                                0.6.dp,
-                                Brush.linearGradient(listOf(Color.White.copy(alpha = 0.7f), Color.Transparent)),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = item.type,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.Black
-                        )
-                    }
-
-                    // Favorite Button / Badge
-                    IconButton(
-                        onClick = { onFavorite?.invoke() ?: onLongClick?.invoke() },
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-                    ) {
-                        Icon(
-                            imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = "Favorit",
-                            tint = if (item.isFavorite) AccentRed else Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Favorit",
+                        tint = if (item.isFavorite) AccentRed else Color.White.copy(alpha = 0.92f),
+                        modifier = Modifier.size(13.dp)
+                    )
                 }
 
                 // Center Liquid Crystal Play Orb
