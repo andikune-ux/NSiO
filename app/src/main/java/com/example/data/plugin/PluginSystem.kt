@@ -253,11 +253,15 @@ class PluginManager(private val context: Context) {
             if (entry.fileSize > 0L) require(total == entry.fileSize) {
                 "Ukuran file tidak cocok dengan metadata repository."
             }
-            val expectedHash = entry.fileHash.trim()
+            val rawHash = entry.fileHash.trim()
+            val expectedHash = rawHash
                 .removePrefix("sha256:")
                 .removePrefix("sha256-")
                 .trim()
-            if (expectedHash.matches(Regex("(?i)[a-f0-9]{64}"))) {
+            if (rawHash.isNotBlank()) {
+                require(expectedHash.matches(Regex("(?i)[a-f0-9]{64}"))) {
+                    "Format fileHash repository tidak didukung; hanya SHA-256 yang diterima."
+                }
                 val sha256 = java.security.MessageDigest.getInstance("SHA-256")
                 temporary.inputStream().buffered().use { input ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -273,6 +277,14 @@ class PluginManager(private val context: Context) {
                 }
             }
             java.util.zip.ZipFile(temporary).use { zip ->
+                val entryNames = HashSet<String>()
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val archiveEntry = entries.nextElement()
+                    require(entryNames.add(archiveEntry.name)) {
+                        "Arsip .cs3 memiliki entri ZIP duplikat: ${archiveEntry.name}"
+                    }
+                }
                 val manifestEntry = zip.getEntry("manifest.json")
                     ?: throw IllegalArgumentException("Arsip .cs3 tidak memiliki manifest.json.")
                 val dexEntry = zip.getEntry("classes.dex")
@@ -302,6 +314,25 @@ class PluginManager(private val context: Context) {
                 val pluginClassName = JSONObject(manifestText).optString("pluginClassName").trim()
                 require(pluginClassName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*(\\\\.[A-Za-z_$][A-Za-z0-9_$]*)+"))) {
                     "manifest.json tidak memiliki pluginClassName yang valid."
+                }
+
+                // ZIP central-directory sizes are attacker-controlled metadata. Count the
+                // actual decompressed DEX bytes as well, so a forged size cannot bypass
+                // the expansion limit or trigger an unbounded allocation during install.
+                var dexTotal = 0L
+                zip.getInputStream(dexEntry).buffered().use { input ->
+                    val buffer = ByteArray(32 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        dexTotal += count
+                        require(dexTotal <= MAX_CLOUDSTREAM_ARTIFACT_BYTES) {
+                            "Data classes.dex hasil ekstraksi melebihi batas 128 MB."
+                        }
+                    }
+                }
+                require(dexTotal == dexEntry.size) {
+                    "Ukuran classes.dex aktual tidak cocok dengan metadata ZIP."
                 }
             }
             if (!temporary.renameTo(destination)) {
