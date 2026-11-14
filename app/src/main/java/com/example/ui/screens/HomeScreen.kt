@@ -154,7 +154,7 @@ fun HomeScreen(
                 start = if (settings.displayMode == "TV") 84.dp else 12.dp,
                 end = 12.dp,
                 top = 8.dp,
-                bottom = if (settings.displayMode == "HP") 82.dp else 8.dp
+                bottom = if (settings.displayMode == "HP") 0.dp else 8.dp
             )
             .testTag("home_screen")
     ) {
@@ -463,7 +463,7 @@ fun HomeScreen(
                 } else {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(columns),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp),
+                        contentPadding = PaddingValues(top = 4.dp, bottom = if (isPhoneLayout) 96.dp else 80.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()

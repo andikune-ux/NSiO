@@ -67,8 +67,8 @@ fun BottomNavGlassBar(
 ) {
     Box(
         modifier = modifier
-            .width(236.dp)
-            .padding(horizontal = 0.dp, vertical = 0.dp),
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -80,7 +80,7 @@ fun BottomNavGlassBar(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().focusGroup(),
-                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BottomNavItem(
@@ -89,6 +89,7 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Home,
                     isSelected = currentDestination == NavDestination.HOME,
                     testTag = "bottom_nav_home",
+                    modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.HOME) }
                 )
                 BottomNavItem(
@@ -97,6 +98,7 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Extension,
                     isSelected = currentDestination == NavDestination.EXTENSION,
                     testTag = "bottom_nav_extension",
+                    modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.EXTENSION) }
                 )
                 BottomNavItem(
@@ -105,6 +107,7 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Settings,
                     isSelected = currentDestination == NavDestination.SETTINGS,
                     testTag = "bottom_nav_settings",
+                    modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.SETTINGS) }
                 )
                 BottomNavItem(
@@ -113,6 +116,7 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Person,
                     isSelected = currentDestination == NavDestination.PROFILE,
                     testTag = "bottom_nav_profile",
+                    modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.PROFILE) }
                 )
             }
@@ -127,7 +131,8 @@ private fun BottomNavItem(
     unselectedIcon: ImageVector,
     isSelected: Boolean,
     testTag: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -156,7 +161,7 @@ private fun BottomNavItem(
     )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
@@ -181,7 +186,8 @@ private fun BottomNavItem(
                 role = Role.Button
                 selected = isSelected
             }
-            .size(48.dp)
+            .fillMaxWidth()
+            .height(48.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
