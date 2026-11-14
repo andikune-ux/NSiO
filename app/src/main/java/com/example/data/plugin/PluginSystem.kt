@@ -251,9 +251,10 @@ class PluginManager(private val context: Context) {
                 }
             }
             require(total > 0L) { "File plugin kosong." }
-            if (entry.fileSize > 0L) require(total == entry.fileSize) {
-                "Ukuran file tidak cocok dengan metadata repository."
-            }
+            // Repository fileSize is advisory and can become stale when an artifact
+            // is rebuilt or mirrored. Enforce the actual download limit above; use
+            // SHA-256 (when supplied) as the authoritative integrity check below.
+            // A metadata-size mismatch alone must not block an otherwise valid .cs3.
             val rawHash = entry.fileHash.trim()
             val expectedHash = rawHash
                 .removePrefix("sha256:")
