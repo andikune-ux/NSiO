@@ -193,7 +193,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.05.dp)
+                    .height(46.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color.White.copy(alpha = if (isDark) 0.18f else 0.48f))
                     .drawBehind {
