@@ -11,12 +11,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -282,63 +284,54 @@ fun SettingsScreen(
                                 }
                             }
 
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Button(
-                                    onClick = { viewModel.syncToCloud() },
-                                    enabled = !isSyncing,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.weight(1f).height(44.dp)
-                                ) {
-                                    if (isSyncing) {
-                                        CircularProgressIndicator(
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                val compact = maxWidth < 380.dp
+                                val syncButton: @Composable (Modifier) -> Unit = { buttonSize ->
+                                    Button(
+                                        onClick = { viewModel.syncToCloud() },
+                                        enabled = !isSyncing,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = buttonSize
+                                    ) {
+                                        if (isSyncing) CircularProgressIndicator(
                                             modifier = Modifier.size(16.dp),
                                             strokeWidth = 2.dp,
                                             color = MaterialTheme.colorScheme.onPrimary
-                                        )
+                                        ) else Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                    } else {
-                                        Icon(
-                                            Icons.Default.CloudUpload,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sinkronkan ke Cloud", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                     }
-                                    Text(
-                                        "Sinkronkan ke Cloud",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp
-                                    )
                                 }
-
-                                Button(
-                                    onClick = { viewModel.restoreFromCloud() },
-                                    enabled = !isSyncing,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.White.copy(alpha = 0.12f),
-                                        contentColor = MaterialTheme.colorScheme.primary
-                                    ),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.weight(1f).height(44.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.CloudDownload,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        "Pulihkan dari Cloud",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp
-                                    )
+                                val restoreButton: @Composable (Modifier) -> Unit = { buttonSize ->
+                                    Button(
+                                        onClick = { viewModel.restoreFromCloud() },
+                                        enabled = !isSyncing,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.White.copy(alpha = 0.12f),
+                                            contentColor = MaterialTheme.colorScheme.primary
+                                        ),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = buttonSize
+                                    ) {
+                                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Pulihkan dari Cloud", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                                if (compact) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        syncButton(Modifier.fillMaxWidth().heightIn(min = 48.dp))
+                                        restoreButton(Modifier.fillMaxWidth().heightIn(min = 48.dp))
+                                    }
+                                } else {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                        syncButton(Modifier.weight(1f).heightIn(min = 48.dp))
+                                        restoreButton(Modifier.weight(1f).heightIn(min = 48.dp))
+                                    }
                                 }
                             }
 
@@ -349,7 +342,7 @@ fun SettingsScreen(
                                     contentColor = AccentRed
                                 ),
                                 shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth().height(40.dp)
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Logout,
@@ -398,7 +391,7 @@ fun SettingsScreen(
                                 shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("btn_google_signin")
                             ) {
                                 Icon(
@@ -426,27 +419,24 @@ fun SettingsScreen(
                 title = "Pengaturan Bahasa",
                 subtitle = "Pilih bahasa antarmuka aplikasi Net Stream iO"
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val languages = listOf("ID" to "Bahasa Indonesia", "EN" to "English")
-                    languages.forEach { (code, label) ->
-                        val isSelected = settings.language == code
-                        Button(
-                            onClick = { viewModel.updateSettings(settings.copy(language = code)) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.weight(1f).height(44.dp)
-                        ) {
-                            Text(
-                                label,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                val languages = listOf("ID" to "Bahasa Indonesia", "EN" to "English")
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val compact = maxWidth < 380.dp
+                    if (compact) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            languages.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.language == code, Modifier.fillMaxWidth()) {
+                                    viewModel.updateSettings(settings.copy(language = code))
+                                }
+                            }
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            languages.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.language == code, Modifier.weight(1f)) {
+                                    viewModel.updateSettings(settings.copy(language = code))
+                                }
+                            }
                         }
                     }
                 }
@@ -460,27 +450,23 @@ fun SettingsScreen(
                 title = "Pengaturan Tema",
                 subtitle = "Pilih gaya visualisasi tema antarmuka"
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val themes = listOf("AUTO" to "Otomatis", "DARK" to "Gelap Glass", "LIGHT" to "Terang")
-                    themes.forEach { (code, label) ->
-                        val isSelected = settings.themeMode == code
-                        Button(
-                            onClick = { viewModel.updateSettings(settings.copy(themeMode = code)) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.weight(1f).height(44.dp)
-                        ) {
-                            Text(
-                                label,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                val themes = listOf("AUTO" to "Otomatis", "DARK" to "Gelap Glass", "LIGHT" to "Terang")
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth < 380.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            themes.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.themeMode == code, Modifier.fillMaxWidth()) {
+                                    viewModel.updateSettings(settings.copy(themeMode = code))
+                                }
+                            }
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            themes.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.themeMode == code, Modifier.weight(1f)) {
+                                    viewModel.updateSettings(settings.copy(themeMode = code))
+                                }
+                            }
                         }
                     }
                 }
@@ -494,27 +480,23 @@ fun SettingsScreen(
                 title = "Pengaturan Tampilan & Orientasi",
                 subtitle = "Optimasi tata letak remote TV D-pad (Landscape) atau sentuhan HP (Portrait)"
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val modes = listOf("AUTO" to "Otomatis", "TV" to "TV Landscape", "HP" to "HP Portrait")
-                    modes.forEach { (code, label) ->
-                        val isSelected = settings.displayMode == code
-                        Button(
-                            onClick = { viewModel.updateSettings(settings.copy(displayMode = code)) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.weight(1f).height(44.dp)
-                        ) {
-                            Text(
-                                label,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                val modes = listOf("AUTO" to "Otomatis", "TV" to "TV Landscape", "HP" to "HP Portrait")
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth < 380.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            modes.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.displayMode == code, Modifier.fillMaxWidth()) {
+                                    viewModel.updateSettings(settings.copy(displayMode = code))
+                                }
+                            }
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            modes.forEach { (code, label) ->
+                                SettingsChoiceButton(label, settings.displayMode == code, Modifier.weight(1f)) {
+                                    viewModel.updateSettings(settings.copy(displayMode = code))
+                                }
+                            }
                         }
                     }
                 }
@@ -575,7 +557,7 @@ fun SettingsScreen(
             ) {
                 Button(
                     onClick = { showServerPinDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -601,7 +583,7 @@ fun SettingsScreen(
                     Text("Lokasi APK: Penyimpanan internal/NSiO/Pembaruan Aplikasi", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!updateStorageAllowed) {
                         Button(onClick = { runCatching { context.startActivity(AppUpdateManager.storagePermissionIntent(context)) }.onFailure { updateMessage = "Tidak dapat membuka pengaturan izin penyimpanan." } },
-                            modifier = Modifier.fillMaxWidth().height(42.dp), shape = RoundedCornerShape(14.dp)) {
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(14.dp)) {
                             Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Izinkan akses folder NSiO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -848,7 +830,7 @@ fun SettingsScreen(
                                     AppUpdateManager.InstallResult.FAILED -> updateMessage = "Gagal membuka installer Android."
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         ) { Text("INSTALL SEKARANG") }
                         Button(onClick = { showUpdateDialog = false }, modifier = Modifier.fillMaxWidth()) { Text("TUTUP") }
                     }
@@ -993,6 +975,33 @@ private fun ServerPinChangeDialog(
                 ) { Text(if (verified) "Simpan" else "Verifikasi") }
             }
         }
+    }
+}
+
+
+@Composable
+private fun SettingsChoiceButton(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
