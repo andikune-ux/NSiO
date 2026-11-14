@@ -37,9 +37,8 @@ internal object CloudStreamArchivePolicy {
             require(
                 name.isNotBlank() &&
                     !name.startsWith("/") &&
-                    !name.startsWith("\\\\") &&
-                    '\\\\' !in name &&
-                    '\\u0000' !in name &&
+                    !name.contains(92.toChar()) &&
+                    !name.contains(0.toChar()) &&
                     name.split('/').none { it == ".." || it.isBlank() && it != name.substringAfterLast('/') }
             ) {
                 "Arsip .cs3 memiliki nama/path entri yang tidak aman."
