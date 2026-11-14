@@ -513,7 +513,7 @@ private fun FileSourceTab(
                         ) {
                             Text(
                                 "Tipe: Video",
-                                color = if (!isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                color = if (!isPhoto) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (!isPhoto) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp
                             )
@@ -529,7 +529,7 @@ private fun FileSourceTab(
                         ) {
                             Text(
                                 "Tipe: Foto",
-                                color = if (isPhoto) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                color = if (isPhoto) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isPhoto) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 12.sp
                             )
@@ -566,7 +566,7 @@ private fun FileSourceTab(
                         Icon(
                             Icons.Default.Add,
                             contentDescription = null,
-                            tint = Color.Black,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -630,7 +630,7 @@ private fun ServerSourceTab(
                             Icon(
                                 Icons.Default.Storage,
                                 contentDescription = null,
-                                tint = Color.Black,
+                                tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }

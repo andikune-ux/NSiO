@@ -116,7 +116,7 @@ fun VerticalNavToolbar(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "NSiO Logo",
-                        tint = Color.Black,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }

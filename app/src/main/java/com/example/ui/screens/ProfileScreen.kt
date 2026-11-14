@@ -114,7 +114,7 @@ fun ProfileScreen(
                     onClick = { showAddDialog = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.Black
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.height(44.dp)
@@ -122,13 +122,13 @@ fun ProfileScreen(
                     Icon(
                         Icons.Default.Add,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         "Tambah Profil",
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
@@ -213,7 +213,7 @@ fun ProfileScreen(
                                             text = (user.displayName ?: "U").take(1).uppercase(),
                                             fontWeight = FontWeight.Black,
                                             fontSize = 18.sp,
-                                            color = Color.Black
+                                            color = MaterialTheme.colorScheme.onPrimary
                                         )
                                     }
                                 }
@@ -237,7 +237,7 @@ fun ProfileScreen(
                                     enabled = !isSyncing,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = Color.Black
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
                                     ),
                                     shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier.height(40.dp)
@@ -245,7 +245,7 @@ fun ProfileScreen(
                                     if (isSyncing) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(14.dp),
-                                            color = Color.Black,
+                                            color = MaterialTheme.colorScheme.onPrimary,
                                             strokeWidth = 2.dp
                                         )
                                     } else {
@@ -282,7 +282,7 @@ fun ProfileScreen(
                                 onClick = { viewModel.signInWithGoogle() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = Color.Black
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 ),
                                 shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
@@ -358,7 +358,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
+                                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant)
                                 .border(
                                     1.dp,
                                     if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
@@ -388,7 +388,7 @@ fun ProfileScreen(
                                         Text(
                                             "Aktif",
                                             fontSize = 9.sp,
-                                            color = Color.Black,
+                                            color = MaterialTheme.colorScheme.onPrimary,
                                             fontWeight = FontWeight.Black
                                         )
                                     }
@@ -428,7 +428,7 @@ fun ProfileScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
-                                Text("Atur PIN", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Atur PIN", color = MaterialTheme.colorScheme.onPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (!isActive) {
@@ -443,7 +443,7 @@ fun ProfileScreen(
                                         viewModel.switchProfile(p)
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.height(38.dp)
                             ) {
@@ -517,14 +517,14 @@ fun ProfileScreen(
                         enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.Black
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.height(42.dp)
                     ) {
                         Text(
                             if (isBackupInProgress) "Backup sedang berjalan..." else "Mulai Backup Profil Ini",
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
@@ -584,14 +584,14 @@ fun ProfileScreen(
                         enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.Black
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.height(42.dp)
                     ) {
                         Text(
                             if (isBackupInProgress) "Backup sedang berjalan..." else "Buat Full Backup Terpadu",
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
@@ -717,7 +717,7 @@ private fun AddProfileDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant)
                                 .border(
                                     1.dp,
                                     if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
@@ -745,7 +745,7 @@ private fun AddProfileDialog(
                         checked = isPinEnabled,
                         onCheckedChange = { isPinEnabled = it },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary
                         )
                     )
@@ -797,12 +797,12 @@ private fun AddProfileDialog(
                         enabled = name.isNotBlank() && (!isPinEnabled || pin.matches(Regex("\\d{4}"))),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.Black
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
-                        Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("Simpan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }
@@ -874,7 +874,7 @@ private fun PinResetDialog(
                         enabled = pin.matches(Regex("\\d{4}")) && pin == confirmation,
                         modifier = Modifier.weight(1f).height(42.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) { Text("Simpan", color = Color.Black, fontWeight = FontWeight.Bold) }
+                    ) { Text("Simpan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
                 }
             }
         }

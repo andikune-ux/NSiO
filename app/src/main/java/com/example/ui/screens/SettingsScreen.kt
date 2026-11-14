@@ -246,7 +246,7 @@ fun SettingsScreen(
                                             text = (user.displayName ?: "U").take(1).uppercase(),
                                             fontWeight = FontWeight.Black,
                                             fontSize = 18.sp,
-                                            color = Color.Black
+                                            color = MaterialTheme.colorScheme.onPrimary
                                         )
                                     }
                                 }
@@ -289,7 +289,7 @@ fun SettingsScreen(
                                     enabled = !isSyncing,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = Color.Black
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
                                     ),
                                     shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier.weight(1f).height(44.dp)
@@ -298,7 +298,7 @@ fun SettingsScreen(
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(16.dp),
                                             strokeWidth = 2.dp,
-                                            color = Color.Black
+                                            color = MaterialTheme.colorScheme.onPrimary
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                     } else {
@@ -343,7 +343,7 @@ fun SettingsScreen(
                             Button(
                                 onClick = { viewModel.signOut() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White.copy(alpha = 0.08f),
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                                     contentColor = AccentRed
                                 ),
                                 shape = RoundedCornerShape(16.dp),
@@ -391,7 +391,7 @@ fun SettingsScreen(
                                 onClick = { viewModel.signInWithGoogle() },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = Color.Black
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 ),
                                 shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
@@ -434,14 +434,14 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(language = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
                         ) {
                             Text(
                                 label,
-                                color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
@@ -468,14 +468,14 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(themeMode = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
                         ) {
                             Text(
                                 label,
-                                color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
@@ -502,14 +502,14 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.updateSettings(settings.copy(displayMode = code)) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.10f)
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
                         ) {
                             Text(
                                 label,
-                                color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
@@ -544,7 +544,7 @@ fun SettingsScreen(
                                     Box(
                                         modifier = Modifier.size(42.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
+                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                                             .border(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                             .clickable {
                                                 if (isPhone) viewModel.updateSettings(settings.copy(gridColumnsPhone = cols))
@@ -554,7 +554,7 @@ fun SettingsScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("$cols", fontWeight = FontWeight.Bold, fontSize = 13.sp,
-                                            color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface)
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
@@ -690,11 +690,11 @@ fun SettingsScreen(
                                 }
                             },
                             enabled = !updateChecking && updateDownloadId == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.weight(1f).height(44.dp)
                         ) {
-                            if (updateChecking) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.Black)
+                            if (updateChecking) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                             else Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(if (updateChecking) "Memeriksa..." else "Cek Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -736,7 +736,7 @@ fun SettingsScreen(
                                         updateMessage = "Gagal membuka installer Android."
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         ) {

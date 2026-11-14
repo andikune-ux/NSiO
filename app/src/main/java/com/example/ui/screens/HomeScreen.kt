@@ -121,7 +121,7 @@ fun HomeScreen(
     }
 
     val isDark = MaterialTheme.colorScheme.background.run { (red + green + blue) < 1.5f }
-    val accentColor = if (isDark) CyanPrimary else Color(0xFF0284C7)
+    val accentColor = MaterialTheme.colorScheme.primary
 
     val filteredList = mediaList.filter { item ->
         val matchesServerAccess = item.sourceType != "SERVER" || isServerUnlocked
@@ -434,7 +434,7 @@ fun HomeScreen(
                                     onClick = onNavigateToExtension,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = accentColor,
-                                        contentColor = if (isDark) Color.Black else Color.White
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
                                     ),
                                     shape = RoundedCornerShape(20.dp),
                                     modifier = Modifier
@@ -834,7 +834,7 @@ fun HomeScreen(
                             Icon(
                                 Icons.Default.Extension,
                                 contentDescription = "Buka pilihan playlist",
-                                tint = if (isDark) Color.Black else Color.White,
+                                tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(25.dp)
                             )
                         }
