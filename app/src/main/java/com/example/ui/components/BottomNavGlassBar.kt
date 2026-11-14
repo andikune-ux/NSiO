@@ -2,12 +2,12 @@ package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -219,9 +219,7 @@ private fun BottomNavItem(
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if ((MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f)
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                else Color.White
+                Color.White
             )
             .clickable(
                 interactionSource = interactionSource,

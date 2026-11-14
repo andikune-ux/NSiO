@@ -2,7 +2,11 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -68,9 +72,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +87,6 @@ import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
 import com.example.ui.components.PinDialog
-import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 
@@ -121,6 +126,15 @@ fun HomeScreen(
     }
 
     val isDark = MaterialTheme.colorScheme.background.run { (red + green + blue) < 1.5f }
+    val headerReflection = rememberInfiniteTransition(label = "header_glass_reflection")
+    val headerReflectionPosition by headerReflection.animateFloat(
+        initialValue = -0.85f,
+        targetValue = 1.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000, easing = LinearEasing)
+        ),
+        label = "header_glass_reflection_position"
+    )
     val accentColor = MaterialTheme.colorScheme.primary
 
     val filteredList = mediaList.filter { item ->
@@ -176,6 +190,33 @@ fun HomeScreen(
             // Nama Aplikasi + Search Bar di Tengah + Tombol TV & Cloud di Kanan
             // Filter disembunyikan agar hemat tempat & grid video jauh lebih luas
             // ==========================================
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.05.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = if (isDark) 0.18f else 0.48f))
+                    .drawBehind {
+                        val sweepX = size.width * headerReflectionPosition
+                        drawRoundRect(
+                            brush = Brush.linearGradient(
+                                colorStops = arrayOf(
+                                    0.00f to Color.Transparent,
+                                    0.28f to Color(0xFF72D8FF).copy(alpha = 0.13f),
+                                    0.48f to Color(0xFFB9A0FF).copy(alpha = 0.17f),
+                                    0.66f to Color(0xFFFFC6E8).copy(alpha = 0.12f),
+                                    1.00f to Color.Transparent
+                                ),
+                                start = Offset(sweepX - size.width * 0.58f, 0f),
+                                end = Offset(sweepX + size.width * 0.58f, size.height)
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
+                        )
+                    }
+                    .border(1.dp, Color.White.copy(alpha = 0.62f), RoundedCornerShape(24.dp))
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -198,12 +239,7 @@ fun HomeScreen(
                     )
                     Box(
                         modifier = Modifier
-                            .liquidGlass(
-                                shape = RoundedCornerShape(10.dp),
-                                alpha = if (isDark) 0.15f else 0.70f,
-                                borderAlpha = 0.35f,
-                                elevation = 2.dp
-                            )
+                            
                             .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(10.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
@@ -224,12 +260,7 @@ fun HomeScreen(
                         .widthIn(min = 48.dp, max = 360.dp)
                         .height(36.dp)
                         .padding(horizontal = 6.dp)
-                        .liquidGlass(
-                            shape = RoundedCornerShape(20.dp),
-                            alpha = if (searchQuery.isNotEmpty()) (if (isDark) 0.22f else 0.95f) else (if (isDark) 0.10f else 0.85f),
-                            borderAlpha = if (searchQuery.isNotEmpty()) 0.65f else 0.30f,
-                            elevation = 3.dp
-                        )
+                        
                         .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(20.dp))
                         .clip(RoundedCornerShape(20.dp))
                         .clickable { isSearchExpanded = true }
@@ -292,12 +323,7 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .height(34.dp)
-                            .liquidGlass(
-                                shape = RoundedCornerShape(18.dp),
-                                alpha = if (isDark) 0.12f else 0.85f,
-                                borderAlpha = 0.3f,
-                                elevation = 3.dp
-                            )
+                            
                             .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
                             .clickable { viewModel.toggleDisplayMode() }
@@ -330,12 +356,7 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .height(34.dp)
-                            .liquidGlass(
-                                shape = RoundedCornerShape(18.dp),
-                                alpha = if (isDark) 0.14f else 0.85f,
-                                borderAlpha = 0.35f,
-                                elevation = 3.dp
-                            )
+                            
                             .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
                             .clickable {
