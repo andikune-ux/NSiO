@@ -253,10 +253,21 @@ class PluginManager(private val context: Context) {
             if (entry.fileSize > 0L) require(total == entry.fileSize) {
                 "Ukuran file tidak cocok dengan metadata repository."
             }
-            val expectedHash = entry.fileHash.trim().removePrefix("sha256:")
+            val expectedHash = entry.fileHash.trim()
+                .removePrefix("sha256:")
+                .removePrefix("sha256-")
+                .trim()
             if (expectedHash.matches(Regex("(?i)[a-f0-9]{64}"))) {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(temporary.readBytes()).joinToString("") { "%02x".format(it) }
+                val sha256 = java.security.MessageDigest.getInstance("SHA-256")
+                temporary.inputStream().buffered().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        sha256.update(buffer, 0, count)
+                    }
+                }
+                val digest = sha256.digest().joinToString("") { "%02x".format(it) }
                 require(digest.equals(expectedHash, ignoreCase = true)) {
                     "Verifikasi SHA-256 gagal. File plugin ditolak."
                 }
@@ -264,12 +275,23 @@ class PluginManager(private val context: Context) {
             java.util.zip.ZipFile(temporary).use { zip ->
                 val manifestEntry = zip.getEntry("manifest.json")
                     ?: throw IllegalArgumentException("Arsip .cs3 tidak memiliki manifest.json.")
-                require(zip.getEntry("classes.dex") != null) {
-                    "Arsip .cs3 tidak memiliki classes.dex."
+                val dexEntry = zip.getEntry("classes.dex")
+                    ?: throw IllegalArgumentException("Arsip .cs3 tidak memiliki classes.dex.")
+                require(!manifestEntry.isDirectory && manifestEntry.size in 1..(64L * 1024L)) {
+                    "Ukuran manifest.json tidak valid."
                 }
-                val manifestText = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                require(!dexEntry.isDirectory && dexEntry.size in 1..MAX_CLOUDSTREAM_ARTIFACT_BYTES) {
+                    "Ukuran classes.dex tidak valid."
+                }
+                val manifestText = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { reader ->
+                    val text = reader.readText()
+                    require(text.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
+                        "manifest.json melebihi batas 64 KB."
+                    }
+                    text
+                }
                 val pluginClassName = JSONObject(manifestText).optString("pluginClassName").trim()
-                require(pluginClassName.isNotBlank() && pluginClassName.contains(".")) {
+                require(pluginClassName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*(\\\\.[A-Za-z_$][A-Za-z0-9_$]*)+"))) {
                     "manifest.json tidak memiliki pluginClassName yang valid."
                 }
             }
