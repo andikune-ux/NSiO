@@ -199,6 +199,99 @@ class PluginManager(private val context: Context) {
         updated
     }
 
+
+    /**
+     * Downloads and validates a CloudStream .cs3 archive into app-private storage.
+     * Artifact installation is separate from execution: no DEX code is run here.
+     */
+    suspend fun installCloudStreamPlugin(entry: CloudStreamPluginEntry): File = withContext(Dispatchers.IO) {
+        require(entry.status != 0) { "Plugin ini dinonaktifkan oleh repository." }
+        val uri = URI(entry.url)
+        require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()) {
+            "Artifact plugin wajib menggunakan URL HTTPS."
+        }
+        val safeName = entry.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            .take(80).ifBlank { throw IllegalArgumentException("Nama internal plugin tidak valid.") }
+        val root = File(context.filesDir, "cloudstream_plugins").canonicalFile
+        require(root.exists() || root.mkdirs()) { "Folder plugin tidak dapat dibuat." }
+        val destination = File(root, "${safeName}-${entry.version}.cs3").canonicalFile
+        require(destination.parentFile == root) { "Lokasi artifact tidak valid." }
+        val temporary = File(root, ".${safeName}-${UUID.randomUUID()}.download")
+        val connection = (URL(entry.url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 20_000
+            readTimeout = 30_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "NSiO/1.0")
+            setRequestProperty("Accept", "application/octet-stream")
+        }
+        try {
+            val code = connection.responseCode
+            require(code in 200..299) { "Unduhan plugin gagal: HTTP $code" }
+            require(connection.url.protocol.equals("https", ignoreCase = true)) {
+                "Unduhan dialihkan ke koneksi non-HTTPS."
+            }
+            require(connection.contentLengthLong <= MAX_CLOUDSTREAM_ARTIFACT_BYTES) {
+                "Ukuran plugin melebihi batas 128 MB."
+            }
+            var total = 0L
+            temporary.outputStream().buffered().use { output ->
+                connection.inputStream.buffered().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= MAX_CLOUDSTREAM_ARTIFACT_BYTES) {
+                            "Ukuran plugin melebihi batas 128 MB."
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            require(total > 0L) { "File plugin kosong." }
+            if (entry.fileSize > 0L) require(total == entry.fileSize) {
+                "Ukuran file tidak cocok dengan metadata repository."
+            }
+            val expectedHash = entry.fileHash.trim().removePrefix("sha256:")
+            if (expectedHash.matches(Regex("(?i)[a-f0-9]{64}"))) {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(temporary.readBytes()).joinToString("") { "%02x".format(it) }
+                require(digest.equals(expectedHash, ignoreCase = true)) {
+                    "Verifikasi SHA-256 gagal. File plugin ditolak."
+                }
+            }
+            java.util.zip.ZipFile(temporary).use { zip ->
+                val manifestEntry = zip.getEntry("manifest.json")
+                    ?: throw IllegalArgumentException("Arsip .cs3 tidak memiliki manifest.json.")
+                require(zip.getEntry("classes.dex") != null) {
+                    "Arsip .cs3 tidak memiliki classes.dex."
+                }
+                val manifestText = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val pluginClassName = JSONObject(manifestText).optString("pluginClassName").trim()
+                require(pluginClassName.isNotBlank() && pluginClassName.contains(".")) {
+                    "manifest.json tidak memiliki pluginClassName yang valid."
+                }
+            }
+            if (!temporary.renameTo(destination)) {
+                temporary.copyTo(destination, overwrite = true)
+                temporary.delete()
+            }
+            destination
+        } catch (error: Throwable) {
+            temporary.delete()
+            throw error
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    fun isCloudStreamPluginInstalled(entry: CloudStreamPluginEntry): Boolean {
+        val safeName = entry.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        val root = File(context.filesDir, "cloudstream_plugins").canonicalFile
+        val artifact = File(root, "${safeName}-${entry.version}.cs3").canonicalFile
+        return artifact.parentFile == root && artifact.isFile && artifact.length() > 0L
+    }
+
     suspend fun installPluginFromManifest(manifest: PluginManifest) = withContext(Dispatchers.IO) {
         require(manifest.name.isNotBlank()) { "Manifest plugin tidak memiliki nama" }
         if (_installedPlugins.value.none { it.manifest?.name == manifest.name && it.manifest?.url == manifest.url }) {

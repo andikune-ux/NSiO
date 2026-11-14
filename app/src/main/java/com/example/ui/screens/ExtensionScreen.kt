@@ -1004,6 +1004,11 @@ private fun PluginRepoTab(
                     ).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    var artifactInstalled by remember(entry.internalName, entry.version) {
+                        mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry))
+                    }
+                    var artifactBusy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                    var artifactMessage by remember(entry.internalName, entry.version) { mutableStateOf("") }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(entry.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                         Text(
@@ -1015,10 +1020,41 @@ private fun PluginRepoTab(
                             Text(entry.description, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                         }
                         Text(
-                            if (entry.status == 0) "Status: nonaktif" else "Metadata tersedia • runtime belum didukung",
+                            when {
+                                entry.status == 0 -> "Status: nonaktif"
+                                artifactInstalled -> "File .cs3 tersimpan • runtime belum aktif"
+                                else -> "Metadata tersedia • belum dipasang"
+                            },
                             fontSize = 9.sp,
                             color = if (entry.status == 0) AccentRed else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (artifactMessage.isNotBlank()) {
+                            Text(artifactMessage, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            if (!artifactBusy && !artifactInstalled && entry.status != 0) {
+                                artifactBusy = true
+                                scope.launch {
+                                    runCatching { viewModel.pluginManager.installCloudStreamPlugin(entry) }
+                                        .onSuccess {
+                                            artifactInstalled = true
+                                            artifactMessage = "Arsip tervalidasi dan tersimpan. Eksekusi runtime belum tersedia."
+                                        }
+                                        .onFailure { error ->
+                                            artifactMessage = error.message ?: "Gagal memasang file plugin."
+                                        }
+                                    artifactBusy = false
+                                }
+                            }
+                        },
+                        enabled = !artifactBusy && !artifactInstalled && entry.status != 0,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        if (artifactBusy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        else Text(if (artifactInstalled) "Tersimpan" else "Pasang", fontSize = 10.sp)
                     }
                 }
             }
