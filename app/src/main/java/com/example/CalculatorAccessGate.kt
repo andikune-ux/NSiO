@@ -2,6 +2,16 @@ package com.example
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,6 +66,9 @@ fun CalculatorAccessGate(
     var degrees by remember { mutableStateOf(true) }
     var memory by remember { mutableStateOf(0.0) }
     var answer by remember { mutableStateOf(0.0) }
+    val context = LocalContext.current
+    var history by remember(context) { mutableStateOf(loadCalculatorHistory(context)) }
+    var showHistory by remember { mutableStateOf(false) }
 
     val portraitKeys = listOf(
         listOf("AC", "DEL", "%", "÷"),
@@ -135,11 +148,16 @@ fun CalculatorAccessGate(
                     value in SecretCodeRegistry.codes -> { clear(); onSecretCode(value) }
                     value.isBlank() -> Unit
                     else -> try {
+                        val originalExpression = value
                         val calculated = currentValue()
                         answer = calculated
-                        result = CalculatorMath.format(calculated)
-                        expression = result.orEmpty()
+                        val formattedResult = CalculatorMath.format(calculated)
+                        result = formattedResult
+                        expression = formattedResult
                         hasError = false
+                        val entry = CalculatorHistoryEntry(originalExpression, formattedResult, System.currentTimeMillis(), degrees)
+                        history = (listOf(entry) + history).take(CALCULATOR_HISTORY_LIMIT)
+                        saveCalculatorHistory(context, history)
                     } catch (_: Exception) {
                         result = "Error"
                         hasError = true
@@ -170,7 +188,9 @@ fun CalculatorAccessGate(
                         Modifier.weight(0.78f).fillMaxHeight(),
                         title = "Calculator",
                         mode = if (degrees) "DEG" else "RAD",
-                        memoryActive = memory != 0.0
+                        memoryActive = memory != 0.0,
+                        historyCount = history.size,
+                        onHistoryClick = { showHistory = true }
                     )
                     CalculatorKeypad(
                         scientificKeys, ::press, Modifier.weight(2.22f),
@@ -180,11 +200,27 @@ fun CalculatorAccessGate(
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CalculatorDisplay(expression, result, hasError, Modifier.weight(0.9f).fillMaxWidth())
+                    CalculatorDisplay(expression, result, hasError, Modifier.weight(0.9f).fillMaxWidth(), historyCount = history.size, onHistoryClick = { showHistory = true })
                     CalculatorKeypad(portraitKeys, ::press, Modifier.weight(1.5f))
                 }
             }
         }
+    }
+
+    if (showHistory) {
+        CalculatorHistoryDialog(
+            entries = history,
+            onDismiss = { showHistory = false },
+            onClear = { history = emptyList(); saveCalculatorHistory(context, history) },
+            onUse = { entry ->
+                expression = entry.expression
+                result = entry.result
+                answer = entry.result.toDoubleOrNull() ?: answer
+                degrees = entry.degrees
+                hasError = false
+                showHistory = false
+            }
+        )
     }
 }
 
@@ -196,7 +232,9 @@ private fun CalculatorDisplay(
     modifier: Modifier = Modifier,
     title: String = "NSiO CALCULATOR",
     mode: String? = null,
-    memoryActive: Boolean = false
+    memoryActive: Boolean = false,
+    historyCount: Int = 0,
+    onHistoryClick: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier.padding(horizontal = 8.dp, vertical = 8.dp),
@@ -209,13 +247,9 @@ private fun CalculatorDisplay(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(title, color = Color(0xFF8993A2), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
-            if (mode != null) {
-                Text(
-                    text = mode + if (memoryActive) "  •  M" else "",
-                    color = Color(0xFF9DA8B8),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (mode != null) Text(mode + if (memoryActive) "  •  M" else "", color = Color(0xFF9DA8B8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                if (onHistoryClick != null) Text("Riwayat ($historyCount)", modifier = Modifier.clickable(onClick = onHistoryClick), color = Color(0xFFB8C7DA), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -295,6 +329,55 @@ private fun CalculatorKeypad(
     }
 }
 
+private const val CALCULATOR_HISTORY_PREFS = "nsio_calculator_history"
+private const val CALCULATOR_HISTORY_KEY = "entries"
+private const val CALCULATOR_HISTORY_LIMIT = 100
+
+private data class CalculatorHistoryEntry(val expression: String, val result: String, val timestamp: Long, val degrees: Boolean)
+
+private fun loadCalculatorHistory(context: Context): List<CalculatorHistoryEntry> {
+    val raw = context.getSharedPreferences(CALCULATOR_HISTORY_PREFS, Context.MODE_PRIVATE).getString(CALCULATOR_HISTORY_KEY, null) ?: return emptyList()
+    return runCatching {
+        val json = JSONArray(raw)
+        (0 until json.length()).mapNotNull { index ->
+            val item = json.optJSONObject(index) ?: return@mapNotNull null
+            val expression = item.optString("expression")
+            val result = item.optString("result")
+            if (expression.isBlank() || result.isBlank()) null else CalculatorHistoryEntry(expression, result, item.optLong("timestamp"), item.optBoolean("degrees", true))
+        }.take(CALCULATOR_HISTORY_LIMIT)
+    }.getOrDefault(emptyList())
+}
+
+private fun saveCalculatorHistory(context: Context, entries: List<CalculatorHistoryEntry>) {
+    val json = JSONArray()
+    entries.take(CALCULATOR_HISTORY_LIMIT).forEach { entry ->
+        json.put(JSONObject().apply { put("expression", entry.expression); put("result", entry.result); put("timestamp", entry.timestamp); put("degrees", entry.degrees) })
+    }
+    context.getSharedPreferences(CALCULATOR_HISTORY_PREFS, Context.MODE_PRIVATE).edit().putString(CALCULATOR_HISTORY_KEY, json.toString()).apply()
+}
+
+@Composable
+private fun CalculatorHistoryDialog(entries: List<CalculatorHistoryEntry>, onDismiss: () -> Unit, onClear: () -> Unit, onUse: (CalculatorHistoryEntry) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Riwayat Perhitungan") },
+        text = {
+            if (entries.isEmpty()) Text("Belum ada perhitungan tersimpan.")
+            else Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                entries.forEach { entry ->
+                    Column(Modifier.fillMaxWidth().clickable { onUse(entry) }.padding(vertical = 4.dp)) {
+                        Text(entry.expression, color = Color(0xFF8993A2), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("= " + entry.result, color = Color(0xFFF3F5F8), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text(DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(entry.timestamp)), color = Color(0xFF8993A2), fontSize = 11.sp)
+                        Text("Pakai perhitungan ini", color = Color(0xFF9DBCE0), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        },
+        confirmButton = { if (entries.isNotEmpty()) TextButton(onClick = onClear) { Text("Hapus riwayat") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Tutup") } }
+    )
+}
 object SecretCodeRegistry {
     data class Entry(val code: String, val title: String, val description: String)
     val entries = listOf(
