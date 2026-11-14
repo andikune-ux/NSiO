@@ -119,7 +119,6 @@ class MainActivity : ComponentActivity() {
 
             MyApplicationTheme(themeMode = settings.themeMode) {
                 CompositionLocalProvider(LocalAppLanguage provides settings.language) {
-                DevModeSelection(enabled = devMode) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // 1. iOS 26 Ambient Fluid Glow Canvas
                     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
@@ -210,6 +209,7 @@ class MainActivity : ComponentActivity() {
                                         AppNavContent(
                                             destination = currentNav,
                                             viewModel = viewModel,
+                                            devMode = devMode,
                                             onNavigate = { currentNav = it }
                                         )
                                         VerticalNavToolbar(
@@ -232,6 +232,7 @@ class MainActivity : ComponentActivity() {
                                             AppNavContent(
                                                 destination = currentNav,
                                                 viewModel = viewModel,
+                                                devMode = devMode,
                                                 onNavigate = { currentNav = it }
                                             )
                                         }
@@ -248,7 +249,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                }
                 }
 
                 secretDialogText?.let { message ->
@@ -456,6 +456,7 @@ private fun developerDiagnostics(
 private fun AppNavContent(
     destination: NavDestination,
     viewModel: MainViewModel,
+    devMode: Boolean,
     onNavigate: (NavDestination) -> Unit
 ) {
     AnimatedContent(
@@ -463,6 +464,7 @@ private fun AppNavContent(
         transitionSpec = { fadeIn() togetherWith fadeOut() },
         label = "screen_nav_transition"
     ) { targetDest ->
+        DevModeSelection(enabled = devMode) {
         when (targetDest) {
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
@@ -478,6 +480,7 @@ private fun AppNavContent(
             NavDestination.PROFILE -> ProfileScreen(
                 viewModel = viewModel
             )
+        }
         }
     }
 }
