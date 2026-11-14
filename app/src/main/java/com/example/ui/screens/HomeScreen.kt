@@ -79,6 +79,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -858,18 +861,66 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .size(54.dp)
-                                .clip(CircleShape)
                                 .clickable { showPlaylistPicker = !showPlaylistPicker }
-                                .liquidGlassTvFocusable(shape = CircleShape)
-                                .border(1.5.dp, accentColor, CircleShape)
+                                .liquidGlassTvFocusable(shape = RoundedCornerShape(16.dp))
+                                .drawBehind {
+                                    // Trace the Material Extension glyph itself so the purple
+                                    // outline follows its puzzle-piece silhouette, not a circle.
+                                    val glyph = Path().apply {
+                                        moveTo(20.5f, 11f)
+                                        lineTo(19f, 11f)
+                                        lineTo(19f, 7f)
+                                        cubicTo(19f, 5.9f, 18.1f, 5f, 17f, 5f)
+                                        lineTo(13f, 5f)
+                                        lineTo(13f, 3.5f)
+                                        cubicTo(13f, 2.12f, 11.88f, 1f, 10.5f, 1f)
+                                        cubicTo(9.12f, 1f, 8f, 2.12f, 8f, 3.5f)
+                                        lineTo(8f, 5f)
+                                        lineTo(4f, 5f)
+                                        cubicTo(2.9f, 5f, 2f, 5.9f, 2f, 7f)
+                                        lineTo(2f, 10.8f)
+                                        lineTo(3.5f, 10.8f)
+                                        cubicTo(4.88f, 10.8f, 6f, 11.92f, 6f, 13.3f)
+                                        cubicTo(6f, 14.68f, 4.88f, 15.8f, 3.5f, 15.8f)
+                                        lineTo(2f, 15.8f)
+                                        lineTo(2f, 20f)
+                                        cubicTo(2f, 21.1f, 2.9f, 22f, 4f, 22f)
+                                        lineTo(8f, 22f)
+                                        lineTo(8f, 20.5f)
+                                        cubicTo(8f, 19.12f, 9.12f, 18f, 10.5f, 18f)
+                                        cubicTo(11.88f, 18f, 13f, 19.12f, 13f, 20.5f)
+                                        lineTo(13f, 22f)
+                                        lineTo(17f, 22f)
+                                        cubicTo(18.1f, 22f, 19f, 21.1f, 19f, 20f)
+                                        lineTo(19f, 16f)
+                                        lineTo(20.5f, 16f)
+                                        cubicTo(21.88f, 16f, 23f, 14.88f, 23f, 13.5f)
+                                        cubicTo(23f, 12.12f, 21.88f, 11f, 20.5f, 11f)
+                                        close()
+                                    }
+                                    val glyphSize = 28.dp.toPx()
+                                    val scaleFactor = glyphSize / 24f
+                                    val left = (size.width - glyphSize) / 2f
+                                    val top = (size.height - glyphSize) / 2f
+                                    withTransform({
+                                        translate(left, top)
+                                        scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
+                                    }) {
+                                        drawPath(
+                                            path = glyph,
+                                            color = accentColor,
+                                            style = Stroke(width = 1.35.dp.toPx())
+                                        )
+                                    }
+                                }
                                 .testTag("floating_playlist_extension_button"),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.Extension,
                                 contentDescription = "Buka pilihan playlist",
-                                tint = accentColor,
-                                modifier = Modifier.size(25.dp)
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     }
