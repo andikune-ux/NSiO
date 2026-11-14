@@ -151,7 +151,7 @@ object SecretCodeRegistry {
     data class Entry(val code: String, val title: String, val description: String)
     val entries = listOf(
         Entry("000", "Daftar kode rahasia", "Menampilkan daftar kode yang tersedia"),
-        Entry("101", "Developer Mode", "Mengaktifkan atau menonaktifkan penanda Developer Mode"),
+        Entry("101", "Developer diagnostics", "Menampilkan panel diagnostik aplikasi dan status komponen nyata"),
         Entry("103", "Panduan gestur", "Menampilkan panduan gestur dan navigasi"),
         Entry("104", "Mode tampilan", "Mengganti mode tampilan NSiO"),
         Entry("111", "Riwayat crash", "Menampilkan log crash terakhir"),
@@ -159,11 +159,11 @@ object SecretCodeRegistry {
         Entry("200", "Info aplikasi", "Membuka detail aplikasi di Pengaturan Android"),
         Entry("202", "Pengaturan notifikasi", "Membuka pengaturan notifikasi NSiO"),
         Entry("333", "Informasi sistem", "Menampilkan informasi perangkat dan Android"),
-        Entry("444", "Diagnostik media player", "Menampilkan status pemutar media"),
+        Entry("444", "Diagnostik media player", "Menampilkan status engine, playback, buffering, durasi, posisi, dan error"),
         Entry("456", "Refresh sumber", "Memulai penyegaran sumber playlist"),
         Entry("555", "Informasi jaringan", "Menampilkan status konektivitas"),
-        Entry("666", "Informasi izin", "Menampilkan panduan pemeriksaan izin"),
-        Entry("777", "Penyimpanan", "Menampilkan ringkasan penyimpanan aplikasi"),
+        Entry("666", "Informasi izin", "Memeriksa status izin yang dideklarasikan aplikasi"),
+        Entry("777", "Penyimpanan", "Menghitung ukuran direktori data NSiO dan kapasitas partisi secara terpisah"),
         Entry("888", "Statistik aplikasi", "Menampilkan jumlah media dan playlist")
     )
     val codes: Set<String> = entries.map { it.code }.toSet()

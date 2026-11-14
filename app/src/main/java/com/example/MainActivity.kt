@@ -5,7 +5,10 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.StatFs
+import android.content.pm.PackageManager
+import java.io.File
 import android.provider.Settings
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -82,6 +85,7 @@ class MainActivity : ComponentActivity() {
             var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
             val settings by viewModel.settings.collectAsState()
             val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
+            val playerState by viewModel.player.playerState.collectAsState()
             val activeProfile by viewModel.activeProfile.collectAsState()
             val statusMessage by viewModel.statusMessage.collectAsState()
 
@@ -118,12 +122,7 @@ class MainActivity : ComponentActivity() {
                             onSecretCode = { code ->
                                 val message = when (code) {
                                     "000" -> SecretCodeRegistry.allCodes
-                                    "101" -> {
-                                        val prefs = context.getSharedPreferences("nsio_developer", android.content.Context.MODE_PRIVATE)
-                                        val enabled = !prefs.getBoolean("enabled", false)
-                                        prefs.edit().putBoolean("enabled", enabled).apply()
-                                        "Developer Mode ${if (enabled) "diaktifkan" else "dinonaktifkan"}."
-                                    }
+                                    "101" -> developerDiagnostics(context, playerState, viewModel.mediaList.value.size, viewModel.sourcePlaylists.value.size)
                                     "103" -> "PANDUAN GESTUR NSiO\n• Gunakan gestur yang tersedia pada pemutar media.\n• Gunakan DPAD/remote untuk berpindah fokus.\n• Tekan Back untuk kembali."
                                     "104" -> {
                                         viewModel.toggleDisplayMode()
@@ -137,19 +136,21 @@ class MainActivity : ComponentActivity() {
                                         val capabilities = network?.let { cm.getNetworkCapabilities(it) }
                                         "INFORMASI JARINGAN\nStatus: ${if (capabilities != null) "Terhubung" else "Tidak terhubung"}\nWi-Fi: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true}\nSeluler: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}"
                                     }
-                                    "666" -> "INFO IZIN\nPeriksa izin aplikasi NSiO melalui Pengaturan Android. Aplikasi hanya dapat menampilkan status izin yang memang diminta oleh versi terpasang."
+                                    "666" -> permissionDiagnostics(context)
                                     "777" -> {
-                                        val stat = StatFs(context.filesDir.absolutePath)
-                                        val total = stat.totalBytes / (1024 * 1024)
-                                        val free = stat.availableBytes / (1024 * 1024)
-                                        "PENYIMPANAN APLIKASI\nTerpakai: ${total - free} MB\nTersedia: ${free} MB\nTotal partisi: ${total} MB"
+                                        secretDialogText = "Menghitung penggunaan penyimpanan NSiO…"
+                                        Thread {
+                                            val report = appStorageDiagnostics(context)
+                                            runOnUiThread { secretDialogText = report }
+                                        }.start()
+                                        null
                                     }
                                     "888" -> "STATISTIK NSiO\nMedia terdaftar: ${viewModel.mediaList.value.size}\nPlaylist/sumber: ${viewModel.sourcePlaylists.value.size}"
                                     "123" -> {
                                         showCacheResetConfirm = true
                                         null
                                     }
-                                    "444" -> "DIAGNOSTIK MEDIA PLAYER\nStatus: ${if (currentlyPlaying != null) "Sedang memutar media" else "Player tidak aktif"}"
+                                    "444" -> playerDiagnostics(currentlyPlaying?.title, playerState)
                                     "456" -> {
                                         viewModel.refreshAllSourcePlaylists()
                                         "Penyegaran sumber playlist dimulai."
@@ -257,12 +258,15 @@ class MainActivity : ComponentActivity() {
                         text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
                         confirmButton = {
                             Button(onClick = {
-                                runCatching {
-                                    context.cacheDir.deleteRecursively()
-                                    context.externalCacheDir?.deleteRecursively()
-                                }
+                                val cacheDirs = listOfNotNull(context.cacheDir, context.externalCacheDir)
+                                val results = cacheDirs.map { dir -> runCatching { dir.deleteRecursively() }.getOrDefault(false) }
+                                val success = results.all { it }
                                 showCacheResetConfirm = false
-                                secretDialogText = "Cache sementara berhasil dibersihkan."
+                                secretDialogText = if (success) {
+                                    "Cache sementara berhasil dibersihkan. Data media, playlist, profil, dan pengaturan tidak disentuh."
+                                } else {
+                                    "Pembersihan cache tidak sepenuhnya berhasil. Sebagian file mungkin sedang digunakan."
+                                }
                             }) { Text("Bersihkan") }
                         },
                         dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
@@ -319,6 +323,112 @@ class MainActivity : ComponentActivity() {
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
         insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.statusBars())
+    }
+}
+
+
+private fun formatMb(bytes: Long): String = String.format(java.util.Locale.US, "%.2f MB", bytes / (1024.0 * 1024.0))
+
+private fun directoryBytes(directory: File?): Long {
+    if (directory == null || !directory.exists()) return 0L
+    return runCatching { directory.walkTopDown().filter { it.isFile }.sumOf { it.length() } }.getOrDefault(0L)
+}
+
+private fun appStorageDiagnostics(context: android.content.Context): String {
+    val internalFiles = directoryBytes(context.filesDir)
+    val cache = directoryBytes(context.cacheDir)
+    val noBackup = directoryBytes(context.noBackupFilesDir)
+    val externalFiles = directoryBytes(context.getExternalFilesDir(null))
+    val externalCache = directoryBytes(context.externalCacheDir)
+    val appData = internalFiles + cache + noBackup + externalFiles + externalCache
+    val stat = StatFs(context.filesDir.absolutePath)
+    return buildString {
+        appendLine("PENYIMPANAN NSiO")
+        appendLine("Data aplikasi terukur: ${formatMb(appData)}")
+        appendLine("• File internal: ${formatMb(internalFiles)}")
+        appendLine("• Cache internal: ${formatMb(cache)}")
+        appendLine("• File tanpa backup: ${formatMb(noBackup)}")
+        appendLine("• File eksternal aplikasi: ${formatMb(externalFiles)}")
+        appendLine("• Cache eksternal: ${formatMb(externalCache)}")
+        appendLine()
+        appendLine("PARTISI DATA PERANGKAT")
+        appendLine("Total: ${formatMb(stat.totalBytes)}")
+        appendLine("Tersedia: ${formatMb(stat.availableBytes)}")
+        append("Kapasitas partisi bukan ukuran data NSiO.")
+    }
+}
+
+private fun permissionDiagnostics(context: android.content.Context): String {
+    val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+    val requested = info.requestedPermissions.orEmpty()
+    val legacyStorage = requested.filter {
+        it == android.Manifest.permission.READ_EXTERNAL_STORAGE ||
+            it == android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    }
+    return buildString {
+        appendLine("STATUS IZIN NSiO")
+        appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+        if (legacyStorage.isEmpty()) appendLine("Izin runtime penyimpanan lama: tidak diminta.")
+        legacyStorage.forEach { permission ->
+            val granted = context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+            appendLine("${permission.substringAfterLast('.')}: ${if (granted) "DIIZINKAN" else "BELUM DIIZINKAN"}")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            "android.permission.MANAGE_EXTERNAL_STORAGE" in requested
+        ) {
+            appendLine("Akses semua file: ${if (Environment.isExternalStorageManager()) "DIIZINKAN" else "BELUM DIIZINKAN"}")
+        }
+        appendLine("Internet dan status jaringan: izin normal, tidak memakai dialog runtime.")
+        append("Hanya izin yang dideklarasikan aplikasi yang ditampilkan.")
+    }
+}
+
+private fun playerDiagnostics(mediaTitle: String?, state: com.example.player.PlayerState): String {
+    val status = when {
+        state.error != null -> "ERROR"
+        state.isBuffering -> "BUFFERING"
+        state.isPlaying -> "PLAYING"
+        mediaTitle != null -> "PAUSED / READY"
+        else -> "IDLE"
+    }
+    fun time(ms: Long): String {
+        val seconds = ms.coerceAtLeast(0L) / 1000L
+        return "%02d:%02d:%02d".format(seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+    }
+    return buildString {
+        appendLine("DIAGNOSTIK MEDIA PLAYER")
+        appendLine("Status engine: $status")
+        appendLine("Media: ${mediaTitle ?: state.title.ifBlank { "Tidak ada media" }}")
+        appendLine("Sedang diputar: ${if (state.isPlaying) "Ya" else "Tidak"}")
+        appendLine("Buffering: ${if (state.isBuffering) "Ya" else "Tidak"}")
+        appendLine("Posisi: ${time(state.currentPositionMs)}")
+        appendLine("Durasi: ${if (state.durationMs > 0L) time(state.durationMs) else "Belum tersedia"}")
+        appendLine("Seek: ${if (state.isSeekable) "Didukung" else "Tidak tersedia"}")
+        appendLine("Kecepatan: ${state.playbackSpeed}x")
+        appendLine("Volume: ${(state.volume * 100).toInt()}%")
+        append("Error: ${state.error ?: "Tidak ada"}")
+    }
+}
+
+private fun developerDiagnostics(
+    context: android.content.Context,
+    playerState: com.example.player.PlayerState,
+    mediaCount: Int,
+    playlistCount: Int
+): String {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    return buildString {
+        appendLine("NSiO • DEVELOPER DIAGNOSTICS")
+        appendLine("Package: ${context.packageName}")
+        appendLine("Versi: ${info.versionName ?: "unknown"} (${info.versionCode})")
+        appendLine("Android API: ${Build.VERSION.SDK_INT}")
+        appendLine("Perangkat: ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("Media terdaftar: $mediaCount")
+        appendLine("Playlist/sumber: $playlistCount")
+        appendLine("Player: ${when { playerState.error != null -> "ERROR"; playerState.isBuffering -> "BUFFERING"; playerState.isPlaying -> "PLAYING"; else -> "IDLE / PAUSED" }}")
+        appendLine("Crash log tersedia: ${if (CrashLogStore.read(context) != null) "Ya" else "Tidak"}")
+        appendLine()
+        append("Tools aktif: player (444), crash log (111), izin (666), penyimpanan (777), jaringan (555).")
     }
 }
 
