@@ -11,7 +11,10 @@ import com.example.data.download.calculateRetryProgress
 import com.example.player.shouldUseNativePlayer
 import com.example.player.normalizePlaybackUrl
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class AppUpdateManagerTest {
     @Test
     fun parsesVersionTagsAndRejectsMalformedValues() {
