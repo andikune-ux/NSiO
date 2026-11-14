@@ -283,13 +283,22 @@ class PluginManager(private val context: Context) {
                 require(!dexEntry.isDirectory && dexEntry.size in 1..MAX_CLOUDSTREAM_ARTIFACT_BYTES) {
                     "Ukuran classes.dex tidak valid."
                 }
-                val manifestText = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { reader ->
-                    val text = reader.readText()
-                    require(text.toByteArray(Charsets.UTF_8).size <= 64 * 1024) {
-                        "manifest.json melebihi batas 64 KB."
+                val manifestBytes = zip.getInputStream(manifestEntry).use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    var manifestTotal = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        manifestTotal += count
+                        require(manifestTotal <= 64 * 1024) {
+                            "manifest.json melebihi batas 64 KB."
+                        }
+                        output.write(buffer, 0, count)
                     }
-                    text
+                    output.toByteArray()
                 }
+                val manifestText = String(manifestBytes, Charsets.UTF_8)
                 val pluginClassName = JSONObject(manifestText).optString("pluginClassName").trim()
                 require(pluginClassName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*(\\\\.[A-Za-z_$][A-Za-z0-9_$]*)+"))) {
                     "manifest.json tidak memiliki pluginClassName yang valid."
