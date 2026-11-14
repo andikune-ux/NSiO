@@ -134,7 +134,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
         val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) { api.load(url) }
             ?: throw IllegalStateException("Provider tidak mengembalikan detail konten atau waktu pemuatan habis.")
 
-        return response.toCloudStreamContent(artifact.nameWithoutExtension, api.name)
+        response.toCloudStreamContent(artifact.nameWithoutExtension, api.name)
     }
 
     suspend fun loadLinks(
@@ -156,7 +156,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
             )
         } ?: false
 
-        if (!completed && rawLinks.isEmpty()) return emptyList()
+        if (!completed && rawLinks.isEmpty()) return@withContext emptyList()
 
         val resolved = mutableListOf<ExtractorLink>()
         rawLinks.forEach { raw ->
@@ -175,7 +175,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
             if (!handled || !emitted) synchronized(resolved) { resolved.add(raw) }
         }
 
-        return resolved.distinctBy { it.url to it.referer }.map { link ->
+        resolved.distinctBy { it.url to it.referer }.map { link ->
             CloudStreamStream(
                 pluginName = artifact.nameWithoutExtension,
                 providerName = api.name,

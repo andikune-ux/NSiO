@@ -174,6 +174,7 @@ dependencies {
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.3")
   implementation("org.jsoup:jsoup:1.17.2")
   implementation("me.xdrop:fuzzywuzzy:1.4.0")
+  implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.10.0")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
