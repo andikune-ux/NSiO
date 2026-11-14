@@ -277,14 +277,7 @@ class PluginManager(private val context: Context) {
                 }
             }
             java.util.zip.ZipFile(temporary).use { zip ->
-                val entryNames = HashSet<String>()
-                val entries = zip.entries()
-                while (entries.hasMoreElements()) {
-                    val archiveEntry = entries.nextElement()
-                    require(entryNames.add(archiveEntry.name)) {
-                        "Arsip .cs3 memiliki entri ZIP duplikat: ${archiveEntry.name}"
-                    }
-                }
+                CloudStreamArchivePolicy.validate(zip)
                 val manifestEntry = zip.getEntry("manifest.json")
                     ?: throw IllegalArgumentException("Arsip .cs3 tidak memiliki manifest.json.")
                 val dexEntry = zip.getEntry("classes.dex")
