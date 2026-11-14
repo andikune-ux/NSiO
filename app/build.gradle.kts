@@ -168,6 +168,12 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.retrofit)
+
+  // CloudStream SDK compatibility runtime (GPL-3.0; see LICENSES/CLOUDSTREAM3.md).
+  // NiceHttp is vendored in app/src/main/java/com/lagradost/nicehttp and uses this OkHttp client.
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.3")
+  implementation("org.jsoup:jsoup:1.17.2")
+  implementation("me.xdrop:fuzzywuzzy:1.4.0")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

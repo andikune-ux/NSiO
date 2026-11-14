@@ -70,6 +70,7 @@ open class Plugin : BasePlugin() {
 
 class PluginManager(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("nsio_plugins_prefs", Context.MODE_PRIVATE)
+    private val cloudStreamRuntime = CloudStreamPluginRuntime(context)
     companion object {
         private const val MAX_CLOUDSTREAM_ARTIFACT_BYTES = 128L * 1024L * 1024L
         const val PLUGINS_KEY = "installed_online_plugins"
@@ -348,6 +349,52 @@ class PluginManager(private val context: Context) {
         return artifact.parentFile == root && artifact.isFile && artifact.length() > 0L
     }
 
+    private fun getCloudStreamArtifact(entry: CloudStreamPluginEntry): File? {
+        val safeName = entry.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        val root = File(context.filesDir, "cloudstream_plugins").canonicalFile
+        val artifact = File(root, "${safeName}-${entry.version}.cs3").canonicalFile
+        return artifact.takeIf { it.parentFile == root && it.isFile && it.length() > 0L }
+    }
+
+    suspend fun loadCloudStreamPlugin(entry: CloudStreamPluginEntry): List<CloudStreamProviderInfo> {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.load(artifact)
+    }
+
+    suspend fun searchCloudStreamPlugin(
+        entry: CloudStreamPluginEntry,
+        query: String
+    ): List<CloudStreamSearchItem> {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.search(artifact, query)
+    }
+
+    suspend fun loadCloudStreamContent(
+        entry: CloudStreamPluginEntry,
+        providerName: String,
+        url: String
+    ): CloudStreamContent {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.loadContent(artifact, providerName, url)
+    }
+
+    suspend fun loadCloudStreamLinks(
+        entry: CloudStreamPluginEntry,
+        providerName: String,
+        data: String
+    ): List<CloudStreamStream> {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.loadLinks(artifact, providerName, data)
+    }
+
+    suspend fun unloadCloudStreamPlugin(entry: CloudStreamPluginEntry) {
+        getCloudStreamArtifact(entry)?.let { cloudStreamRuntime.unload(it) }
+    }
+
     suspend fun installPluginFromManifest(manifest: PluginManifest) = withContext(Dispatchers.IO) {
         require(manifest.name.isNotBlank()) { "Manifest plugin tidak memiliki nama" }
         if (_installedPlugins.value.none { it.manifest?.name == manifest.name && it.manifest?.url == manifest.url }) {
@@ -421,8 +468,8 @@ class PluginManager(private val context: Context) {
     }
 
     /**
-     * Restores installed plugin entries as metadata-only placeholders.
-     * NSiO does not execute arbitrary Cloudstream APK/DEX plugin code.
+     * Restores NSiO-native plugin metadata placeholders. CloudStream .cs3
+     * artifacts are managed and executed by CloudStreamPluginRuntime.
      */
     private fun loadInstalledPlugins() {
         val raw = prefs.getString(PLUGINS_KEY, null) ?: return
