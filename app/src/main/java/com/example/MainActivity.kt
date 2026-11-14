@@ -1,6 +1,12 @@
 package com.example
 
 import android.content.pm.ActivityInfo
+import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Uri
+import android.os.Build
+import android.os.StatFs
+import android.provider.Settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
@@ -70,6 +76,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
+            var isCalculatorUnlocked by remember { mutableStateOf(false) }
+            var secretDialogText by remember { mutableStateOf<String?>(null) }
+            var showCacheResetConfirm by remember { mutableStateOf(false) }
             var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
             val settings by viewModel.settings.collectAsState()
             val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
@@ -102,8 +111,69 @@ class MainActivity : ComponentActivity() {
                     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                     AmbientFluidBackground(isDark = isDark)
 
-                    // 2. Fullscreen Video Player or Main App Navigation
-                    if (currentlyPlaying != null) {
+                    // Calculator gate: main application UI is not composed until the correct PIN is entered.
+                    if (!isCalculatorUnlocked) {
+                        CalculatorAccessGate(
+                            onUnlock = { isCalculatorUnlocked = true },
+                            onSecretCode = { code ->
+                                val message = when (code) {
+                                    "000" -> SecretCodeRegistry.allCodes
+                                    "101" -> {
+                                        val prefs = context.getSharedPreferences("nsio_developer", android.content.Context.MODE_PRIVATE)
+                                        val enabled = !prefs.getBoolean("enabled", false)
+                                        prefs.edit().putBoolean("enabled", enabled).apply()
+                                        "Developer Mode ${if (enabled) "diaktifkan" else "dinonaktifkan"}."
+                                    }
+                                    "103" -> "PANDUAN GESTUR NSiO\n• Gunakan gestur yang tersedia pada pemutar media.\n• Gunakan DPAD/remote untuk berpindah fokus.\n• Tekan Back untuk kembali."
+                                    "104" -> {
+                                        viewModel.toggleDisplayMode()
+                                        "Mode tampilan diganti. Periksa Pengaturan untuk melihat mode aktif."
+                                    }
+                                    "111" -> CrashLogStore.read(context) ?: "Belum ada catatan crash tersimpan."
+                                    "333" -> "INFORMASI SISTEM\nPerangkat: ${Build.MANUFACTURER} ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\nArsitektur: ${Build.SUPPORTED_ABIS.joinToString()}"
+                                    "555" -> {
+                                        val cm = context.getSystemService(ConnectivityManager::class.java)
+                                        val network = cm?.activeNetwork
+                                        val capabilities = network?.let { cm.getNetworkCapabilities(it) }
+                                        "INFORMASI JARINGAN\nStatus: ${if (capabilities != null) "Terhubung" else "Tidak terhubung"}\nWi-Fi: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true}\nSeluler: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}"
+                                    }
+                                    "666" -> "INFO IZIN\nPeriksa izin aplikasi NSiO melalui Pengaturan Android. Aplikasi hanya dapat menampilkan status izin yang memang diminta oleh versi terpasang."
+                                    "777" -> {
+                                        val stat = StatFs(context.filesDir.absolutePath)
+                                        val total = stat.totalBytes / (1024 * 1024)
+                                        val free = stat.availableBytes / (1024 * 1024)
+                                        "PENYIMPANAN APLIKASI\nTerpakai: ${total - free} MB\nTersedia: ${free} MB\nTotal partisi: ${total} MB"
+                                    }
+                                    "888" -> "STATISTIK NSiO\nMedia terdaftar: ${viewModel.mediaList.value.size}\nPlaylist/sumber: ${viewModel.sourcePlaylists.value.size}"
+                                    "123" -> {
+                                        showCacheResetConfirm = true
+                                        null
+                                    }
+                                    "444" -> "DIAGNOSTIK MEDIA PLAYER\nStatus: ${if (currentlyPlaying != null) "Sedang memutar media" else "Player tidak aktif"}"
+                                    "456" -> {
+                                        viewModel.refreshAllSourcePlaylists()
+                                        "Penyegaran sumber playlist dimulai."
+                                    }
+                                    "200" -> {
+                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        })
+                                        null
+                                    }
+                                    "202" -> {
+                                        runCatching {
+                                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                            })
+                                        }.onFailure { secretDialogText = "Pengaturan notifikasi tidak tersedia pada perangkat ini." }
+                                        null
+                                    }
+                                    else -> "Kode tidak dikenal."
+                                }
+                                if (message != null) secretDialogText = message
+                            }
+                        )
+                    } else if (currentlyPlaying != null) {
                         PlayerScreen(
                             media = currentlyPlaying!!,
                             viewModel = viewModel,
@@ -169,6 +239,34 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+
+                secretDialogText?.let { message ->
+                    AlertDialog(
+                        onDismissRequest = { secretDialogText = null },
+                        title = { Text(if (message == SecretCodeRegistry.allCodes) "Kode Rahasia NSiO" else "NSiO • Secret Tools") },
+                        text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState()), maxLines = 24) },
+                        confirmButton = { Button(onClick = { secretDialogText = null }) { Text("Tutup") } }
+                    )
+                }
+
+                if (showCacheResetConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showCacheResetConfirm = false },
+                        title = { Text("Bersihkan cache NSiO?") },
+                        text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
+                        confirmButton = {
+                            Button(onClick = {
+                                runCatching {
+                                    context.cacheDir.deleteRecursively()
+                                    context.externalCacheDir?.deleteRecursively()
+                                }
+                                showCacheResetConfirm = false
+                                secretDialogText = "Cache sementara berhasil dibersihkan."
+                            }) { Text("Bersihkan") }
+                        },
+                        dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
+                    )
                 }
 
                 crashLog?.let { log ->
