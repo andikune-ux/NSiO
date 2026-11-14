@@ -76,6 +76,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -87,6 +88,7 @@ import com.example.data.firebase.AuthState
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
 import com.example.ui.components.PinDialog
+import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 
@@ -408,6 +410,7 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
             }
 
             // ==========================================
