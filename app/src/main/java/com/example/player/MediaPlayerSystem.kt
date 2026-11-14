@@ -73,6 +73,7 @@ class CS3IPlayer(
     private var lastTitle: String = ""
     private var lastPositionMs: Long = 0L
     private var lastHeaders: Map<String, String> = emptyMap()
+    private var lastMimeType: String? = null
     private var lastNonZeroVolume: Float = 1f
     private lateinit var httpDataSourceFactory: DefaultHttpDataSource.Factory
 
@@ -196,10 +197,31 @@ class CS3IPlayer(
     }
 
     override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
+        playInternal(url, title, startPositionMs, requestHeaders, null)
+    }
+
+    fun playWithMimeType(
+        url: String,
+        title: String,
+        startPositionMs: Long = 0L,
+        requestHeaders: Map<String, String> = emptyMap(),
+        mimeType: String? = null
+    ) {
+        playInternal(url, title, startPositionMs, requestHeaders, mimeType)
+    }
+
+    private fun playInternal(
+        url: String,
+        title: String,
+        startPositionMs: Long,
+        requestHeaders: Map<String, String>,
+        mimeType: String?
+    ) {
         lastUrl = url
         lastTitle = title
         lastPositionMs = startPositionMs
         lastHeaders = requestHeaders
+        lastMimeType = mimeType
 
         exoPlayer?.let { player ->
             try {
@@ -217,8 +239,10 @@ class CS3IPlayer(
                     shuffleEnabled = player.shuffleModeEnabled,
                     volume = player.volume
                 )
-                val mediaItem = ExoMediaItem.fromUri(normalizePlaybackUrl(url.trim()))
-                player.setMediaItem(mediaItem)
+                val mediaItemBuilder = ExoMediaItem.Builder()
+                    .setUri(normalizePlaybackUrl(url.trim()))
+                mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
+                player.setMediaItem(mediaItemBuilder.build())
                 if (startPositionMs > 0) {
                     player.seekTo(startPositionMs)
                 }
@@ -237,7 +261,7 @@ class CS3IPlayer(
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
             val current = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
-            play(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders)
+            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType)
         }
     }
 
@@ -283,6 +307,7 @@ class CS3IPlayer(
         lastTitle = ""
         lastPositionMs = 0L
         lastHeaders = emptyMap()
+        lastMimeType = null
         _playerState.value = PlayerState()
     }
 

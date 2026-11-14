@@ -868,7 +868,7 @@ private fun PluginRepoTab(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Simpan URL katalog/repository eksternal. Saat ini NSiO dapat memperbarui sumber playlist M3U dari URL yang didukung, tetapi belum menjalankan plugin CloudStream berbasis Kotlin/JS secara langsung.",
+                        text = "Kelola repository CloudStream, pasang plugin .cs3, lalu jalankan provider untuk mencari konten dan mengambil link streaming.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1008,6 +1008,8 @@ private fun PluginRepoTab(
                         mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry))
                     }
                     var artifactBusy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                    var runtimeActive by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                    var runtimeProviderCount by remember(entry.internalName, entry.version) { mutableIntStateOf(0) }
                     var artifactMessage by remember(entry.internalName, entry.version) { mutableStateOf("") }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(entry.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
@@ -1022,7 +1024,8 @@ private fun PluginRepoTab(
                         Text(
                             when {
                                 entry.status == 0 -> "Status: nonaktif"
-                                artifactInstalled -> "File .cs3 tersimpan • runtime belum aktif"
+                                runtimeActive -> "Runtime aktif • $runtimeProviderCount provider"
+                                artifactInstalled -> "File .cs3 tersimpan • belum dijalankan"
                                 else -> "Metadata tersedia • belum dipasang"
                             },
                             fontSize = 9.sp,
@@ -1034,31 +1037,54 @@ private fun PluginRepoTab(
                     }
                     Button(
                         onClick = {
-                            if (!artifactBusy && !artifactInstalled && entry.status != 0) {
+                            if (!artifactBusy && !runtimeActive && entry.status != 0) {
                                 artifactBusy = true
                                 scope.launch {
-                                    runCatching { viewModel.pluginManager.installCloudStreamPlugin(entry) }
-                                        .onSuccess {
+                                    try {
+                                        if (!artifactInstalled) {
+                                            viewModel.pluginManager.installCloudStreamPlugin(entry)
                                             artifactInstalled = true
-                                            artifactMessage = "Arsip tervalidasi dan tersimpan. Eksekusi runtime belum tersedia."
                                         }
-                                        .onFailure { error ->
-                                            artifactMessage = error.message ?: "Gagal memasang file plugin."
+                                        val providers = viewModel.pluginManager.loadCloudStreamPlugin(entry)
+                                        runtimeProviderCount = providers.size
+                                        runtimeActive = true
+                                        artifactMessage = if (providers.isEmpty()) {
+                                            "Runtime aktif. Plugin tidak mendaftarkan provider MainAPI."
+                                        } else {
+                                            "Runtime aktif • ${providers.size} provider siap dicari."
                                         }
-                                    artifactBusy = false
+                                    } catch (error: Throwable) {
+                                        artifactMessage = if (artifactInstalled) {
+                                            "File tersimpan, aktivasi gagal: ${error.message ?: "kesalahan runtime"}"
+                                        } else {
+                                            error.message ?: "Gagal memasang file plugin."
+                                        }
+                                    } finally {
+                                        artifactBusy = false
+                                    }
                                 }
                             }
                         },
-                        enabled = !artifactBusy && !artifactInstalled && entry.status != 0,
+                        enabled = !artifactBusy && !runtimeActive && entry.status != 0,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
                         if (artifactBusy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        else Text(if (artifactInstalled) "Tersimpan" else "Pasang", fontSize = 10.sp)
+                        else Text(
+                            when {
+                                runtimeActive -> "Aktif"
+                                artifactInstalled -> "Aktifkan"
+                                else -> "Pasang & aktifkan"
+                            },
+                            fontSize = 10.sp
+                        )
                     }
                 }
             }
         }
+
+        item { CloudStreamSearchPanel(viewModel, repos) }
+
 
         item {
             Text(
@@ -1068,7 +1094,7 @@ private fun PluginRepoTab(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Runtime eksekusi plugin eksternal belum tersedia. Entri di bawah hanya metadata plugin yang tercatat.",
+                text = "Bagian ini berisi metadata plugin internal NSiO. Provider CloudStream dikelola melalui katalog dan pencarian di atas.",
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1077,7 +1103,7 @@ private fun PluginRepoTab(
         if (plugins.isEmpty()) {
             item {
                 Text(
-                    "Belum ada metadata plugin. Catatan: NSiO belum menjalankan kode plugin CloudStream eksternal.",
+                    "Belum ada plugin internal NSiO yang tercatat.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1152,5 +1178,247 @@ private fun PluginRepoTab(
             },
             dismissButton = { TextButton(onClick = { editingPlaylist = null }) { Text("Batal") } }
         )
+    }
+}
+
+
+@Composable
+private fun CloudStreamSearchPanel(
+    viewModel: MainViewModel,
+    repos: List<com.example.data.plugin.RepoManifest>
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var searchMessage by remember { mutableStateOf("") }
+    var results by remember {
+        mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>>(emptyList())
+    }
+    var selectedContent by remember {
+        mutableStateOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamContent>?>(null)
+    }
+    var loadingDetail by remember { mutableStateOf(false) }
+    var resolvingLinks by remember { mutableStateOf(false) }
+    var linkMessage by remember { mutableStateOf("") }
+    var linkTarget by remember { mutableStateOf("") }
+    var streams by remember {
+        mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamStream>>>(emptyList())
+    }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val installedEntries = repos.flatMap { it.plugins }
+        .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
+        .distinctBy { it.internalName to it.version }
+
+    fun resolveLinks(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        providerName: String,
+        data: String,
+        target: String
+    ) {
+        resolvingLinks = true
+        linkTarget = target
+        linkMessage = ""
+        streams = emptyList()
+        scope.launch {
+            runCatching {
+                viewModel.pluginManager.loadCloudStreamLinks(entry, providerName, data)
+            }.onSuccess { found ->
+                streams = found.map { entry to it }
+                linkMessage = if (found.isEmpty()) {
+                    "Provider belum menemukan link yang dapat diputar."
+                } else {
+                    "Ditemukan ${found.size} link."
+                }
+            }.onFailure { error ->
+                linkMessage = error.message ?: "Gagal mengambil link streaming."
+            }
+            resolvingLinks = false
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().liquidGlass(
+            shape = RoundedCornerShape(22.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 5.dp
+        ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Text(
+            text = "Cari konten CloudStream",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Pencarian hanya memakai plugin .cs3 yang sudah terpasang. Menekan Cari akan memuat kode plugin bila belum aktif. Plugin pihak ketiga berjalan dengan izin aplikasi—gunakan repository yang kamu percaya.",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it.take(180) },
+            placeholder = { Text("Judul film atau serial", fontSize = 12.sp) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = {
+                searching = true
+                results = emptyList()
+                selectedContent = null
+                streams = emptyList()
+                searchMessage = ""
+                scope.launch {
+                    val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
+                    val failures = mutableListOf<String>()
+                    installedEntries.forEach { entry ->
+                        runCatching {
+                            viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim())
+                        }.onSuccess { items ->
+                            items.forEach { found.add(entry to it) }
+                        }.onFailure { error ->
+                            failures.add("${entry.name}: ${error.message ?: "gagal"}")
+                        }
+                    }
+                    results = found
+                    searchMessage = when {
+                        found.isNotEmpty() && failures.isNotEmpty() ->
+                            "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
+                        found.isNotEmpty() -> "Ditemukan ${found.size} hasil."
+                        installedEntries.isEmpty() -> "Belum ada plugin .cs3 terpasang."
+                        failures.isNotEmpty() -> failures.take(2).joinToString(" • ")
+                        else -> "Tidak ada hasil untuk kata kunci ini."
+                    }
+                    searching = false
+                }
+            },
+            enabled = !searching && query.isNotBlank() && installedEntries.isNotEmpty(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (searching) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            else Text("Cari di ${installedEntries.size} plugin terpasang", fontSize = 11.sp)
+        }
+        if (searchMessage.isNotBlank()) {
+            Text(searchMessage, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        results.forEach { (entry, result) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(result.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "${result.providerName} • ${result.contentType ?: entry.name}${result.year?.let { " • $it" } ?: ""}",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    enabled = !loadingDetail,
+                    onClick = {
+                        loadingDetail = true
+                        streams = emptyList()
+                        scope.launch {
+                            runCatching {
+                                viewModel.pluginManager.loadCloudStreamContent(entry, result.providerName, result.url)
+                            }.onSuccess { content ->
+                                selectedContent = entry to content
+                                linkMessage = ""
+                            }.onFailure { error ->
+                                searchMessage = error.message ?: "Gagal memuat detail konten."
+                            }
+                            loadingDetail = false
+                        }
+                    }
+                ) { Text("Detail", fontSize = 10.sp) }
+            }
+        }
+        if (loadingDetail) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        }
+        selectedContent?.let { (entry, content) ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(content.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(
+                listOfNotNull(content.year?.toString(), content.contentType, content.durationMinutes?.let { "$it menit" }).joinToString(" • "),
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            content.plot?.takeIf { it.isNotBlank() }?.let {
+                Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 5)
+            }
+            content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
+                Button(
+                    onClick = { resolveLinks(entry, content.providerName, data, "Film") },
+                    enabled = !resolvingLinks,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                ) { Text("Ambil link film", fontSize = 10.sp) }
+            }
+            content.episodes.forEachIndexed { index, episode ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        episode.name.ifBlank { "Episode ${index + 1}" },
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        enabled = !resolvingLinks,
+                        onClick = {
+                            resolveLinks(
+                                entry,
+                                content.providerName,
+                                episode.data,
+                                episode.name.ifBlank { "Episode ${index + 1}" }
+                            )
+                        }
+                    ) { Text("Link", fontSize = 10.sp) }
+                }
+            }
+        }
+        if (resolvingLinks) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        }
+        if (linkMessage.isNotBlank()) {
+            Text("$linkTarget • $linkMessage", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        streams.forEach { (_, stream) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stream.name.ifBlank { stream.source }, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${stream.quality.takeIf { it > 0 }?.let { "${it}p • " } ?: ""}${stream.streamType}",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        val headers = stream.headers.toMutableMap()
+                        if (stream.referer.isNotBlank() && headers.keys.none { it.equals("Referer", ignoreCase = true) }) {
+                            headers["Referer"] = stream.referer
+                        }
+                        val mimeType = when (stream.streamType.uppercase()) {
+                            "M3U8" -> "application/x-mpegURL"
+                            "DASH" -> "application/dash+xml"
+                            else -> null
+                        }
+                        viewModel.player.playWithMimeType(
+                            stream.url,
+                            stream.name.ifBlank { selectedContent?.second?.title ?: "CloudStream" },
+                            requestHeaders = headers,
+                            mimeType = mimeType
+                        )
+                    }
+                ) { Text("Putar", fontSize = 10.sp) }
+            }
+        }
     }
 }
