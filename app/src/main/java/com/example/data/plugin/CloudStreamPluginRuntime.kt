@@ -12,7 +12,9 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.extractorApis
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.io.File
+import java.lang.ref.WeakReference
 import java.util.zip.ZipFile
+import com.lagradost.api.setContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -245,6 +247,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
             "pluginClassName pada manifest tidak valid."
         }
 
+        setContext(WeakReference(context as Any))
         val dexDirectory = File(
             context.codeCacheDir,
             "cloudstream_plugins/${canonical.nameWithoutExtension}"
