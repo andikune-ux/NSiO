@@ -652,19 +652,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
-        val profileId = _activeProfile.value?.id ?: return
         viewModelScope.launch {
-            var successCount = 0
-            val failures = mutableListOf<String>()
-            repo.pluginLists.distinct().forEach { url ->
-                val result = runCatching { parseAndAddLinkInternal(url, profileId) }
-                    .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
-                if (result.startsWith("Error:")) failures += result else successCount++
-            }
-            showStatus(
-                if (failures.isEmpty()) "Repository diperbarui: $successCount sumber"
-                else "Repository: $successCount berhasil, ${failures.size} gagal"
-            )
+            runCatching { pluginManager.refreshRepositoryCatalog(repo) }
+                .onSuccess { updated ->
+                    showStatus("Katalog ${updated.name} diperbarui: ${updated.plugins.size} plugin ditemukan. Plugin CloudStream belum dieksekusi oleh runtime NSiO.")
+                }
+                .onFailure { error ->
+                    showStatus("Gagal memperbarui katalog: ${error.localizedMessage ?: "periksa URL dan koneksi"}")
+                }
         }
     }
 

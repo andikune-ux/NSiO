@@ -979,13 +979,49 @@ private fun PluginRepoTab(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(repo.pluginLists.firstOrNull().orEmpty(), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${repo.plugins.size} plugin • ${repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }}", fontSize = 10.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(onClick = { viewModel.refreshRepository(repo) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)) {
                     Text("Refresh", fontSize = 11.sp)
                 }
             }
         }
+        }
+
+        repos.filter { it.plugins.isNotEmpty() }.forEach { repo ->
+            item(key = "cloudstream-title-${repo.sourceUrl}") {
+                Text(
+                    text = "Katalog ${repo.name} • ${repo.plugins.size} plugin",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            items(repo.plugins, key = { "cloudstream-${repo.sourceUrl}-${it.internalName}" }) { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().liquidGlass(
+                        shape = RoundedCornerShape(14.dp), alpha = 0.07f, borderAlpha = 0.2f, elevation = 2.dp
+                    ).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(entry.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "${entry.internalName} • v${entry.version} • ${entry.language.ifBlank { "bahasa tidak ditentukan" }}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (entry.description.isNotBlank()) {
+                            Text(entry.description, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                        }
+                        Text(
+                            if (entry.status == 0) "Status: nonaktif" else "Metadata tersedia • runtime belum didukung",
+                            fontSize = 9.sp,
+                            color = if (entry.status == 0) AccentRed else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         item {

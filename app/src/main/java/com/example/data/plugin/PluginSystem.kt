@@ -12,6 +12,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URI
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 
 data class PluginManifest(
@@ -24,11 +26,29 @@ data class PluginManifest(
     val iconUrl: String = ""
 )
 
+data class CloudStreamPluginEntry(
+    val name: String,
+    val internalName: String,
+    val version: Int,
+    val apiVersion: Int,
+    val status: Int,
+    val url: String,
+    val description: String,
+    val authors: List<String>,
+    val tvTypes: List<String>,
+    val language: String,
+    val iconUrl: String,
+    val fileHash: String,
+    val fileSize: Long
+)
+
 data class RepoManifest(
     val name: String,
     val description: String,
     val manifestVersion: Int = 1,
-    val pluginLists: List<String> = emptyList()
+    val pluginLists: List<String> = emptyList(),
+    val sourceUrl: String = "",
+    val plugins: List<CloudStreamPluginEntry> = emptyList()
 )
 
 abstract class BasePlugin {
@@ -68,6 +88,86 @@ class PluginManager(private val context: Context) {
     fun getLocalPluginsDirectory(): File = File(context.filesDir, "Cloudstream3/plugins").also { it.mkdirs() }
     fun getOnlinePluginsDirectory(repoHash: String): File = File(context.filesDir, "Extensions/$repoHash").also { it.mkdirs() }
 
+    private fun fetchJson(url: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 20_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "NSiO/1.0")
+            setRequestProperty("Accept", "application/json")
+        }
+        try {
+            val code = connection.responseCode
+            require(code in 200..299) { "HTTP $code saat membaca $url" }
+            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun parsePluginEntries(json: String): List<CloudStreamPluginEntry> {
+        val array = JSONArray(json)
+        return (0 until array.length()).mapNotNull { index ->
+            val item = array.optJSONObject(index) ?: return@mapNotNull null
+            val url = item.optString("url").trim()
+            val internalName = item.optString("internalName").trim()
+            if (url.isBlank() || internalName.isBlank()) return@mapNotNull null
+            val authorsJson = item.optJSONArray("authors")
+            val tvTypesJson = item.optJSONArray("tvTypes")
+            CloudStreamPluginEntry(
+                name = item.optString("name").ifBlank { internalName },
+                internalName = internalName,
+                version = item.optInt("version", 1),
+                apiVersion = item.optInt("apiVersion", 1),
+                status = item.optInt("status", 1),
+                url = url,
+                description = item.optString("description").ifBlank {
+                    (0 until (tvTypesJson?.length() ?: 0)).joinToString(", ") { tvTypesJson!!.optString(it) }
+                },
+                authors = (0 until (authorsJson?.length() ?: 0)).map { authorsJson!!.optString(it) },
+                tvTypes = (0 until (tvTypesJson?.length() ?: 0)).map { tvTypesJson!!.optString(it) },
+                language = item.optString("language"),
+                iconUrl = item.optString("iconUrl"),
+                fileHash = item.optString("fileHash"),
+                fileSize = item.optLong("fileSize", 0L)
+            )
+        }
+    }
+
+    private fun loadCloudStreamCatalog(sourceUrl: String): RepoManifest {
+        val payload = fetchJson(sourceUrl).trim()
+        if (payload.startsWith("[")) {
+            val entries = parsePluginEntries(payload)
+            return RepoManifest(
+                name = "CloudStream Plugin List",
+                description = "${entries.size} plugin ditemukan",
+                pluginLists = listOf(sourceUrl),
+                sourceUrl = sourceUrl,
+                plugins = entries
+            )
+        }
+        val root = JSONObject(payload)
+        val pluginListsArray = root.optJSONArray("pluginLists")
+            ?: throw IllegalArgumentException("Manifest tidak memiliki field pluginLists.")
+        val pluginListUrls = (0 until pluginListsArray.length())
+            .map { pluginListsArray.optString(it).trim() }
+            .filter { it.startsWith("https://") || it.startsWith("http://") }
+        require(pluginListUrls.isNotEmpty()) { "Manifest tidak memiliki URL plugins.json yang valid." }
+        val entries = pluginListUrls.flatMap { listUrl ->
+            val listJson = fetchJson(listUrl).trim()
+            require(listJson.startsWith("[")) { "Daftar plugin dari $listUrl bukan JSON array." }
+            parsePluginEntries(listJson)
+        }.distinctBy { it.internalName to it.url }
+        return RepoManifest(
+            name = root.optString("name").ifBlank { "CloudStream Repository" },
+            description = root.optString("description").ifBlank { "${entries.size} plugin ditemukan" },
+            manifestVersion = root.optInt("manifestVersion", 1),
+            pluginLists = pluginListUrls,
+            sourceUrl = sourceUrl,
+            plugins = entries
+        )
+    }
+
     suspend fun addRepository(name: String, url: String) = withContext(Dispatchers.IO) {
         val normalized = url.trim()
         val uri = try { URI(normalized) } catch (_: Exception) { null }
@@ -76,16 +176,27 @@ class PluginManager(private val context: Context) {
             URI(it.scheme.lowercase(), it.userInfo, it.host.lowercase(), it.port, it.path, it.query, it.fragment).toASCIIString()
         }
         require(_repositories.value.none { repo ->
-            repo.pluginLists.any { savedUrl ->
-                runCatching {
-                    val saved = URI(savedUrl.trim()).normalize()
-                    URI(saved.scheme?.lowercase(), saved.userInfo, saved.host?.lowercase(), saved.port, saved.path, saved.query, saved.fragment).toASCIIString() == canonicalUrl
-                }.getOrDefault(savedUrl.trim() == normalized)
-            }
+            val existing = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }
+            runCatching {
+                val saved = URI(existing).normalize()
+                URI(saved.scheme?.lowercase(), saved.userInfo, saved.host?.lowercase(), saved.port, saved.path, saved.query, saved.fragment).toASCIIString() == canonicalUrl
+            }.getOrDefault(existing == normalized)
         }) { "Repository ini sudah tersimpan." }
-        val newRepo = RepoManifest(name.trim().ifEmpty { "Repositori Eksternal" }, "Repositori pengguna: $normalized", 1, listOf(normalized))
-        _repositories.value = _repositories.value + newRepo
+        val catalog = loadCloudStreamCatalog(normalized)
+        val repo = catalog.copy(name = catalog.name.ifBlank { name.trim().ifBlank { "Repositori Eksternal" } })
+        _repositories.value = _repositories.value + repo
         saveRepositories()
+    }
+
+    suspend fun refreshRepositoryCatalog(repo: RepoManifest): RepoManifest = withContext(Dispatchers.IO) {
+        val source = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }
+        require(source.isNotBlank()) { "URL repository tidak ditemukan." }
+        val updated = loadCloudStreamCatalog(source)
+        _repositories.value = _repositories.value.map { current ->
+            if (current.sourceUrl == source || current == repo) updated else current
+        }
+        saveRepositories()
+        updated
     }
 
     suspend fun installPluginFromManifest(manifest: PluginManifest) = withContext(Dispatchers.IO) {
@@ -110,7 +221,28 @@ class PluginManager(private val context: Context) {
             _repositories.value = (0 until arr.length()).mapNotNull { i ->
                 val obj = arr.optJSONObject(i) ?: return@mapNotNull null
                 val urls = obj.optJSONArray("pluginLists") ?: JSONArray()
-                RepoManifest(obj.optString("name", "Repositori"), obj.optString("description"), obj.optInt("manifestVersion", 1), (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() })
+                RepoManifest(
+                    name = obj.optString("name", "Repositori"),
+                    description = obj.optString("description"),
+                    manifestVersion = obj.optInt("manifestVersion", 1),
+                    pluginLists = (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() },
+                    sourceUrl = obj.optString("sourceUrl"),
+                    plugins = obj.optJSONArray("plugins")?.let { entries ->
+                        (0 until entries.length()).mapNotNull { index ->
+                            entries.optJSONObject(index)?.let { item ->
+                                val authors = item.optJSONArray("authors")
+                                val types = item.optJSONArray("tvTypes")
+                                CloudStreamPluginEntry(
+                                    item.optString("name"), item.optString("internalName"), item.optInt("version", 1),
+                                    item.optInt("apiVersion", 1), item.optInt("status", 1), item.optString("url"),
+                                    item.optString("description"), (0 until (authors?.length() ?: 0)).map { authors!!.optString(it) },
+                                    (0 until (types?.length() ?: 0)).map { types!!.optString(it) }, item.optString("language"),
+                                    item.optString("iconUrl"), item.optString("fileHash"), item.optLong("fileSize", 0L)
+                                )
+                            }
+                        }
+                    }.orEmpty()
+                )
             }
         }
     }
@@ -121,6 +253,19 @@ class PluginManager(private val context: Context) {
             array.put(JSONObject().apply {
                 put("name", repo.name); put("description", repo.description); put("manifestVersion", repo.manifestVersion)
                 put("pluginLists", JSONArray(repo.pluginLists))
+                put("sourceUrl", repo.sourceUrl)
+                put("plugins", JSONArray().apply {
+                    repo.plugins.forEach { plugin ->
+                        put(JSONObject().apply {
+                            put("name", plugin.name); put("internalName", plugin.internalName)
+                            put("version", plugin.version); put("apiVersion", plugin.apiVersion)
+                            put("status", plugin.status); put("url", plugin.url)
+                            put("description", plugin.description); put("authors", JSONArray(plugin.authors))
+                            put("tvTypes", JSONArray(plugin.tvTypes)); put("language", plugin.language)
+                            put("iconUrl", plugin.iconUrl); put("fileHash", plugin.fileHash); put("fileSize", plugin.fileSize)
+                        })
+                    }
+                })
             })
         }
         prefs.edit().putString(REPOSITORIES_KEY, array.toString()).apply()
