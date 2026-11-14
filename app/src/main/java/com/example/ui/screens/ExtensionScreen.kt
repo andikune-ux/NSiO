@@ -938,7 +938,19 @@ private fun PluginRepoTab(
             onDismissRequest = { showPlaylistDialog = false },
             title = { Text("Daftar Playlist (" + sourcePlaylists.size + ")") },
             text = {
-                Text(if (sourcePlaylists.isEmpty()) "Belum ada playlist tersimpan." else sourcePlaylists.joinToString("\n\n") { it.name + " • " + it.itemCount + " item\n" + it.url }, fontSize = 11.sp)
+                if (sourcePlaylists.isEmpty()) Text("Belum ada playlist tersimpan.")
+                else LazyColumn(modifier = Modifier.height(360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(sourcePlaylists, key = { it.id }) { playlist ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f).clickable { viewModel.selectFilter("PLAYLIST:" + playlist.id); showPlaylistDialog = false }) {
+                                Text(playlist.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(playlist.itemCount.toString() + " item • " + playlist.url, fontSize = 9.sp, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { editingPlaylist = playlist; editedName = playlist.name }) { Icon(Icons.Default.Edit, contentDescription = "Ubah nama") }
+                            IconButton(onClick = { viewModel.deleteSourcePlaylist(playlist) }) { Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = AccentRed) }
+                        }
+                    }
+                }
             },
             confirmButton = { TextButton(onClick = { showPlaylistDialog = false }) { Text("Tutup") } }
         )
@@ -947,18 +959,66 @@ private fun PluginRepoTab(
         AlertDialog(
             onDismissRequest = { showRepositoryDialog = false },
             title = { Text("Daftar Repository (" + repos.size + ")") },
-            text = { Text(if (repos.isEmpty()) "Belum ada repository." else repos.joinToString("\n\n") { it.name + " • " + it.plugins.size + " plugin\n" + it.sourceUrl }, fontSize = 11.sp) },
+            text = {
+                if (repos.isEmpty()) Text("Belum ada repository.")
+                else LazyColumn(modifier = Modifier.height(360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(repos, key = { it.sourceUrl.ifBlank { it.name } }) { repo ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(repo.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(repo.plugins.size.toString() + " plugin • " + repo.sourceUrl, fontSize = 9.sp, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { viewModel.refreshRepository(repo) }) { Text("Refresh", fontSize = 10.sp) }
+                        }
+                    }
+                }
+            },
             confirmButton = { TextButton(onClick = { showRepositoryDialog = false }) { Text("Tutup") } }
         )
     }
     if (showPluginDialog) {
         val entries = repos.flatMap { it.plugins }.distinctBy { it.internalName to it.version }
-        val pluginSummary = entries.joinToString("\n") { it.name + " • " + it.internalName + " • v" + it.version + if (viewModel.pluginManager.isCloudStreamPluginInstalled(it)) " • terpasang" else " • belum dipasang" }
-        val internalSummary = plugins.joinToString("\n") { it.manifest?.name ?: it.filename.ifBlank { "Plugin internal NSiO" } }
         AlertDialog(
             onDismissRequest = { showPluginDialog = false },
             title = { Text("Daftar Plugin (" + (entries.size + plugins.size) + ")") },
-            text = { Text(listOf(pluginSummary, internalSummary).filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { "Belum ada plugin." }, fontSize = 10.sp) },
+            text = {
+                if (entries.isEmpty() && plugins.isEmpty()) Text("Belum ada plugin.")
+                else LazyColumn(modifier = Modifier.height(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(entries, key = { it.internalName + "-" + it.version }) { entry ->
+                        var installed by remember(entry.internalName, entry.version) { mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry)) }
+                        var busy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                        Column(modifier = Modifier.fillMaxWidth().padding(6.dp)) {
+                            Text(entry.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(entry.internalName + " • v" + entry.version + " • " + if (installed) "terpasang" else "belum dipasang", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Button(
+                                onClick = {
+                                    if (!busy && entry.status != 0) {
+                                        busy = true
+                                        scope.launch {
+                                            runCatching {
+                                                if (!installed) viewModel.pluginManager.installCloudStreamPlugin(entry)
+                                                viewModel.pluginManager.loadCloudStreamPlugin(entry)
+                                            }.onSuccess { installed = true }
+                                             .onFailure { repoFeedback = it.message ?: "Gagal memasang plugin." }
+                                            busy = false
+                                        }
+                                    }
+                                },
+                                enabled = !busy && entry.status != 0
+                            ) { if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp) else Text(if (installed) "Aktifkan" else "Pasang & aktifkan", fontSize = 10.sp) }
+                        }
+                    }
+                    items(plugins, key = { it.manifest?.name ?: it.filename }) { plugin ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(plugin.manifest?.name ?: plugin.filename.ifBlank { "Plugin internal NSiO" }, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(plugin.manifest?.description ?: "Plugin internal NSiO", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = { viewModel.pluginManager.unloadPlugin(plugin) }) { Icon(Icons.Default.Delete, contentDescription = "Copot", tint = AccentRed) }
+                        }
+                    }
+                }
+            },
             confirmButton = { TextButton(onClick = { showPluginDialog = false }) { Text("Tutup") } }
         )
     }
