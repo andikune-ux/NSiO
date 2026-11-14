@@ -204,6 +204,7 @@ fun HomeScreen(
                                 borderAlpha = 0.35f,
                                 elevation = 2.dp
                             )
+                            .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(10.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -229,6 +230,7 @@ fun HomeScreen(
                             borderAlpha = if (searchQuery.isNotEmpty()) 0.65f else 0.30f,
                             elevation = 3.dp
                         )
+                        .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(20.dp))
                         .clip(RoundedCornerShape(20.dp))
                         .clickable { isSearchExpanded = true }
                         .liquidGlassTvFocusable(shape = RoundedCornerShape(20.dp))
@@ -296,6 +298,7 @@ fun HomeScreen(
                                 borderAlpha = 0.3f,
                                 elevation = 3.dp
                             )
+                            .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
                             .clickable { viewModel.toggleDisplayMode() }
                             .liquidGlassTvFocusable(shape = RoundedCornerShape(18.dp))
@@ -333,6 +336,7 @@ fun HomeScreen(
                                 borderAlpha = 0.35f,
                                 elevation = 3.dp
                             )
+                            .background(if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White, RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
                             .clickable {
                                 if (authState is AuthState.Authenticated) {
