@@ -212,8 +212,8 @@ val generateNsioLauncherIcons = tasks.register("generateNsioLauncherIcons") {
       val r = (rgb shr 16) and 255
       val g = (rgb shr 8) and 255
       val b = rgb and 255
-      val neutral = kotlin.math.abs(r - g) < 22 && kotlin.math.abs(g - b) < 22
-      return neutral && (r > 218 || (r in 165..225 && kotlin.math.abs(r - 207) < 34))
+      val neutral = java.lang.Math.abs(r - g) < 22 && java.lang.Math.abs(g - b) < 22
+      return neutral && (r > 218 || (r in 165..225 && java.lang.Math.abs(r - 207) < 34))
     }
     fun enqueue(i: Int) {
       if (i in 0 until n && !transparent[i] && checker(pixels[i])) {
