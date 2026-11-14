@@ -230,7 +230,7 @@ private fun NavToolbarGlassItem(
                     Modifier.border(
                         1.dp,
                         Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
-                        RoundedCornerShape(14.dp)
+                        RoundedCornerShape(12.dp)
                     )
                 } else if (isSelected) {
                     Modifier.border(
