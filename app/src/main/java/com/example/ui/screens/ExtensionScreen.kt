@@ -1410,11 +1410,12 @@ private fun CloudStreamSearchPanel(
                             "DASH" -> "application/dash+xml"
                             else -> null
                         }
-                        viewModel.player.playWithMimeType(
-                            stream.url,
-                            stream.name.ifBlank { selectedContent?.second?.title ?: "CloudStream" },
+                        viewModel.playExternalStream(
+                            url = stream.url,
+                            title = stream.name.ifBlank { selectedContent?.second?.title ?: "CloudStream" },
                             requestHeaders = headers,
-                            mimeType = mimeType
+                            mimeType = mimeType,
+                            sourceUrl = stream.referer
                         )
                     }
                 ) { Text("Putar", fontSize = 10.sp) }

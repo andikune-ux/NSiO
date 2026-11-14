@@ -655,7 +655,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { pluginManager.refreshRepositoryCatalog(repo) }
                 .onSuccess { updated ->
-                    showStatus("Katalog ${updated.name} diperbarui: ${updated.plugins.size} plugin ditemukan. Plugin CloudStream belum dieksekusi oleh runtime NSiO.")
+                    showStatus("Katalog ${updated.name} diperbarui: ${updated.plugins.size} plugin ditemukan. Pasang dan aktifkan .cs3 dari katalog untuk menggunakan providernya.")
                 }
                 .onFailure { error ->
                     showStatus("Gagal memperbarui katalog: ${error.localizedMessage ?: "periksa URL dan koneksi"}")
@@ -873,6 +873,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Player Management ---
+    /**
+     * Opens NSiO's normal PlayerScreen for a resolved external/CloudStream stream.
+     * CloudStream items are transient and are not persisted as Room media records.
+     */
+    fun playExternalStream(
+        url: String,
+        title: String,
+        requestHeaders: Map<String, String> = emptyMap(),
+        mimeType: String? = null,
+        sourceUrl: String = ""
+    ) {
+        require(url.isNotBlank()) { "URL stream kosong." }
+        val displayTitle = title.ifBlank { "Streaming" }
+        _currentlyPlaying.value = MediaItem(
+            id = "external-stream:${java.util.UUID.randomUUID()}",
+            profileId = _activeProfile.value?.id ?: "external-stream",
+            title = displayTitle,
+            url = url,
+            type = "STREAM",
+            sourceType = "CLOUDSTREAM",
+            sourceUrl = sourceUrl
+        )
+        player.playWithMimeType(
+            url = url,
+            title = displayTitle,
+            requestHeaders = requestHeaders,
+            mimeType = mimeType
+        )
+    }
+
     fun playMedia(item: MediaItem) {
         val useNativePlayer = shouldUseNativePlayer(item.type, item.url)
         if (!useNativePlayer) player.stop()
@@ -911,6 +941,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!isNativeVideo) return
 
         player.pause()
+        if (current.sourceType == "CLOUDSTREAM") return
         val positionMs = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
         viewModelScope.launch {
             runCatching { mediaDao.updateProgress(current.id, positionMs) }
@@ -925,7 +956,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun closePlayer() {
         val current = _currentlyPlaying.value
         val isPlayableVideo = current?.let { shouldUseNativePlayer(it.type, it.url) } == true
-        if (current != null && isPlayableVideo) {
+        if (current != null && isPlayableVideo && current.sourceType != "CLOUDSTREAM") {
             val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
             viewModelScope.launch {
                 mediaDao.updateProgress(current.id, pos)
