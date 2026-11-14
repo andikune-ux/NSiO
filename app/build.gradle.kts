@@ -194,12 +194,13 @@ val generateNsioLauncherIcons = tasks.register<GenerateNsioLauncherIconsTask>("g
   outputDirectory.set(nsioLauncherResDir)
 }
 
-android.sourceSets.getByName("main").res.srcDir(nsioLauncherResDir.get().asFile)
-
-// Android's source-set API accepts a concrete directory, so explicitly wire the generator
-// before every task that discovers, merges, or packages Android resources.
-tasks.configureEach {
-  if (name.contains("Resources", ignoreCase = true) || name.contains("SourceSetPaths")) {
-    dependsOn(generateNsioLauncherIcons)
+// Register generated resources through the Android Components Variant API.
+// AGP now owns the producer/consumer relationship, so resource, manifest/deep-link,
+// and packaging tasks all receive the correct implicit dependency.
+androidComponents {
+  onVariants(selector().all()) { variant ->
+    variant.sources.res?.addGeneratedSourceDirectory(generateNsioLauncherIcons) { task ->
+      task.outputDirectory
+    }
   }
 }
