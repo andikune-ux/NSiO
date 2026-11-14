@@ -739,7 +739,7 @@ fun HomeScreen(
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.padding(end = 8.dp, bottom = if (isPhoneLayout) 88.dp else 12.dp)
+                        modifier = Modifier.padding(end = 8.dp, bottom = if (isPhoneLayout) 72.dp else 12.dp)
                     ) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = showPlaylistPicker,
@@ -859,16 +859,16 @@ fun HomeScreen(
                             modifier = Modifier
                                 .size(54.dp)
                                 .clip(CircleShape)
-                                .background(accentColor)
                                 .clickable { showPlaylistPicker = !showPlaylistPicker }
                                 .liquidGlassTvFocusable(shape = CircleShape)
+                                .border(1.5.dp, accentColor, CircleShape)
                                 .testTag("floating_playlist_extension_button"),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.Extension,
                                 contentDescription = "Buka pilihan playlist",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = accentColor,
                                 modifier = Modifier.size(25.dp)
                             )
                         }
