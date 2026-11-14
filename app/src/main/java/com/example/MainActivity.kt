@@ -101,9 +101,14 @@ class MainActivity : ComponentActivity() {
             var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
             val snackbarHostState = remember { SnackbarHostState() }
 
-            LaunchedEffect(statusMessage, settings.language) {
+            LaunchedEffect(statusMessage, settings.language, isCalculatorUnlocked) {
                 statusMessage?.let { msg ->
-                    snackbarHostState.showSnackbar(translateAppText(msg, settings.language))
+                    val translated = translateAppText(msg, settings.language)
+                    if (isCalculatorUnlocked) {
+                        snackbarHostState.showSnackbar(translated)
+                    } else {
+                        secretDialogText = translated
+                    }
                     viewModel.clearStatus()
                 }
             }
