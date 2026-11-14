@@ -269,7 +269,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                crashLog?.let { log ->
+                if (isCalculatorUnlocked) crashLog?.let { log ->
                     AlertDialog(
                         onDismissRequest = { crashLog = null },
                         title = { Text("Aplikasi mengalami crash") },

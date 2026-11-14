@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.security.MessageDigest
 
 @Composable
 fun CalculatorAccessGate(
@@ -53,7 +54,7 @@ fun CalculatorAccessGate(
             "=" -> {
                 val value = expression.trim()
                 when {
-                    value == "140399" -> { expression = ""; result = null; onUnlock() }
+                    isValidAccessPin(value) -> { expression = ""; result = null; onUnlock() }
                     value in SecretCodeRegistry.codes -> { expression = ""; result = null; onSecretCode(value) }
                     value.isBlank() -> Unit
                     else -> try {
@@ -167,6 +168,13 @@ object SecretCodeRegistry {
     )
     val codes: Set<String> = entries.map { it.code }.toSet()
     val allCodes: String = entries.joinToString("\n") { "${it.code} =  ${it.title}\n${it.description}" }
+}
+
+private fun isValidAccessPin(value: String): Boolean {
+    val digest = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+    return digest == "03122084549941efe9eb5c75f4dcdeb82654e086fb54da8fa4e92d06680f4e57"
 }
 
 private object CalculatorMath {
