@@ -705,7 +705,7 @@ fun HomeScreen(
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.padding(end = 8.dp, bottom = 12.dp)
+                        modifier = Modifier.padding(end = 8.dp, bottom = if (isPhoneLayout) 88.dp else 12.dp)
                     ) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = showPlaylistPicker,

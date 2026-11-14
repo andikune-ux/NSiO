@@ -157,6 +157,11 @@ private fun BottomNavItem(
         modifier = Modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
+            .background(
+                if ((MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f)
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                else Color.White
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
