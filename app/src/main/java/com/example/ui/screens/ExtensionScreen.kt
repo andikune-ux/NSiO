@@ -811,6 +811,9 @@ private fun PluginRepoTab(
     var editedName by remember { mutableStateOf("") }
     var repoFeedback by remember { mutableStateOf<String?>(null) }
     var isAddingRepository by remember { mutableStateOf(false) }
+    var showPlaylistDialog by remember { mutableStateOf(false) }
+    var showRepositoryDialog by remember { mutableStateOf(false) }
+    var showPluginDialog by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
@@ -818,35 +821,10 @@ private fun PluginRepoTab(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            Text(
-                text = "Riwayat Playlist Sumber (${sourcePlaylists.size})",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        if (sourcePlaylists.isEmpty()) {
-            item { Text("Belum ada link sumber yang dimasukkan.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        } else {
-            items(sourcePlaylists, key = { it.id }) { playlist ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().liquidGlass(
-                        shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
-                    ).clickable { viewModel.selectFilter("PLAYLIST:${playlist.id}") }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(playlist.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Text("${playlist.itemCount} item • ${playlist.url}", fontSize = 10.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = { editingPlaylist = playlist; editedName = playlist.name }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Rename playlist", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(onClick = { viewModel.deleteSourcePlaylist(playlist) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Hapus playlist", tint = AccentRed, modifier = Modifier.size(18.dp))
-                    }
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { showPlaylistDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar playlist (" + sourcePlaylists.size + ")", fontSize = 11.sp) }
+                Button(onClick = { showRepositoryDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar repository (" + repos.size + ")", fontSize = 11.sp) }
+                Button(onClick = { showPluginDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar plugin (" + (repos.sumOf { it.plugins.size } + plugins.size) + ")", fontSize = 11.sp) }
             }
         }
         item {
@@ -952,219 +930,37 @@ private fun PluginRepoTab(
             }
         }
 
-        item {
-            Text(
-                text = "Repository Tersimpan (${repos.size}):",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        if (repos.isEmpty()) {
-            item {
-                Text(
-                    "Belum ada repository tersimpan. Tambahkan URL katalog yang kamu percaya untuk mulai mengelolanya.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(repos, key = { it.pluginLists.firstOrNull() ?: "${it.name}:${it.description}" }) { repo ->
-            Row(
-                modifier = Modifier.fillMaxWidth().liquidGlass(
-                    shape = RoundedCornerShape(16.dp), alpha = 0.08f, borderAlpha = 0.25f, elevation = 3.dp
-                ).padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(repo.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text("${repo.plugins.size} plugin • ${repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }}", fontSize = 10.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Button(onClick = { viewModel.refreshRepository(repo) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(36.dp)) {
-                    Text("Refresh", fontSize = 11.sp)
-                }
-            }
-        }
-        }
-
-        repos.filter { it.plugins.isNotEmpty() }.forEach { repo ->
-            item(key = "cloudstream-title-${repo.sourceUrl}") {
-                Text(
-                    text = "Katalog ${repo.name} • ${repo.plugins.size} plugin",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            items(repo.plugins, key = { "cloudstream-${repo.sourceUrl}-${it.internalName}" }) { entry ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().liquidGlass(
-                        shape = RoundedCornerShape(14.dp), alpha = 0.07f, borderAlpha = 0.2f, elevation = 2.dp
-                    ).padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    var artifactInstalled by remember(entry.internalName, entry.version) {
-                        mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry))
-                    }
-                    var artifactBusy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
-                    var runtimeActive by remember(entry.internalName, entry.version) { mutableStateOf(false) }
-                    var runtimeProviderCount by remember(entry.internalName, entry.version) { mutableIntStateOf(0) }
-                    var artifactMessage by remember(entry.internalName, entry.version) { mutableStateOf("") }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(entry.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            text = "${entry.internalName} • v${entry.version} • ${entry.language.ifBlank { "bahasa tidak ditentukan" }}",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (entry.description.isNotBlank()) {
-                            Text(entry.description, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                        }
-                        Text(
-                            when {
-                                entry.status == 0 -> "Status: nonaktif"
-                                runtimeActive -> "Runtime aktif • $runtimeProviderCount provider"
-                                artifactInstalled -> "File .cs3 tersimpan • belum dijalankan"
-                                else -> "Metadata tersedia • belum dipasang"
-                            },
-                            fontSize = 9.sp,
-                            color = if (entry.status == 0) AccentRed else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (artifactMessage.isNotBlank()) {
-                            Text(artifactMessage, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Button(
-                        onClick = {
-                            if (!artifactBusy && !runtimeActive && entry.status != 0) {
-                                artifactBusy = true
-                                scope.launch {
-                                    try {
-                                        if (!artifactInstalled) {
-                                            viewModel.pluginManager.installCloudStreamPlugin(entry)
-                                            artifactInstalled = true
-                                        }
-                                        val providers = viewModel.pluginManager.loadCloudStreamPlugin(entry)
-                                        runtimeProviderCount = providers.size
-                                        runtimeActive = true
-                                        artifactMessage = if (providers.isEmpty()) {
-                                            "Runtime aktif. Plugin tidak mendaftarkan provider MainAPI."
-                                        } else {
-                                            "Runtime aktif • ${providers.size} provider siap dicari."
-                                        }
-                                    } catch (error: Throwable) {
-                                        artifactMessage = if (artifactInstalled) {
-                                            "File tersimpan, aktivasi gagal: ${error.message ?: "kesalahan runtime"}"
-                                        } else {
-                                            error.message ?: "Gagal memasang file plugin."
-                                        }
-                                    } finally {
-                                        artifactBusy = false
-                                    }
-                                }
-                            }
-                        },
-                        enabled = !artifactBusy && !runtimeActive && entry.status != 0,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        if (artifactBusy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        else Text(
-                            when {
-                                runtimeActive -> "Aktif"
-                                artifactInstalled -> "Aktifkan"
-                                else -> "Pasang & aktifkan"
-                            },
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-            }
-        }
-
         item { CloudStreamSearchPanel(viewModel, repos) }
 
-
-        item {
-            Text(
-                text = "Plugin Tercatat (${plugins.size}):",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Bagian ini berisi metadata plugin internal NSiO. Provider CloudStream dikelola melalui katalog dan pencarian di atas.",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (plugins.isEmpty()) {
-            item {
-                Text(
-                    "Belum ada plugin internal NSiO yang tercatat.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(plugins, key = { plugin ->
-            plugin.manifest?.let { "${it.name}|${it.url}|${it.version}" }
-                ?: plugin.filename.ifBlank { "plugin-${plugins.indexOf(plugin)}" }
-        }) { plugin ->
-            val pName = plugin.manifest?.name ?: plugin.filename ?: "Plugin Ekstensi"
-            val pDesc = plugin.manifest?.description ?: "Plugin streaming terpasang"
-            val pVersion = plugin.manifest?.version ?: 1
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = 0.08f,
-                        borderAlpha = 0.25f,
-                        elevation = 3.dp
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = pName,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "$pDesc • v$pVersion",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.pluginManager.unloadPlugin(plugin) },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Copot",
-                            tint = AccentRed,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-        }
+    }
+    if (showPlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { showPlaylistDialog = false },
+            title = { Text("Daftar Playlist (" + sourcePlaylists.size + ")") },
+            text = {
+                Text(if (sourcePlaylists.isEmpty()) "Belum ada playlist tersimpan." else sourcePlaylists.joinToString("\n\n") { it.name + " • " + it.itemCount + " item\n" + it.url }, fontSize = 11.sp)
+            },
+            confirmButton = { TextButton(onClick = { showPlaylistDialog = false }) { Text("Tutup") } }
+        )
+    }
+    if (showRepositoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showRepositoryDialog = false },
+            title = { Text("Daftar Repository (" + repos.size + ")") },
+            text = { Text(if (repos.isEmpty()) "Belum ada repository." else repos.joinToString("\n\n") { it.name + " • " + it.plugins.size + " plugin\n" + it.sourceUrl }, fontSize = 11.sp) },
+            confirmButton = { TextButton(onClick = { showRepositoryDialog = false }) { Text("Tutup") } }
+        )
+    }
+    if (showPluginDialog) {
+        val entries = repos.flatMap { it.plugins }.distinctBy { it.internalName to it.version }
+        val pluginSummary = entries.joinToString("\n") { it.name + " • " + it.internalName + " • v" + it.version + if (viewModel.pluginManager.isCloudStreamPluginInstalled(it)) " • terpasang" else " • belum dipasang" }
+        val internalSummary = plugins.joinToString("\n") { it.manifest?.name ?: it.filename.ifBlank { "Plugin internal NSiO" } }
+        AlertDialog(
+            onDismissRequest = { showPluginDialog = false },
+            title = { Text("Daftar Plugin (" + (entries.size + plugins.size) + ")") },
+            text = { Text(listOf(pluginSummary, internalSummary).filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { "Belum ada plugin." }, fontSize = 10.sp) },
+            confirmButton = { TextButton(onClick = { showPluginDialog = false }) { Text("Tutup") } }
+        )
     }
     editingPlaylist?.let { playlist ->
         AlertDialog(
