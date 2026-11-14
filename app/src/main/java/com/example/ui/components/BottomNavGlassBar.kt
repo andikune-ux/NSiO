@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,19 +67,20 @@ fun BottomNavGlassBar(
 ) {
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .width(236.dp)
+            .padding(horizontal = 0.dp, vertical = 0.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 5.dp, vertical = 3.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .padding(horizontal = 4.dp, vertical = 3.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().focusGroup(),
-                horizontalArrangement = Arrangement.SpaceAround,
+                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BottomNavItem(
@@ -179,15 +181,11 @@ private fun BottomNavItem(
                 role = Role.Button
                 selected = isSelected
             }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .size(48.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
+        Box(
                 modifier = Modifier
                     .size(30.dp)
                     .clip(CircleShape)
@@ -204,13 +202,6 @@ private fun BottomNavItem(
                     modifier = Modifier.size(19.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(1.dp))
-            Text(
-                text = title,
-                fontSize = 10.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = textColor
-            )
         }
     }
 }

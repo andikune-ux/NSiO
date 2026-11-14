@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,13 +75,14 @@ fun VerticalNavToolbar(
         modifier = modifier
             .fillMaxHeight()
             .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)
-            .width(68.dp)
+            .offset(y = 28.dp)
+            .width(58.dp)
             .testTag("vertical_nav_toolbar")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(vertical = 8.dp, horizontal = 3.dp),
+                .padding(vertical = 8.dp, horizontal = 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -114,19 +116,12 @@ fun VerticalNavToolbar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = "NSiO",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 1.sp
-                )
+                
             }
 
             // Navigation Items (Top to Bottom: 1. Beranda, 2. Extension, 3. Pengaturan, 4. Profil)
             Column(
-                verticalArrangement = Arrangement.spacedBy(5.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f, fill = false).focusGroup()
             ) {
@@ -164,21 +159,7 @@ fun VerticalNavToolbar(
                 )
             }
 
-            // Bottom Active Profile Glass Pill
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = activeProfileName.take(5),
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center
-                )
-            }
+            Spacer(modifier = Modifier.height(2.dp))
         }
     }
 }
@@ -209,7 +190,7 @@ private fun NavToolbarGlassItem(
 
     Column(
         modifier = Modifier
-            .width(60.dp)
+            .width(48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(buttonSurface, RoundedCornerShape(12.dp))
             .then(if (isSelected) Modifier.neumorphicInset(RoundedCornerShape(12.dp), depth = 3.dp) else Modifier)
@@ -236,7 +217,7 @@ private fun NavToolbarGlassItem(
                 role = Role.Button
                 selected = isSelected
             }
-            .padding(vertical = 5.dp, horizontal = 1.dp)
+            .size(46.dp)
             .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -244,7 +225,7 @@ private fun NavToolbarGlassItem(
         if (avatarEmoji != null && avatarEmoji.isNotEmpty() && title == "Profil") {
             Text(
                 text = avatarEmoji,
-                fontSize = 16.sp,
+                fontSize = 21.sp,
                 textAlign = TextAlign.Center
             )
         } else {
@@ -252,17 +233,8 @@ private fun NavToolbarGlassItem(
                 imageVector = icon,
                 contentDescription = title,
                 tint = contentColor,
-                modifier = Modifier.size(19.dp)
+                modifier = Modifier.size(23.dp)
             )
         }
-        Spacer(modifier = Modifier.height(1.dp))
-        Text(
-            text = title,
-            fontSize = 9.sp,
-            fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal,
-            color = contentColor,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
     }
 }
