@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -71,11 +72,18 @@ fun BottomNavGlassBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
+        val glassShape = RoundedCornerShape(24.dp)
+        val glassTint = Color.White.copy(
+            alpha = if (MaterialTheme.colorScheme.background.red < 0.2f) 0.18f else 0.48f
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .padding(horizontal = 4.dp, vertical = 3.dp)
+                .height(48.dp)
+                .clip(glassShape)
+                .background(glassTint)
+                .border(1.dp, Color.White.copy(alpha = 0.62f), glassShape)
+                .padding(horizontal = 4.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {
             Row(
