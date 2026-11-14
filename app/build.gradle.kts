@@ -2,6 +2,9 @@ import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesS
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 
 plugins {
   alias(libs.plugins.android.application)
@@ -185,3 +188,83 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+ 
+// Generate launcher density assets from the approved artwork at build time.
+val nsioLauncherResDir = layout.buildDirectory.dir("generated/res/nsioLauncher")
+val generateNsioLauncherIcons = tasks.register("generateNsioLauncherIcons") {
+  val source = layout.projectDirectory.file("src/main/icon-source/nsio-launcher.jpg")
+  inputs.file(source)
+  outputs.dir(nsioLauncherResDir)
+  doLast {
+    val original = ImageIO.read(source.asFile) ?: throw GradleException("Cannot read NSiO launcher source image")
+    require(original.width == original.height) { "NSiO launcher source must be square" }
+    val w = original.width
+    val h = original.height
+    val n = w * h
+    val pixels = IntArray(n)
+    original.getRGB(0, 0, w, h, pixels, 0, w)
+    val transparent = BooleanArray(n)
+    val queue = IntArray(n)
+    var head = 0
+    var tail = 0
+    fun checker(rgb: Int): Boolean {
+      val r = (rgb shr 16) and 255
+      val g = (rgb shr 8) and 255
+      val b = rgb and 255
+      val neutral = kotlin.math.abs(r - g) < 22 && kotlin.math.abs(g - b) < 22
+      return neutral && (r > 218 || (r in 165..225 && kotlin.math.abs(r - 207) < 34))
+    }
+    fun enqueue(i: Int) {
+      if (i in 0 until n && !transparent[i] && checker(pixels[i])) {
+        transparent[i] = true
+        queue[tail++] = i
+      }
+    }
+    for (x in 0 until w) { enqueue(x); enqueue((h - 1) * w + x) }
+    for (y in 0 until h) { enqueue(y * w); enqueue(y * w + w - 1) }
+    while (head < tail) {
+      val i = queue[head++]
+      val x = i % w
+      val y = i / w
+      if (x > 0) enqueue(i - 1)
+      if (x + 1 < w) enqueue(i + 1)
+      if (y > 0) enqueue(i - w)
+      if (y + 1 < h) enqueue(i + w)
+    }
+    val cleaned = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+    for (i in 0 until n) cleaned.setRGB(i % w, i / w, if (transparent[i]) 0 else pixels[i] or (0xff shl 24))
+    val root = nsioLauncherResDir.get().asFile
+    root.deleteRecursively()
+    fun write(image: BufferedImage, file: File) {
+      file.parentFile.mkdirs()
+      ImageIO.write(image, "png", file)
+    }
+    fun resize(image: BufferedImage, size: Int): BufferedImage {
+      val out = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+      val graphics = out.createGraphics()
+      graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+      graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+      graphics.drawImage(image, 0, 0, size, size, null)
+      graphics.dispose()
+      return out
+    }
+    listOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192).forEach { (density, size) ->
+      val folder = File(root, "mipmap-$density")
+      write(resize(cleaned, size), File(folder, "ic_launcher.png"))
+      write(resize(cleaned, size), File(folder, "ic_launcher_round.png"))
+    }
+    val adaptive = BufferedImage(432, 432, BufferedImage.TYPE_INT_ARGB)
+    val graphics = adaptive.createGraphics()
+    graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+    graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    val safe = 292
+    graphics.drawImage(cleaned, (432 - safe) / 2, (432 - safe) / 2, safe, safe, null)
+    graphics.dispose()
+    write(adaptive, File(root, "drawable-xxxhdpi/ic_launcher_foreground_art.png"))
+    write(resize(cleaned, 1024), File(root, "drawable-nodpi/ic_nsio_logo.png"))
+  }
+}
+android.sourceSets.getByName("main").res.srcDir(nsioLauncherResDir)
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Resources") }
+  .configureEach { dependsOn(generateNsioLauncherIcons) }
