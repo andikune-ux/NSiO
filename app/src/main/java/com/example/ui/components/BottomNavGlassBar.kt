@@ -79,7 +79,7 @@ fun BottomNavGlassBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(48.05.dp)
                 .clip(glassShape)
                 .background(glassTint)
                 .border(1.dp, Color.White.copy(alpha = 0.62f), glassShape)
