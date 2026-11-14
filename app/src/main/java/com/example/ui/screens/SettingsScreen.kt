@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -106,6 +107,7 @@ fun SettingsScreen(
     var readyToInstallVersion by remember { mutableStateOf<String?>(null) }
     var updateStorageAllowed by remember { mutableStateOf(AppUpdateManager.hasUpdateStorageAccess(context)) }
     var updateHistory by remember { mutableStateOf(AppUpdateManager.listDownloadedApks(context)) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -644,16 +646,10 @@ fun SettingsScreen(
                     if (updateRelease?.available == true) {
                         val release = updateRelease!!
                         Text(
-                            text = "Versi terbaru: v${release.latestVersion} • ${if (release.assetSize > 0L) android.text.format.Formatter.formatShortFileSize(context, release.assetSize) else "Ukuran tidak diketahui"}",
+                            text = "Versi terbaru tersedia: v${release.latestVersion} • ${if (release.assetSize > 0L) android.text.format.Formatter.formatShortFileSize(context, release.assetSize) else "Ukuran tidak diketahui"}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = release.notes,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 8
                         )
                     } else if (updateRelease != null) {
                         Text(
@@ -671,79 +667,37 @@ fun SettingsScreen(
                         )
                         Text("Progres unduhan: $updateProgress%", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = {
-                                updateScope.launch {
-                                    updateChecking = true
-                                    updateMessage = "Memeriksa rilis GitHub..."
-                                    updateRelease = runCatching { AppUpdateManager.checkLatest() }.getOrElse { error ->
-                                        updateMessage = "Gagal memeriksa update: ${error.localizedMessage ?: "koneksi bermasalah"}"
-                                        null
+                    Button(
+                        onClick = {
+                            updateScope.launch {
+                                updateChecking = true
+                                updateMessage = "Memeriksa rilis GitHub..."
+                                val result = runCatching { AppUpdateManager.checkLatest() }
+                                result.onSuccess { release ->
+                                    updateRelease = release
+                                    if (release.available) {
+                                        updateMessage = "Pembaruan v${release.latestVersion} tersedia."
+                                        showUpdateDialog = true
+                                    } else {
+                                        showUpdateDialog = false
+                                        updateMessage = "NSiO sudah menggunakan versi terbaru (v${release.currentVersion})."
                                     }
-                                    if (updateRelease?.available == true) {
-                                        updateMessage = "Pembaruan v${updateRelease!!.latestVersion} tersedia."
-                                    } else if (updateRelease != null) {
-                                        updateMessage = "NSiO sudah versi terbaru."
-                                    }
-                                    updateChecking = false
+                                }.onFailure { error ->
+                                    updateRelease = null
+                                    updateMessage = "Gagal memeriksa update: ${error.localizedMessage ?: "koneksi bermasalah"}. Coba lagi."
                                 }
-                            },
-                            enabled = !updateChecking && updateDownloadId == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.weight(1f).height(44.dp)
-                        ) {
-                            if (updateChecking) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                            else Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (updateChecking) "Memeriksa..." else "Cek Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                        if (updateRelease?.available == true && readyToInstallVersion == null && updateDownloadId == null) {
-                            Button(
-                                onClick = {
-                                    runCatching { AppUpdateManager.startDownload(context, updateRelease!!) }
-                                        .onSuccess { id ->
-                                            updateDownloadId = id
-                                            updateVersion = updateRelease!!.latestVersion
-                                            readyToInstallVersion = null
-                                            updateProgress = 0
-                                            updateMessage = "Menyiapkan unduhan..."
-                                        }
-                                        .onFailure { updateMessage = "Gagal memulai unduhan: ${it.localizedMessage}" }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = MaterialTheme.colorScheme.primary),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.height(44.dp)
-                            ) {
-                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text("Unduh APK", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                updateChecking = false
                             }
-                        }
-                    }
-                    readyToInstallVersion?.let { version ->
-                        Button(
-                            onClick = {
-                                when (AppUpdateManager.install(context, version)) {
-                                    AppUpdateManager.InstallResult.OPENED ->
-                                        updateMessage = "Installer Android dibuka. Konfirmasi pemasangan untuk menyelesaikan update."
-                                    AppUpdateManager.InstallResult.PERMISSION_REQUIRED ->
-                                        updateMessage = "Aktifkan izin 'Instal aplikasi tidak dikenal' untuk NSiO, lalu tekan Instal lagi."
-                                    AppUpdateManager.InstallResult.INVALID_APK ->
-                                        updateMessage = "APK tidak valid, versi atau tanda tangan tidak cocok. Unduh ulang dari rilis resmi."
-                                    AppUpdateManager.InstallResult.FAILED ->
-                                        updateMessage = "Gagal membuka installer Android."
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(7.dp))
-                            Text("Instal Pembaruan v$version", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
+                        },
+                        enabled = !updateChecking && updateDownloadId == null,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        if (updateChecking) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        else Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (updateChecking) "Memeriksa..." else "Cek Update", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }
@@ -805,6 +759,136 @@ fun SettingsScreen(
         }
     }
  
+    if (showUpdateDialog && updateRelease?.available == true) {
+        val release = updateRelease!!
+        Dialog(onDismissRequest = {
+            if (updateDownloadId == null) showUpdateDialog = false
+        }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(22.dp))
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(62.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                        .align(Alignment.CenterHorizontally),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(34.dp))
+                }
+                Text(
+                    "PEMBARUAN TERSEDIA",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Text(
+                    "Versi baru: v${release.latestVersion}",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Rincian Pembaruan", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        release.notes.ifBlank { "Tidak ada rincian pembaruan." },
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Ukuran APK: ${if (release.assetSize > 0L) android.text.format.Formatter.formatShortFileSize(context, release.assetSize) else "Tidak diketahui"}",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                when {
+                    updateDownloadId != null -> {
+                        Text("Mengunduh pembaruan... $updateProgress%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        androidx.compose.material3.LinearProgressIndicator(progress = updateProgress / 100f, modifier = Modifier.fillMaxWidth())
+                        Button(
+                            onClick = {
+                                updateDownloadId?.let { AppUpdateManager.cancelDownload(context, it) }
+                                AppUpdateManager.clearPending(context)
+                                updateDownloadId = null
+                                updateVersion = null
+                                updateProgress = 0
+                                updateMessage = "Unduhan pembaruan dibatalkan."
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) { Text("BATALKAN DOWNLOAD") }
+                    }
+                    readyToInstallVersion != null -> {
+                        Button(
+                            onClick = {
+                                when (AppUpdateManager.install(context, readyToInstallVersion!!)) {
+                                    AppUpdateManager.InstallResult.OPENED -> updateMessage = "Installer Android dibuka. Konfirmasi pemasangan untuk menyelesaikan update."
+                                    AppUpdateManager.InstallResult.PERMISSION_REQUIRED -> updateMessage = "Aktifkan izin 'Instal aplikasi tidak dikenal' untuk NSiO, lalu tekan Instal lagi."
+                                    AppUpdateManager.InstallResult.INVALID_APK -> updateMessage = "APK tidak valid atau tanda tangan aplikasi tidak cocok. Unduh ulang dari rilis resmi."
+                                    AppUpdateManager.InstallResult.FAILED -> updateMessage = "Gagal membuka installer Android."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) { Text("INSTALL SEKARANG") }
+                        Button(onClick = { showUpdateDialog = false }, modifier = Modifier.fillMaxWidth()) { Text("TUTUP") }
+                    }
+                    else -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    AppUpdateManager.skipVersion(context, release.latestVersion)
+                                    showUpdateDialog = false
+                                    updateMessage = "Pembaruan v${release.latestVersion} dilewati."
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)
+                            ) { Text("SKIP", fontSize = 11.sp) }
+                            Button(
+                                onClick = { showUpdateDialog = false },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)
+                            ) { Text("NANTI", fontSize = 11.sp) }
+                            Button(
+                                onClick = {
+                                    runCatching { AppUpdateManager.startDownload(context, release) }
+                                        .onSuccess { id ->
+                                            updateDownloadId = id
+                                            updateVersion = release.latestVersion
+                                            readyToInstallVersion = null
+                                            updateProgress = 0
+                                            updateMessage = "Menyiapkan unduhan..."
+                                        }
+                                        .onFailure { updateMessage = "Gagal memulai unduhan: ${it.localizedMessage ?: "periksa izin penyimpanan"}" }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("UPDATE", fontSize = 11.sp) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (showServerPinDialog) {
         ServerPinChangeDialog(
             currentPin = settings.serverPin.ifBlank { "123456" },

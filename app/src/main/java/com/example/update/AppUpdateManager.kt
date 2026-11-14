@@ -23,6 +23,7 @@ object AppUpdateManager {
     private const val PREFS = "nsio_app_updates"
     private const val KEY_DOWNLOAD_ID = "download_id"
     private const val KEY_VERSION = "download_version"
+    private const val KEY_SKIPPED_VERSION = "skipped_version"
     private const val MAX_APK_SIZE = 512L * 1024L * 1024L
 
     data class Release(
@@ -194,6 +195,19 @@ object AppUpdateManager {
     fun clearPending(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove(KEY_DOWNLOAD_ID).remove(KEY_VERSION).apply()
+    }
+
+    fun skipVersion(context: Context, version: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_SKIPPED_VERSION, version).apply()
+    }
+
+    fun skippedVersion(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_SKIPPED_VERSION, null)
+
+    fun cancelDownload(context: Context, id: Long): Boolean {
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        return manager.remove(id) > 0
     }
 
     fun queryDownload(context: Context, id: Long): DownloadState? {
