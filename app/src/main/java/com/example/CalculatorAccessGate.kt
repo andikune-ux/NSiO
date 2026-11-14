@@ -366,35 +366,38 @@ internal object CalculatorMath {
         }
 
         private fun term(): Double {
-            var value = power()
+            var value = unary()
             while (true) {
                 skipSpaces()
                 when {
-                    consume('*') -> value *= power()
-                    consume('/') -> { val divisor = power(); require(divisor != 0.0); value /= divisor }
+                    consume('*') -> value *= unary()
+                    consume('/') -> { val divisor = unary(); require(divisor != 0.0); value /= divisor }
                     consume('%') -> { value /= 100.0 }
                     else -> return value
                 }
             }
         }
 
+        // Exponentiation binds more tightly than a leading sign and remains right-associative:
+        // -2^2 == -(2^2), while 2^-2 and 2^3^2 are also parsed correctly.
         private fun power(): Double {
-            val base = unary()
+            val base = postfix()
             skipSpaces()
-            return if (consume('^')) base.pow(power()) else base
+            return if (consume('^')) base.pow(unary()) else base
         }
 
         private fun unary(): Double {
             skipSpaces()
             if (consume('+')) return unary()
             if (consume('-')) return -unary()
+            return power()
+        }
+
+        private fun postfix(): Double {
             var value = primary()
             while (true) {
                 skipSpaces()
-                when {
-                    consume('!') -> value = factorial(value)
-                    else -> return value
-                }
+                if (consume('!')) value = factorial(value) else return value
             }
         }
 
@@ -422,8 +425,8 @@ internal object CalculatorMath {
                 "sin" -> sin(toRadians(argument()))
                 "cos" -> cos(toRadians(argument()))
                 "tan" -> tan(toRadians(argument()))
-                "asin" -> fromRadians(asin(argument().coerceIn(-1.0, 1.0)))
-                "acos" -> fromRadians(acos(argument().coerceIn(-1.0, 1.0)))
+                "asin" -> fromRadians(asin(argument().also { require(it in -1.0..1.0) }))
+                "acos" -> fromRadians(acos(argument().also { require(it in -1.0..1.0) }))
                 "atan" -> fromRadians(atan(argument()))
                 else -> throw IllegalArgumentException("Unknown function")
             }
