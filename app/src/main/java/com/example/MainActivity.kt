@@ -211,7 +211,6 @@ class MainActivity : ComponentActivity() {
                                         VerticalNavToolbar(
                                             currentDestination = currentNav,
                                             onNavigate = { dest -> currentNav = dest },
-                                            activeProfileName = activeProfile?.name ?: "NSiO",
                                             activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬",
                                             modifier = Modifier.align(Alignment.CenterStart)
                                         )

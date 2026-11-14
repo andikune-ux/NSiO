@@ -31,7 +31,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,7 +46,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,15 +64,13 @@ enum class NavDestination(val label: String) {
 fun VerticalNavToolbar(
     currentDestination: NavDestination,
     onNavigate: (NavDestination) -> Unit,
-    activeProfileName: String,
     activeProfileAvatar: String,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 4.dp)
-            .offset(y = 28.dp)
+            .padding(start = 6.dp, top = 34.dp, bottom = 6.dp, end = 4.dp)
             .width(58.dp)
             .testTag("vertical_nav_toolbar")
     ) {
@@ -116,7 +111,6 @@ fun VerticalNavToolbar(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                
             }
 
             // Navigation Items (Top to Bottom: 1. Beranda, 2. Extension, 3. Pengaturan, 4. Profil)
