@@ -1,7 +1,11 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.border
@@ -41,8 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,12 +82,52 @@ fun BottomNavGlassBar(
         val glassTint = Color.White.copy(
             alpha = if (MaterialTheme.colorScheme.background.red < 0.2f) 0.18f else 0.48f
         )
+        // A slow, low-opacity color refraction sweep gives the translucent
+        // glass a living reflection without changing the solid white nav buttons.
+        val reflectionTransition = rememberInfiniteTransition(label = "nav_glass_reflection")
+        val reflectionPosition by reflectionTransition.animateFloat(
+            initialValue = -0.85f,
+            targetValue = 1.85f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 9000, easing = LinearEasing)
+            ),
+            label = "nav_glass_reflection_position"
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.05.dp)
                 .clip(glassShape)
                 .background(glassTint)
+                .drawBehind {
+                    val sweepX = size.width * reflectionPosition
+                    val reflectionBrush = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Transparent,
+                            0.28f to Color(0xFF72D8FF).copy(alpha = 0.13f),
+                            0.48f to Color(0xFFB9A0FF).copy(alpha = 0.17f),
+                            0.66f to Color(0xFFFFC6E8).copy(alpha = 0.12f),
+                            1.00f to Color.Transparent
+                        ),
+                        start = Offset(sweepX - size.width * 0.58f, 0f),
+                        end = Offset(sweepX + size.width * 0.58f, size.height)
+                    )
+                    drawRoundRect(
+                        brush = reflectionBrush,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
+                    )
+                    // A soft secondary highlight keeps the glass edge luminous.
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.10f),
+                                Color.Transparent,
+                                Color(0xFFB8DFFF).copy(alpha = 0.05f)
+                            )
+                        ),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
+                    )
+                }
                 .border(1.dp, Color.White.copy(alpha = 0.62f), glassShape)
                 .padding(horizontal = 4.dp)
                 .testTag("bottom_nav_glass_bar")
