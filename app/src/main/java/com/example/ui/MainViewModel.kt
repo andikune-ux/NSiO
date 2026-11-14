@@ -65,6 +65,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _settings = MutableStateFlow(ProfileSettings(profileId = "default"))
     val settings: StateFlow<ProfileSettings> = _settings.asStateFlow()
 
+    private val devModePreferences = application.getSharedPreferences("nsio_developer_preferences", Application.MODE_PRIVATE)
+    private val _devMode = MutableStateFlow(devModePreferences.getBoolean("dev_mode_enabled", false))
+    val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
+
+    fun setDevModeEnabled(enabled: Boolean) {
+        devModePreferences.edit().putBoolean("dev_mode_enabled", enabled).apply()
+        _devMode.value = enabled
+        showStatus(if (enabled) "Mode Dev aktif. Teks layar dapat diseleksi dan disalin." else "Mode Dev nonaktif.")
+    }
+
     // Content state
     private val _mediaList = MutableStateFlow<List<MediaItem>>(emptyList())
     val mediaList: StateFlow<List<MediaItem>> = _mediaList.asStateFlow()

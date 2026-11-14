@@ -307,7 +307,7 @@ class PluginManager(private val context: Context) {
                 }
                 val manifestText = String(manifestBytes, Charsets.UTF_8)
                 val pluginClassName = JSONObject(manifestText).optString("pluginClassName").trim()
-                require(pluginClassName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*(\\\\.[A-Za-z_$][A-Za-z0-9_$]*)+"))) {
+                require(pluginClassName.matches(Regex("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)+"))) {
                     "manifest.json tidak memiliki pluginClassName yang valid."
                 }
 

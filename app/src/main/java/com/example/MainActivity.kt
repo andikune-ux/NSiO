@@ -46,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity() {
             var showCacheResetConfirm by remember { mutableStateOf(false) }
             var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
             val settings by viewModel.settings.collectAsState()
+            val devMode by viewModel.devMode.collectAsState()
             val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
             val playerState by viewModel.player.playerState.collectAsState()
             val activeProfile by viewModel.activeProfile.collectAsState()
@@ -117,6 +119,7 @@ class MainActivity : ComponentActivity() {
 
             MyApplicationTheme(themeMode = settings.themeMode) {
                 CompositionLocalProvider(LocalAppLanguage provides settings.language) {
+                DevModeSelection(enabled = devMode) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // 1. iOS 26 Ambient Fluid Glow Canvas
                     val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
@@ -245,6 +248,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
 
                 secretDialogText?.let { message ->
@@ -476,4 +480,10 @@ private fun AppNavContent(
             )
         }
     }
+}
+
+
+@Composable
+private fun DevModeSelection(enabled: Boolean, content: @Composable () -> Unit) {
+    if (enabled) SelectionContainer(content = content) else content()
 }

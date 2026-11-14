@@ -49,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import android.app.DownloadManager
@@ -95,6 +96,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    val devMode by viewModel.devMode.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
@@ -208,6 +210,31 @@ fun SettingsScreen(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        item {
+            SettingsGlassCard(
+                icon = Icons.Default.GridOn,
+                title = "Mode Developer",
+                subtitle = "Aktifkan seleksi teks di layar agar tulisan dapat disalin dengan tekan-tahan."
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Izinkan salin teks layar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (devMode) "Aktif • teks dapat diseleksi dan disalin"
+                            else "Nonaktif • seleksi teks standar dimatikan",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = devMode, onCheckedChange = { viewModel.setDevModeEnabled(it) })
+                }
             }
         }
 
