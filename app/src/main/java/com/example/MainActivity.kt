@@ -59,6 +59,7 @@ import com.example.ui.components.AmbientFluidBackground
 import com.example.ui.components.LocalAppLanguage
 import com.example.ui.components.translateAppText
 import com.example.ui.components.BottomNavGlassBar
+import com.example.ui.components.BottomNavSafeAreaGlass
 import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
 import com.example.ui.screens.ExtensionScreen
@@ -218,10 +219,21 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     // HP: bottom navigation floats above full-screen content with no gray backplate.
                                     Box(modifier = Modifier.fillMaxSize()) {
-                                        AppNavContent(
-                                            destination = currentNav,
-                                            viewModel = viewModel,
-                                            onNavigate = { currentNav = it }
+                                        // Reserve a real 48.05dp safe area so screen content ends
+                                        // above the glass boundary; navigation remains overlaid.
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(bottom = 48.05.dp)
+                                        ) {
+                                            AppNavContent(
+                                                destination = currentNav,
+                                                viewModel = viewModel,
+                                                onNavigate = { currentNav = it }
+                                            )
+                                        }
+                                        BottomNavSafeAreaGlass(
+                                            modifier = Modifier.align(Alignment.BottomCenter)
                                         )
                                         BottomNavGlassBar(
                                             currentDestination = currentNav,

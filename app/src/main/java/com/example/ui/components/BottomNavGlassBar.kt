@@ -1,12 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,9 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,8 +42,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -62,7 +51,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.theme.CyanSecondary
 
 /**
@@ -82,63 +70,22 @@ fun BottomNavGlassBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        val glassShape = RoundedCornerShape(24.dp)
-        val glassTint = Color.White.copy(
-            alpha = if (MaterialTheme.colorScheme.background.red < 0.2f) 0.18f else 0.48f
-        )
-        // A slow, low-opacity color refraction sweep gives the translucent
-        // glass a living reflection without changing the solid white nav buttons.
-        val reflectionTransition = rememberInfiniteTransition(label = "nav_glass_reflection")
-        val reflectionPosition by reflectionTransition.animateFloat(
-            initialValue = -0.85f,
-            targetValue = 1.85f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 9000, easing = LinearEasing)
-            ),
-            label = "nav_glass_reflection_position"
-        )
+        val navShape = RoundedCornerShape(24.dp)
+        // One continuous white surface: item backgrounds no longer appear as
+        // disconnected tiles. The glass safe-area is rendered separately below.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.05.dp)
-                .clip(glassShape)
-                .background(glassTint)
-                .drawBehind {
-                    val sweepX = size.width * reflectionPosition
-                    val reflectionBrush = Brush.linearGradient(
-                        colorStops = arrayOf(
-                            0.00f to Color.Transparent,
-                            0.28f to Color(0xFF72D8FF).copy(alpha = 0.13f),
-                            0.48f to Color(0xFFB9A0FF).copy(alpha = 0.17f),
-                            0.66f to Color(0xFFFFC6E8).copy(alpha = 0.12f),
-                            1.00f to Color.Transparent
-                        ),
-                        start = Offset(sweepX - size.width * 0.58f, 0f),
-                        end = Offset(sweepX + size.width * 0.58f, size.height)
-                    )
-                    drawRoundRect(
-                        brush = reflectionBrush,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
-                    )
-                    // A soft secondary highlight keeps the glass edge luminous.
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.10f),
-                                Color.Transparent,
-                                Color(0xFFB8DFFF).copy(alpha = 0.05f)
-                            )
-                        ),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
-                    )
-                }
-                .border(1.dp, Color.White.copy(alpha = 0.62f), glassShape)
+                .height(48.dp)
+                .clip(navShape)
+                .background(Color.White)
+                .border(1.dp, Color.White.copy(alpha = 0.62f), navShape)
                 .padding(horizontal = 4.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().focusGroup(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BottomNavItem(
@@ -232,9 +179,7 @@ private fun BottomNavItem(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                Color.White
-            )
+            
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
