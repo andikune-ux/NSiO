@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusProperties
+import androidx.compose.foundation.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -38,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,6 +70,11 @@ fun VerticalNavToolbar(
     activeProfileAvatar: String,
     modifier: Modifier = Modifier
 ) {
+    val homeFocusRequester = remember { FocusRequester() }
+    val extensionFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+    val profileFocusRequester = remember { FocusRequester() }
+
     Box(
         modifier = modifier
             .fillMaxHeight()
@@ -124,6 +132,8 @@ fun VerticalNavToolbar(
                     icon = if (currentDestination == NavDestination.HOME) Icons.Filled.Home else Icons.Outlined.Home,
                     isSelected = currentDestination == NavDestination.HOME,
                     testTag = "nav_item_home",
+                    focusRequester = homeFocusRequester,
+                    downFocusRequester = extensionFocusRequester,
                     onClick = { onNavigate(NavDestination.HOME) }
                 )
 
@@ -132,6 +142,9 @@ fun VerticalNavToolbar(
                     icon = if (currentDestination == NavDestination.EXTENSION) Icons.Filled.Extension else Icons.Outlined.Extension,
                     isSelected = currentDestination == NavDestination.EXTENSION,
                     testTag = "nav_item_extension",
+                    focusRequester = extensionFocusRequester,
+                    upFocusRequester = homeFocusRequester,
+                    downFocusRequester = settingsFocusRequester,
                     onClick = { onNavigate(NavDestination.EXTENSION) }
                 )
 
@@ -140,6 +153,9 @@ fun VerticalNavToolbar(
                     icon = if (currentDestination == NavDestination.SETTINGS) Icons.Filled.Settings else Icons.Outlined.Settings,
                     isSelected = currentDestination == NavDestination.SETTINGS,
                     testTag = "nav_item_settings",
+                    focusRequester = settingsFocusRequester,
+                    upFocusRequester = extensionFocusRequester,
+                    downFocusRequester = profileFocusRequester,
                     onClick = { onNavigate(NavDestination.SETTINGS) }
                 )
 
@@ -148,6 +164,8 @@ fun VerticalNavToolbar(
                     icon = if (currentDestination == NavDestination.PROFILE) Icons.Filled.Person else Icons.Outlined.Person,
                     isSelected = currentDestination == NavDestination.PROFILE,
                     testTag = "nav_item_profile",
+                    focusRequester = profileFocusRequester,
+                    upFocusRequester = settingsFocusRequester,
                     avatarEmoji = activeProfileAvatar,
                     onClick = { onNavigate(NavDestination.PROFILE) }
                 )
@@ -165,7 +183,10 @@ private fun NavToolbarGlassItem(
     isSelected: Boolean,
     testTag: String,
     onClick: () -> Unit,
-    avatarEmoji: String? = null
+    avatarEmoji: String? = null,
+    focusRequester: FocusRequester,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -175,7 +196,7 @@ private fun NavToolbarGlassItem(
 
     val contentColor by animateColorAsState(
         targetValue = when {
-            isFocused -> MaterialTheme.colorScheme.primary
+            isFocused -> Color.White
             isSelected -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
@@ -191,21 +212,20 @@ private fun NavToolbarGlassItem(
             .then(
                 if (isFocused) {
                     Modifier.border(
-                        1.dp,
-                        Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
+                        1.5.dp,
+                        Color.White,
                         RoundedCornerShape(12.dp)
-                    )
-                } else if (isSelected) {
-                    Modifier.border(
-                        1.dp,
-                        Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), Color.Transparent)),
-                        RoundedCornerShape(14.dp)
                     )
                 } else {
                     Modifier
                 }
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusRequester(focusRequester)
+            .focusProperties {
+                upFocusRequester?.let { up = it }
+                downFocusRequester?.let { down = it }
+            }
             .focusable(interactionSource = interactionSource)
             .semantics {
                 role = Role.Button

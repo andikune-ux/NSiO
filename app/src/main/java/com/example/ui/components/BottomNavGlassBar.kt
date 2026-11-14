@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusProperties
+import androidx.compose.foundation.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -48,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -72,6 +75,7 @@ fun BottomNavGlassBar(
     onNavigate: (NavDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val itemFocusRequesters = remember { List(4) { FocusRequester() } }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -143,6 +147,8 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Home,
                     isSelected = currentDestination == NavDestination.HOME,
                     testTag = "bottom_nav_home",
+                    index = 0,
+                    focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.HOME) }
                 )
@@ -152,6 +158,8 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Extension,
                     isSelected = currentDestination == NavDestination.EXTENSION,
                     testTag = "bottom_nav_extension",
+                    index = 1,
+                    focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.EXTENSION) }
                 )
@@ -161,6 +169,8 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Settings,
                     isSelected = currentDestination == NavDestination.SETTINGS,
                     testTag = "bottom_nav_settings",
+                    index = 2,
+                    focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.SETTINGS) }
                 )
@@ -170,6 +180,8 @@ fun BottomNavGlassBar(
                     unselectedIcon = Icons.Outlined.Person,
                     isSelected = currentDestination == NavDestination.PROFILE,
                     testTag = "bottom_nav_profile",
+                    index = 3,
+                    focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
                     onClick = { onNavigate(NavDestination.PROFILE) }
                 )
@@ -186,7 +198,9 @@ private fun BottomNavItem(
     isSelected: Boolean,
     testTag: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    index: Int,
+    focusRequesters: List<FocusRequester>
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -199,7 +213,7 @@ private fun BottomNavItem(
     val iconColor by animateColorAsState(
         targetValue = when {
             isSelected -> MaterialTheme.colorScheme.primary
-            isFocused -> MaterialTheme.colorScheme.primary
+            isFocused -> Color.White
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "bottom_nav_icon_color"
@@ -226,13 +240,14 @@ private fun BottomNavItem(
                 indication = null,
                 onClick = onClick
             )
+            .focusRequester(focusRequesters[index])
+            .focusProperties {
+                if (index > 0) left = focusRequesters[index - 1]
+                if (index < focusRequesters.lastIndex) right = focusRequesters[index + 1]
+            }
             .focusable(interactionSource = interactionSource)
             .then(
-                if (isFocused) Modifier.border(
-                    1.dp,
-                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.outline)),
-                    RoundedCornerShape(20.dp)
-                ) else Modifier
+                if (isFocused) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier
             )
             .semantics {
                 role = Role.Button
