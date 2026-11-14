@@ -266,6 +266,6 @@ val generateNsioLauncherIcons = tasks.register("generateNsioLauncherIcons") {
     write(resize(cleaned, 1024), File(root, "drawable-nodpi/ic_nsio_logo.png"))
   }
 }
-android.sourceSets.getByName("main").res.srcDir(nsioLauncherResDir)
+android.sourceSets.getByName("main").res.srcDir(nsioLauncherResDir.get().asFile)
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Resources") }
   .configureEach { dependsOn(generateNsioLauncherIcons) }
