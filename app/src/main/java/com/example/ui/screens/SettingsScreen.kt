@@ -225,62 +225,69 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (!user.photoUrl?.toString().isNullOrEmpty()) {
-                                    AsyncImage(
-                                        model = user.photoUrl.toString(),
-                                        contentDescription = "Avatar Pengguna",
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = (user.displayName ?: "U").take(1).uppercase(),
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 18.sp,
-                                            color = MaterialTheme.colorScheme.onPrimary
+                            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                val compact = maxWidth < 380.dp
+                                val avatar: @Composable () -> Unit = {
+                                    if (!user.photoUrl?.toString().isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = user.photoUrl.toString(),
+                                            contentDescription = "Avatar Pengguna",
+                                            modifier = Modifier.size(44.dp).clip(CircleShape)
+                                                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                         )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier.size(44.dp).clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text((user.displayName ?: "U").take(1).uppercase(),
+                                                fontWeight = FontWeight.Black, fontSize = 18.sp,
+                                                color = MaterialTheme.colorScheme.onPrimary)
+                                        }
                                     }
                                 }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = user.displayName ?: "Pengguna Google",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = user.email ?: user.uid,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                val identity: @Composable () -> Unit = {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text(user.displayName ?: "Pengguna Google",
+                                            fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurface)
+                                        Text(user.email ?: user.uid, fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "Cloud Terhubung",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                val cloudBadge: @Composable () -> Unit = {
+                                    Box(
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Cloud Terhubung", fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                                if (compact) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            avatar()
+                                            cloudBadge()
+                                        }
+                                        identity()
+                                    }
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        avatar()
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(user.displayName ?: "Pengguna Google",
+                                                fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onSurface)
+                                            Text(user.email ?: user.uid, fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        cloudBadge()
+                                    }
                                 }
                             }
 
