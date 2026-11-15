@@ -14,7 +14,7 @@ import com.example.data.model.SourcePlaylist
 
 @Database(
     entities = [MediaItem::class, Profile::class, ProfileSettings::class, DownloadItem::class, SourcePlaylist::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
