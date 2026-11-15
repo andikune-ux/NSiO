@@ -745,7 +745,7 @@ fun HomeScreen(
                                                     MediaGridCard(
                                                         item = mediaItem,
                                                         modifier = Modifier.width(148.dp),
-                                                        onClick = { viewModel.requestCloudStreamDetail(mediaItem); onNavigateToExtension() },
+                                                        onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                         onLongClick = { viewModel.toggleFavorite(mediaItem) },
                                                         onDownload = { viewModel.downloadMedia(mediaItem) }
                                                     )
