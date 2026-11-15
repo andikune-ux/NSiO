@@ -134,8 +134,11 @@ fun HomeScreen(
     }
     val drivePlaylists = remember(sourcePlaylists, mediaList) {
         sourcePlaylists.filter { playlist ->
-            playlist.url.contains("drive.google.com", ignoreCase = true) ||
+            playlist.sourceType.equals("DRIVE", ignoreCase = true) ||
+                playlist.url.contains("drive.google.com", ignoreCase = true) ||
                 playlist.url.contains("docs.google.com", ignoreCase = true) ||
+                playlist.url.contains("drive.usercontent.google.com", ignoreCase = true) ||
+                playlist.url.contains("drive.googleusercontent.com", ignoreCase = true) ||
                 mediaList.any { item ->
                     item.playlistId == playlist.id && (
                         item.category.contains("Google Drive", ignoreCase = true) ||
@@ -215,7 +218,8 @@ fun HomeScreen(
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
-        val isDriveMedia = item.playlistId in drivePlaylists.map { it.id } ||
+        val isDriveMedia = item.sourceType.equals("DRIVE", ignoreCase = true) ||
+            item.playlistId in drivePlaylists.map { it.id } ||
             item.category.contains("Google Drive", ignoreCase = true) ||
             item.url.contains("drive.google.com", ignoreCase = true) ||
             item.url.contains("docs.google.com", ignoreCase = true) ||
@@ -594,7 +598,8 @@ fun HomeScreen(
                             .toSortedMap(compareBy<String> {
                                 when (it) {
                                     "LINK" -> 0
-                                    "STREAM" -> 1
+                                    "DRIVE" -> 1
+                                    "STREAM" -> 2
                                     "REPO" -> 2
                                     "CLOUDSTREAM" -> 3
                                     "FILE" -> 4
@@ -618,6 +623,7 @@ fun HomeScreen(
                                     Text(
                                         text = (if (expandedSourceType == sourceType) "‹  " else "›  ") + when (sourceType) {
                                             "LINK" -> "Playlist / Link"
+                                            "DRIVE" -> "Google Drive"
                                             "STREAM" -> "Stream"
                                             "REPO" -> "Repository"
                                             "CLOUDSTREAM" -> "CloudStream"
