@@ -1086,6 +1086,7 @@ private fun CloudStreamSearchPanel(
     viewModel: MainViewModel,
     repos: List<com.example.data.plugin.RepoManifest>
 ) {
+    val trailerContext = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var loadingHomeCatalog by remember { mutableStateOf(false) }
     var savingHomeCatalog by remember { mutableStateOf(false) }
