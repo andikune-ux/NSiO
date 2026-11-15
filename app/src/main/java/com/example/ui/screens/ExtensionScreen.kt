@@ -1248,7 +1248,8 @@ fun CloudStreamSearchPanel(
     searchRequest: Int,
     showCatalogControls: Boolean = false,
     renderContent: Boolean = true,
-    handlePendingDetail: Boolean = true
+    handlePendingDetail: Boolean = true,
+    enableSearch: Boolean = true
 ) {
     val trailerContext = LocalContext.current
     var loadingHomeCatalog by remember { mutableStateOf(false) }
@@ -1666,8 +1667,8 @@ fun CloudStreamSearchPanel(
             }
         }
     }
-        LaunchedEffect(searchRequest) {
-            if (searchRequest <= 0 || query.isBlank()) return@LaunchedEffect
+        LaunchedEffect(searchRequest, enableSearch) {
+            if (!enableSearch || searchRequest <= 0 || query.isBlank()) return@LaunchedEffect
             searching = true
             results = emptyList()
             searchNextPages = emptyMap()
