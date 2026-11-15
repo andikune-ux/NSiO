@@ -891,14 +891,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val pluginId = pluginManager.cloudStreamPluginId(entry)
                         cloudStreamHomePages[pluginId] = 1
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { refreshed += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
