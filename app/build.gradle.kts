@@ -154,6 +154,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.dash)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.common)
+  implementation(libs.play.services.cast.framework)
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
