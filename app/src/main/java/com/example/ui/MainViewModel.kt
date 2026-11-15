@@ -1545,7 +1545,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (item.id.startsWith("external-stream:")) return
         val safePosition = positionMs.coerceAtLeast(0L)
         viewModelScope.launch {
-            runCatching { mediaDao.updatePlaybackState(item.id, safePosition, durationMs.coerceAtLeast(0L)) }
+            runCatching { mediaDao.updatePlaybackState(item.id, safePosition, durationMs.coerceAtLeast(item.durationMs)) }
             authManager.currentUser?.let { user ->
                 runCatching {
                     cloudRepository.saveMediaItem(user.uid, item.copy(
