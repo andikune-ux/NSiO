@@ -12,6 +12,30 @@ class PlaybackQueuePolicyTest {
         type = type, sourceType = "PLAYLIST", category = "Test"
     )
 
+    @Test fun queueOnlyContainsItemsFromCurrentSource() {
+        val driveA = item("drive-a").copy(sourceType = "DRIVE", playlistId = "drive-list")
+        val driveB = item("drive-b").copy(sourceType = "DRIVE", playlistId = "drive-list")
+        val otherDrive = item("drive-other").copy(sourceType = "DRIVE", playlistId = "other-list")
+        val cloudStream = item("cloud").copy(sourceType = "CLOUDSTREAM", pluginId = "plugin-a")
+        val queue = PlaybackQueuePolicy.filterForCurrentSource(
+            listOf(driveA, driveB, otherDrive, cloudStream),
+            driveA
+        )
+        assertEquals(listOf("drive-a", "drive-b"), queue.map { it.id })
+    }
+
+    @Test fun cloudStreamQueueStaysInsideTheSamePlugin() {
+        val first = item("cs-a").copy(sourceType = "CLOUDSTREAM", pluginId = "plugin-a")
+        val second = item("cs-b").copy(sourceType = "CLOUDSTREAM", pluginId = "plugin-a")
+        val anotherPlugin = item("cs-c").copy(sourceType = "CLOUDSTREAM", pluginId = "plugin-b")
+        val drive = item("drive").copy(sourceType = "DRIVE")
+        val queue = PlaybackQueuePolicy.filterForCurrentSource(
+            listOf(first, second, anotherPlugin, drive),
+            first
+        )
+        assertEquals(listOf("cs-a", "cs-b"), queue.map { it.id })
+    }
+
     @Test fun queueSkipsPhotosAndRemovesDuplicateIds() {
         val queue = PlaybackQueuePolicy.build(listOf(item("a"), item("photo", "PHOTO"), item("b"), item("a")), "a", false)
         assertEquals(listOf("a", "b"), queue.map { it.id })
