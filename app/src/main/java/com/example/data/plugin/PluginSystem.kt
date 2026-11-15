@@ -131,6 +131,16 @@ class PluginManager(private val context: Context) {
             }
         }?.name.orEmpty()
 
+    fun findCloudStreamPlugin(pluginId: String): CloudStreamPluginEntry? {
+        if (pluginId.isBlank()) return null
+        return _repositories.value.asSequence()
+            .flatMap { it.plugins.asSequence() }
+            .firstOrNull { entry ->
+                entry.status != 0 && isCloudStreamPluginInstalled(entry) &&
+                    cloudStreamPluginId(entry) == pluginId
+            }
+    }
+
     fun getLocalPluginsDirectory(): File = File(context.filesDir, "Cloudstream3/plugins").also { it.mkdirs() }
     fun getOnlinePluginsDirectory(repoHash: String): File = File(context.filesDir, "Extensions/$repoHash").also { it.mkdirs() }
 
