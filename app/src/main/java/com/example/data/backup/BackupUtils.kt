@@ -104,6 +104,7 @@ object BackupUtils {
                     put("repositoryId", m.repositoryId)
                     put("durationMs", m.durationMs)
                     put("progressMs", m.progressMs)
+                    put("lastWatchedAt", m.lastWatchedAt)
                     put("isFavorite", m.isFavorite)
                     put("createdAt", m.createdAt)
                     put("extraInfo", m.extraInfo)
@@ -226,6 +227,7 @@ object BackupUtils {
                                 repositoryId = m.optString("repositoryId", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L),
+                                lastWatchedAt = m.optLong("lastWatchedAt", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
                                 createdAt = m.optLong("createdAt", System.currentTimeMillis()),
                                 extraInfo = m.optString("extraInfo", "")
@@ -299,6 +301,7 @@ object BackupUtils {
                                 repositoryId = m.optString("repositoryId", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L),
+                                lastWatchedAt = m.optLong("lastWatchedAt", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
                                 createdAt = m.optLong("createdAt", System.currentTimeMillis()),
                                 extraInfo = m.optString("extraInfo", "")
