@@ -1449,6 +1449,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 player.playWithMimeType(
                     url = stream.url,
                     title = item.title,
+                    startPositionMs = item.progressMs.coerceAtLeast(0L),
                     requestHeaders = headers,
                     mimeType = mimeType
                 )
@@ -1504,13 +1505,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!isNativeVideo) return
 
         player.pause()
-        if (current.sourceType == "CLOUDSTREAM") return
         val positionMs = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
+        persistPlaybackProgress(current, positionMs)
+    }
+
+    private fun persistPlaybackProgress(item: MediaItem, positionMs: Long) {
+        // External streams have no catalog row; CloudStream catalog items do.
+        if (item.id.startsWith("external-stream:")) return
+        val safePosition = positionMs.coerceAtLeast(0L)
         viewModelScope.launch {
-            runCatching { mediaDao.updateProgress(current.id, positionMs) }
+            runCatching { mediaDao.updateProgress(item.id, safePosition) }
             authManager.currentUser?.let { user ->
                 runCatching {
-                    cloudRepository.saveMediaItem(user.uid, current.copy(progressMs = positionMs))
+                    cloudRepository.saveMediaItem(user.uid, item.copy(progressMs = safePosition))
                 }
             }
         }
@@ -1519,14 +1526,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun closePlayer() {
         val current = _currentlyPlaying.value
         val isPlayableVideo = current?.let { shouldUseNativePlayer(it.type, it.url) } == true
-        if (current != null && isPlayableVideo && current.sourceType != "CLOUDSTREAM") {
+        if (current != null && isPlayableVideo) {
             val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
-            viewModelScope.launch {
-                mediaDao.updateProgress(current.id, pos)
-                authManager.currentUser?.let { user ->
-                    try { cloudRepository.saveMediaItem(user.uid, current.copy(progressMs = pos)) } catch (_: Exception) {}
-                }
-            }
+            persistPlaybackProgress(current, pos)
         }
         player.stop()
         _currentlyPlaying.value = null
