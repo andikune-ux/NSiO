@@ -989,7 +989,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun playCloudStreamMedia(item: MediaItem) {
+        viewModelScope.launch {
+            runCatching {
+                val entry = pluginManager.findCloudStreamPlugin(item.pluginId)
+                    ?: throw IllegalStateException("Plugin asal tidak ditemukan atau belum terpasang.")
+                val content = pluginManager.loadCloudStreamContent(entry, item.extraInfo, item.url)
+                val playbackData = content.dataUrl?.takeIf { it.isNotBlank() }
+                    ?: content.episodes.firstOrNull()?.data?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("Provider tidak menyediakan data film atau episode untuk diputar.")
+                val streams = pluginManager.loadCloudStreamLinks(entry, content.providerName, playbackData)
+                    .filter { it.url.isNotBlank() }
+                val stream = streams.maxByOrNull { it.quality }
+                    ?: throw IllegalStateException("Provider tidak menemukan link streaming yang dapat diputar.")
+                val headers = stream.headers.toMutableMap()
+                if (stream.referer.isNotBlank() && headers.keys.none { it.equals("Referer", ignoreCase = true) }) {
+                    headers["Referer"] = stream.referer
+                }
+                val mimeType = when (stream.streamType.uppercase()) {
+                    "M3U8" -> "application/x-mpegURL"
+                    "DASH" -> "application/dash+xml"
+                    else -> null
+                }
+                player.playWithMimeType(
+                    url = stream.url,
+                    title = item.title,
+                    requestHeaders = headers,
+                    mimeType = mimeType
+                )
+                "Memutar ${item.title} melalui ${entry.name}."
+            }.onSuccess { message ->
+                showStatus(message)
+            }.onFailure { error ->
+                showStatus("CloudStream gagal memutar '${item.title}': ${error.localizedMessage ?: "sumber tidak tersedia"}")
+            }
+        }
+    }
+
     fun playMedia(item: MediaItem) {
+        if (item.sourceType == "CLOUDSTREAM") {
+            _currentlyPlaying.value = item
+            playCloudStreamMedia(item)
+            return
+        }
         val useNativePlayer = shouldUseNativePlayer(item.type, item.url)
         if (!useNativePlayer) player.stop()
         _currentlyPlaying.value = item
