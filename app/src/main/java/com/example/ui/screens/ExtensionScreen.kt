@@ -1427,7 +1427,19 @@ fun CloudStreamSearchPanel(
         resolvedPlaybackContentUrl = contentUrl
         linkMessage = ""
         streams = emptyList()
-        if (autoPlay) viewModel.beginCloudStreamPlaybackPreparation(contentUrl, resolvedPlaybackTitle, posterUrl, "CloudStream • Film")
+        if (autoPlay) {
+            viewModel.playCloudStreamFilmImmediately(
+                entry = entry,
+                contentUrl = contentUrl,
+                providerName = providerName,
+                playbackData = data,
+                title = resolvedPlaybackTitle,
+                posterUrl = posterUrl,
+                durationMs = durationMs
+            )
+            resolvingLinks = false
+            return
+        }
         scope.launch {
             runCatching {
                 viewModel.pluginManager.loadCloudStreamLinks(entry, providerName, data)
@@ -1914,29 +1926,13 @@ fun CloudStreamSearchPanel(
                 TextButton(
                     enabled = !resolvingLinks && (trailer.url.startsWith("https://", true) || trailer.url.startsWith("http://", true)),
                     onClick = {
-                        resolvingLinks = true
-                        linkMessage = "Menyiapkan trailer di pemutar NSiO..."
-                        viewModel.beginCloudStreamPlaybackPreparation(
-                            contentUrl = trailer.url,
-                            title = "Trailer • ${content.title}",
-                            posterUrl = content.posterUrl,
-                            category = "CloudStream • Trailer"
+                        viewModel.playCloudStreamTrailerFromPlugin(
+                            entry = entry,
+                            providerName = content.providerName,
+                            trailer = trailer,
+                            title = content.title,
+                            posterUrl = content.posterUrl
                         )
-                        scope.launch {
-                            runCatching {
-                                viewModel.pluginManager.resolveCloudStreamTrailer(entry, content.providerName, trailer)
-                                    .sortedWith(compareByDescending<com.example.data.plugin.CloudStreamStream> { it.quality })
-                                    .firstOrNull()
-                                    ?: throw IllegalStateException("Extractor tidak menghasilkan stream trailer.")
-                            }.onSuccess { trailerStream ->
-                                linkMessage = ""
-                                viewModel.playCloudStreamTrailer(content.title, content.posterUrl, trailerStream)
-                            }.onFailure { error ->
-                                linkMessage = "Trailer gagal disiapkan: ${error.localizedMessage ?: "stream tidak tersedia"}"
-                                viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
-                            }
-                            resolvingLinks = false
-                        }
                     }
                 ) { Text("Putar trailer ${index + 1} di NSiO", fontSize = 9.sp) }
                 TextButton(
