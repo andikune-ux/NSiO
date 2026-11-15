@@ -126,6 +126,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentlyPlaying = MutableStateFlow<MediaItem?>(null)
     val currentlyPlaying: StateFlow<MediaItem?> = _currentlyPlaying.asStateFlow()
 
+    // A CloudStream catalogue card opens its provider detail page before playback.
+    private val _pendingCloudStreamDetail = MutableStateFlow<MediaItem?>(null)
+    val pendingCloudStreamDetail: StateFlow<MediaItem?> = _pendingCloudStreamDetail.asStateFlow()
+
+    fun requestCloudStreamDetail(item: MediaItem) {
+        if (item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)) {
+            _pendingCloudStreamDetail.value = item
+        }
+    }
+
+    fun clearPendingCloudStreamDetail(itemId: String) {
+        if (_pendingCloudStreamDetail.value?.id == itemId) {
+            _pendingCloudStreamDetail.value = null
+        }
+    }
+
     // Toast / Feedback message
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
