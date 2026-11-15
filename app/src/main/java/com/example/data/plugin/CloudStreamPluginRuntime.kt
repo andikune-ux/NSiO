@@ -101,7 +101,13 @@ data class CloudStreamContent(
     val trailers: List<CloudStreamTrailer> = emptyList(),
     val recommendations: List<CloudStreamRecommendation> = emptyList(),
     val seasonNames: Map<Int, String> = emptyMap(),
-    val externalIds: Map<String, String> = emptyMap()
+    val externalIds: Map<String, String> = emptyMap(),
+    val englishTitle: String? = null,
+    val japaneseTitle: String? = null,
+    val synonyms: List<String> = emptyList(),
+    val nextAiringEpisode: Int? = null,
+    val nextAiringUnixTime: Long? = null,
+    val nextAiringSeason: Int? = null
 )
 
 data class CloudStreamSubtitle(
@@ -578,7 +584,14 @@ class CloudStreamPluginRuntime(private val context: Context) {
                         readProperty(this@toCloudStreamContent, key)?.toString()
                             ?.takeIf { it.isNotBlank() }?.let { put(key, it) }
                     }
-            }
+            },
+            englishTitle = readProperty(this@toCloudStreamContent, "engName") as? String,
+            japaneseTitle = readProperty(this@toCloudStreamContent, "japName") as? String,
+            synonyms = (readProperty(this@toCloudStreamContent, "synonyms") as? Iterable<*>)
+                ?.mapNotNull { it?.toString()?.takeIf(String::isNotBlank) }.orEmpty(),
+            nextAiringEpisode = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "episode") as? Int,
+            nextAiringUnixTime = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "unixTime") as? Long,
+            nextAiringSeason = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "season") as? Int
         )
     }
 
