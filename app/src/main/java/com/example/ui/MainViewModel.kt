@@ -64,6 +64,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val downloadManager = VideoDownloadManager.getInstance(application)
     val downloads = downloadManager.downloads
     val player = CS3IPlayer(application, viewModelScope)
+    private var cloudStreamVerifierJob: Job? = null
 
     // Firebase Auth & Cloud Firestore Integration
     val authManager = FirebaseAuthManager(application)
@@ -1573,11 +1574,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     videoInterceptor = videoInterceptor,
                     pluginStreams = availablePluginStreams
                 )
-                if (!extractorData.isNullOrBlank()) {
+                cloudStreamVerifierJob?.cancel()
+                cloudStreamVerifierJob = if (!extractorData.isNullOrBlank()) {
                     viewModelScope.launch {
-                        pluginManager.runCloudStreamExtractorVerifier(entry, providerName, extractorData)
+                        runCatching {
+                            pluginManager.runCloudStreamExtractorVerifier(entry, providerName, extractorData)
+                        }
                     }
-                }
+                } else null
                 startPlaybackProgressPersistence(item)
                 authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.saveMediaItem(user.uid, item) }
