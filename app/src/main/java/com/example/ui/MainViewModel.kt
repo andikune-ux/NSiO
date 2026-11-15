@@ -75,6 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Keep Home catalog selection independently for each local profile.
     private val catalogPreferences = application.getSharedPreferences("nsio_catalog_preferences", Application.MODE_PRIVATE)
     private val cloudStreamHealthPreferences = application.getSharedPreferences("nsio_cloudstream_health", Application.MODE_PRIVATE)
+    private val cloudStreamOrderPreferences = application.getSharedPreferences("nsio_cloudstream_plugin_order", Application.MODE_PRIVATE)
     private val _devMode = MutableStateFlow(devModePreferences.getBoolean("dev_mode_enabled", false))
     val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
@@ -126,6 +127,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isLoadingMoreCloudStreamHome: StateFlow<Boolean> = _isLoadingMoreCloudStreamHome.asStateFlow()
     private val _cloudStreamSourceHealth = MutableStateFlow<Map<String, CloudStreamSourceHealth>>(emptyMap())
     val cloudStreamSourceHealth: StateFlow<Map<String, CloudStreamSourceHealth>> = _cloudStreamSourceHealth.asStateFlow()
+    private val _cloudStreamPluginOrder = MutableStateFlow<List<String>>(emptyList())
+    val cloudStreamPluginOrder: StateFlow<List<String>> = _cloudStreamPluginOrder.asStateFlow()
+
+    private fun cloudStreamOrderKey(profileId: String) = "plugin_order_$profileId"
+
+    private fun loadCloudStreamPluginOrder(profileId: String): List<String> {
+        val raw = cloudStreamOrderPreferences.getString(cloudStreamOrderKey(profileId), null) ?: return emptyList()
+        return runCatching {
+            val json = org.json.JSONArray(raw)
+            (0 until json.length()).mapNotNull { index -> json.optString(index).takeIf { it.isNotBlank() } }.distinct()
+        }.getOrDefault(emptyList())
+    }
+
+    fun moveCloudStreamPluginOrder(pluginId: String, direction: Int, visiblePluginIds: List<String>) {
+        val profileId = _activeProfile.value?.id ?: return
+        if (direction == 0 || pluginId !in visiblePluginIds) return
+        val current = (visiblePluginIds.filter { it in _cloudStreamPluginOrder.value } +
+            _cloudStreamPluginOrder.value.filter { it !in visiblePluginIds } +
+            visiblePluginIds.filter { it !in _cloudStreamPluginOrder.value }).distinct().toMutableList()
+        val from = current.indexOf(pluginId)
+        val to = (from + direction.coerceIn(-1, 1)).coerceIn(0, visiblePluginIds.size - 1)
+        if (from == to) return
+        val targetId = visiblePluginIds.getOrNull(to) ?: return
+        val targetIndex = current.indexOf(targetId)
+        if (targetIndex < 0) return
+        val moved = current.removeAt(from)
+        current.add(targetIndex.coerceIn(0, current.size), moved)
+        _cloudStreamPluginOrder.value = current
+        val json = org.json.JSONArray().apply { current.forEach { put(it) } }
+        cloudStreamOrderPreferences.edit().putString(cloudStreamOrderKey(profileId), json.toString()).apply()
+    }
 
     private fun loadCloudStreamSourceHealth(profileId: String): Map<String, CloudStreamSourceHealth> {
         val prefix = "$profileId|"
@@ -233,6 +265,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _activeProfile.value = active
                 _settings.value = loadSettingsForProfile(active.id)
                 _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(active.id)
+                _cloudStreamPluginOrder.value = loadCloudStreamPluginOrder(active.id)
                 _selectedFilter.value = loadSelectedFilter(active.id)
                 _selectedSort.value = loadSelectedSort(active.id)
             }
@@ -280,6 +313,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isServerUnlocked.value = false
             _settings.value = loadSettingsForProfile(profile.id)
             _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profile.id)
+            _cloudStreamPluginOrder.value = loadCloudStreamPluginOrder(profile.id)
             _selectedFilter.value = loadSelectedFilter(profile.id)
             _selectedSort.value = loadSelectedSort(profile.id)
             observeActiveProfileMedia()
