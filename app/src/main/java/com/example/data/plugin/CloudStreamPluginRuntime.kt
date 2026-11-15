@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -88,6 +89,12 @@ data class CloudStreamContent(
     val seasonNames: Map<Int, String> = emptyMap()
 )
 
+data class CloudStreamSubtitle(
+    val language: String,
+    val url: String,
+    val headers: Map<String, String> = emptyMap()
+)
+
 data class CloudStreamStream(
     val pluginName: String,
     val providerName: String,
@@ -97,7 +104,8 @@ data class CloudStreamStream(
     val referer: String,
     val headers: Map<String, String>,
     val quality: Int,
-    val streamType: String
+    val streamType: String,
+    val subtitles: List<CloudStreamSubtitle> = emptyList()
 )
 
 class CloudStreamPluginRuntime(private val context: Context) {
@@ -227,11 +235,21 @@ class CloudStreamPluginRuntime(private val context: Context) {
             ?: throw IllegalArgumentException("Provider CloudStream tidak ditemukan: $providerName")
 
         val rawLinks = mutableListOf<ExtractorLink>()
+        val subtitles = java.util.Collections.synchronizedList(mutableListOf<CloudStreamSubtitle>())
+        val subtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
+            if (subtitle.url.isNotBlank()) {
+                subtitles.add(CloudStreamSubtitle(
+                    language = subtitle.lang.ifBlank { "Unknown" },
+                    url = subtitle.url,
+                    headers = subtitle.headers.orEmpty()
+                ))
+            }
+        }
         val completed = withTimeoutOrNull(LINKS_TIMEOUT_MS) {
             api.loadLinks(
                 data = data,
                 isCasting = false,
-                subtitleCallback = { },
+                subtitleCallback = subtitleCallback,
                 callback = { link -> synchronized(rawLinks) { rawLinks.add(link) } }
             )
         } ?: false
@@ -246,7 +264,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
                     loadExtractor(
                         url = raw.url,
                         referer = raw.referer,
-                        subtitleCallback = { },
+                        subtitleCallback = subtitleCallback,
                         callback = { link -> synchronized(resolved) { resolved.add(link) } }
                     )
                 }.getOrDefault(false)
@@ -265,7 +283,8 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 referer = link.referer,
                 headers = link.headers,
                 quality = link.quality,
-                streamType = link.type.toString()
+                streamType = link.type.toString(),
+                subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } }
             )
         }
     }
