@@ -1516,7 +1516,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         durationMs: Long = 0L,
         streamUrl: String,
         requestHeaders: Map<String, String> = emptyMap(),
-        mimeType: String? = null
+        mimeType: String? = null,
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             showStatus("Profil aktif tidak ditemukan.")
@@ -1564,7 +1565,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     title = item.title,
                     startPositionMs = item.progressMs.coerceAtLeast(0L),
                     requestHeaders = requestHeaders,
-                    mimeType = mimeType
+                    mimeType = mimeType,
+                    externalSubtitles = externalSubtitles
                 )
                 startPlaybackProgressPersistence(item)
                 authManager.currentUser?.let { user ->
@@ -1621,7 +1623,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     title = item.title,
                     startPositionMs = item.progressMs.coerceAtLeast(0L),
                     requestHeaders = headers,
-                    mimeType = mimeType
+                    mimeType = mimeType,
+                    externalSubtitles = stream.subtitles
                 )
                 startPlaybackProgressPersistence(item)
                 "Memutar ${item.title} melalui ${entry.name}."
