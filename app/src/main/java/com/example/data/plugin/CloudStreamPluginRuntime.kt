@@ -40,6 +40,12 @@ data class CloudStreamSearchItem(
     val year: Int?
 )
 
+data class CloudStreamSearchPage(
+    val items: List<CloudStreamSearchItem>,
+    val hasNext: Boolean,
+    val page: Int
+)
+
 data class CloudStreamHomeSection(
     val pluginName: String,
     val providerName: String,
@@ -191,17 +197,28 @@ class CloudStreamPluginRuntime(private val context: Context) {
             }
         }
 
-    suspend fun search(artifact: File, query: String): List<CloudStreamSearchItem> = withContext(Dispatchers.IO) {
+    suspend fun search(artifact: File, query: String, page: Int = 1): CloudStreamSearchPage = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Masukkan kata pencarian terlebih dahulu." }
+        val requestedPage = page.coerceAtLeast(1)
         val loaded = loadPlugin(artifact)
-        loaded.providers.flatMap { api ->
-            val results = withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
-                val quick = runCatching { api.quickSearch(query) }.getOrNull()
-                quick ?: runCatching { api.search(query, 1)?.list }.getOrNull()
-                    ?: runCatching { api.search(query).orEmpty() }.getOrDefault(emptyList())
-            }.orEmpty()
-
-            results.map { result ->
+        val pages = loaded.providers.mapNotNull { api ->
+            withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
+                val response = if (requestedPage == 1) {
+                    val quick = runCatching { api.quickSearch(query) }.getOrNull()
+                    if (quick != null) {
+                        com.lagradost.cloudstream3.SearchResponseList(quick, hasNext = false)
+                    } else {
+                        runCatching { api.search(query, requestedPage) }.getOrNull()
+                            ?: runCatching { api.search(query)?.let { com.lagradost.cloudstream3.SearchResponseList(it, hasNext = false) } }.getOrNull()
+                    }
+                } else {
+                    runCatching { api.search(query, requestedPage) }.getOrNull()
+                }
+                response?.let { api to it }
+            }
+        }
+        val items = pages.flatMap { (api, response) ->
+            response.list.map { result ->
                 CloudStreamSearchItem(
                     pluginName = artifact.nameWithoutExtension,
                     providerName = api.name,
@@ -213,6 +230,11 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 )
             }
         }
+        CloudStreamSearchPage(
+            items = items,
+            hasNext = pages.any { (_, response) -> response.hasNext },
+            page = requestedPage
+        )
     }
 
     suspend fun loadContent(
