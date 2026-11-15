@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.model.MediaItem
+import com.example.data.model.MediaRefreshPolicy
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -57,6 +58,9 @@ interface MediaDao {
     @Query("DELETE FROM media_items WHERE profileId = :profileId")
     suspend fun clearProfileMedia(profileId: String)
 
+    @Query("SELECT * FROM media_items WHERE playlistId = :playlistId")
+    suspend fun getPlaylistItems(playlistId: String): List<MediaItem>
+
     @Query("DELETE FROM media_items WHERE playlistId = :playlistId")
     suspend fun clearPlaylist(playlistId: String)
 
@@ -74,8 +78,13 @@ interface MediaDao {
 
     @Transaction
     suspend fun replacePlaylist(playlistId: String, items: List<MediaItem>) {
+        require(items.all { it.playlistId == playlistId }) {
+            "Identitas playlist tidak konsisten."
+        }
+        val existing = getPlaylistItems(playlistId)
+        val merged = MediaRefreshPolicy.mergePlaylist(existing, items)
         clearPlaylist(playlistId)
-        if (items.isNotEmpty()) insertAll(items)
+        if (merged.isNotEmpty()) insertAll(merged)
     }
 
     @Query("SELECT COUNT(*) FROM media_items WHERE playlistId = :playlistId")
