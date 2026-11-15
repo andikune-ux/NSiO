@@ -82,6 +82,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -139,6 +140,9 @@ fun PlayerScreen(
     onClose: () -> Unit
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
+    // Cast callbacks can outlive a playback-position update; always read the latest state.
+    val latestCastPlayerState by rememberUpdatedState(playerState)
+    val latestCastMedia by rememberUpdatedState(media)
     val mediaList by viewModel.mediaList.collectAsState()
     val playbackQueue by viewModel.playbackQueue.collectAsState()
     var showControls by remember { mutableStateOf(true) }
@@ -257,7 +261,7 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(castContext, media.id, media.url, playerState.selectedPluginStreamUrl) {
+    DisposableEffect(castContext, media.id, media.url, latestCastPlayerState.selectedPluginStreamUrl) {
         val sessionManager = castContext?.sessionManager
         // Prefer the provider's selected stream, but fall back to the URL
         // currently opened in the player for ordinary catalogue/network media.
@@ -267,7 +271,7 @@ fun PlayerScreen(
         fun sendCurrentMedia(session: CastSession?) {
             if (session == null || activeUrl.isBlank()) return
             val extension = runCatching { Uri.parse(activeUrl).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
-            val streamType = playerState.pluginStreams.firstOrNull { it.url == activeUrl }?.streamType.orEmpty().uppercase()
+            val streamType = latestCastPlayerState.pluginStreams.firstOrNull { it.url == activeUrl }?.streamType.orEmpty().uppercase()
             val contentType = when {
                 extension == "m3u8" || streamType.contains("HLS") -> "application/x-mpegURL"
                 extension == "mpd" || streamType.contains("DASH") -> "application/dash+xml"
@@ -276,8 +280,8 @@ fun PlayerScreen(
                 else -> "video/mp4"
             }
             val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
-                putString(MediaMetadata.KEY_TITLE, playerState.title.ifBlank { media.title })
-                if (media.thumbnailUrl.isNotBlank() && media.thumbnailUrl.startsWith("http", true)) {
+                putString(MediaMetadata.KEY_TITLE, latestCastPlayerState.title.ifBlank { latestCastMedia.title })
+                if (latestCastMedia.thumbnailUrl.isNotBlank() && media.thumbnailUrl.startsWith("http", true)) {
                     addImage(WebImage(Uri.parse(media.thumbnailUrl)))
                 }
             }
@@ -285,12 +289,12 @@ fun PlayerScreen(
                 .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
                 .setContentType(contentType)
                 .setMetadata(metadata)
-                .apply { if (playerState.durationMs > 0L) setStreamDuration(playerState.durationMs) }
+                .apply { if (latestCastPlayerState.durationMs > 0L) setStreamDuration(playerState.durationMs) }
                 .build()
             val request = MediaLoadRequestData.Builder()
                 .setMediaInfo(info)
                 .setAutoplay(true)
-                .setCurrentTime(playerState.currentPositionMs.coerceAtLeast(0L))
+                .setCurrentTime(latestCastPlayerState.currentPositionMs.coerceAtLeast(0L))
                 .build()
             session.remoteMediaClient?.load(request)
         }
