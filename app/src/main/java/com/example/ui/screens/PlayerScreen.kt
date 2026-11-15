@@ -654,6 +654,7 @@ fun PlayerScreen(
                                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
                                     else -> "Fit"
                                 },
+                                "Sumber" to (playerState.pluginStreams.firstOrNull { it.url == playerState.selectedPluginStreamUrl }?.name?.ifBlank { "Sumber aktif" } ?: "Default"),
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis")
@@ -705,26 +706,30 @@ fun PlayerScreen(
                                         }.padding(horizontal = 10.dp, vertical = 9.dp)
                                     )
                                 }
+                                "Sumber" -> {
+                                    val availableSources = playerState.pluginStreams.distinctBy { it.url }
+                                        .sortedWith(compareByDescending<com.example.data.plugin.CloudStreamStream> { it.quality }.thenBy { it.name })
+                                    if (availableSources.isEmpty()) {
+                                        Text("Provider tidak menyediakan pilihan sumber/server lain", color = controlMutedColor, fontSize = 11.sp)
+                                    }
+                                    availableSources.forEach { stream ->
+                                        val qualityLabel = stream.quality.takeIf { it > 0 }?.let { "${it}p" } ?: "Kualitas otomatis"
+                                        val detail = listOf(stream.name, stream.source, stream.streamType).filter { it.isNotBlank() }.distinct().joinToString(" • ")
+                                        Text(
+                                            text = (if (playerState.selectedPluginStreamUrl == stream.url) "✓ " else "") + qualityLabel + " · " + detail,
+                                            color = if (playerState.selectedPluginStreamUrl == stream.url) controlAccentColor else controlTextColor,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.selectPluginStream(stream)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
                                 "Kualitas video" -> {
-                                    if (playerState.pluginStreams.isEmpty() && playerState.videoTracks.isEmpty()) {
+                                    if (playerState.videoTracks.isEmpty()) {
                                         Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
                                     }
-                                    playerState.pluginStreams
-                                        .distinctBy { it.url }
-                                        .sortedByDescending { it.quality }
-                                        .forEach { stream ->
-                                            val qualityLabel = stream.quality.takeIf { it > 0 }?.let { "${it}p" } ?: stream.name.ifBlank { stream.source }
-                                            val detail = listOf(stream.name, stream.source, stream.streamType).filter { it.isNotBlank() }.distinct().joinToString(" • ")
-                                            Text(
-                                                text = (if (playerState.selectedPluginStreamUrl == stream.url) "✓ " else "") + qualityLabel + if (detail.isNotBlank()) "  ·  $detail" else "",
-                                                color = if (playerState.selectedPluginStreamUrl == stream.url) controlAccentColor else controlTextColor,
-                                                fontSize = 11.sp,
-                                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                                                    viewModel.player.selectPluginStream(stream)
-                                                    selectedPlayerSetting = null
-                                                }.padding(horizontal = 10.dp, vertical = 9.dp)
-                                            )
-                                        }
                                     playerState.videoTracks.forEach { track ->
                                         Text(
                                             text = (if (track.selected) "✓ " else "") + track.label,
