@@ -129,6 +129,7 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
     var showTrackMenu by remember { mutableStateOf(false) }
+    var selectedPlayerSetting by remember { mutableStateOf<String?>(null) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var isFullscreen by remember { mutableStateOf(false) }
@@ -550,76 +551,117 @@ fun PlayerScreen(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("KECEPATAN PEMUTARAN", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).forEach { speed ->
-                            Text(
-                                text = (if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) "✓ " else "") + "${speed}×",
-                                color = if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) controlAccentColor else controlTextColor,
-                                fontSize = 12.sp,
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                                    viewModel.player.setPlaybackSpeed(speed)
-                                }.padding(horizontal = 8.dp, vertical = 7.dp)
-                            )
-                        }
-                        Text("RASIO LAYAR", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        listOf(
-                            "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
-                            "Fill" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
-                            "Zoom" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        ).forEach { (label, mode) ->
-                            Text(
-                                text = (if (selectedResizeMode == mode) "✓ " else "") + label,
-                                color = if (selectedResizeMode == mode) controlAccentColor else controlTextColor,
-                                fontSize = 12.sp,
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                                    selectedResizeMode = mode
-                                    playerViewRef?.resizeMode = mode
-                                }.padding(horizontal = 8.dp, vertical = 7.dp)
-                            )
-                        }
-                        Text("KUALITAS VIDEO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        if (playerState.videoTracks.isEmpty()) {
-                            Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
-                        } else {
-                            playerState.videoTracks.forEach { track ->
+                        if (selectedPlayerSetting == null) {
+                            Text("PENGATURAN PEMUTARAN", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            listOf(
+                                "Kecepatan pemutaran" to "${playerState.playbackSpeed}×",
+                                "Rasio layar" to when (selectedResizeMode) {
+                                    AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Fill"
+                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
+                                    else -> "Fit"
+                                },
+                                "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
+                                "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
+                                "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis")
+                            ).forEach { (label, current) ->
                                 Text(
-                                    text = (if (track.selected) "✓ " else "") + track.label,
-                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    text = "$label  ·  $current  ›",
+                                    color = controlTextColor,
                                     fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+                                        .clickable { selectedPlayerSetting = label }
+                                        .padding(horizontal = 10.dp, vertical = 11.dp)
                                 )
                             }
-                        }
-                        Text("AUDIO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-                        if (playerState.audioTracks.isEmpty()) {
-                            Text("Tidak ada pilihan track audio tambahan", color = controlMutedColor, fontSize = 11.sp)
                         } else {
-                            playerState.audioTracks.forEach { track ->
-                                Text(
-                                    text = (if (track.selected) "✓ " else "") + track.label,
-                                    color = if (track.selected) controlAccentColor else controlTextColor,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
-                                )
-                            }
-                        }
-                        Text("SUBTITLE", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-                        Text(
-                            text = if (playerState.subtitlesDisabled) "✓ Nonaktif" else "Nonaktifkan subtitle",
-                            color = if (playerState.subtitlesDisabled) controlAccentColor else controlTextColor,
-                            fontSize = 12.sp,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.disableSubtitles() }.padding(horizontal = 8.dp, vertical = 7.dp)
-                        )
-                        if (playerState.subtitleTracks.isEmpty()) {
-                            Text("Tidak ada subtitle tertanam pada sumber ini", color = controlMutedColor, fontSize = 11.sp)
-                        } else {
-                            playerState.subtitleTracks.forEach { track ->
-                                Text(
-                                    text = (if (track.selected) "✓ " else "") + track.label,
-                                    color = if (track.selected) controlAccentColor else controlTextColor,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
-                                )
+                            Text(
+                                text = "‹  $selectedPlayerSetting",
+                                color = controlAccentColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                    .clickable { selectedPlayerSetting = null }
+                                    .padding(horizontal = 8.dp, vertical = 9.dp)
+                            )
+                            when (selectedPlayerSetting) {
+                                "Kecepatan pemutaran" -> listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).forEach { speed ->
+                                    Text(
+                                        text = (if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) "✓ " else "") + "${speed}×",
+                                        color = if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            viewModel.player.setPlaybackSpeed(speed)
+                                            selectedPlayerSetting = null
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Rasio layar" -> listOf(
+                                    "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                                    "Fill" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                                    "Zoom" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                ).forEach { (label, mode) ->
+                                    Text(
+                                        text = (if (selectedResizeMode == mode) "✓ " else "") + label,
+                                        color = if (selectedResizeMode == mode) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            selectedResizeMode = mode
+                                            playerViewRef?.resizeMode = mode
+                                            selectedPlayerSetting = null
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Kualitas video" -> {
+                                    if (playerState.videoTracks.isEmpty()) Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                                    playerState.videoTracks.forEach { track ->
+                                        Text(
+                                            text = (if (track.selected) "✓ " else "") + track.label,
+                                            color = if (track.selected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.selectTrack(track)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Audio" -> {
+                                    if (playerState.audioTracks.isEmpty()) Text("Tidak ada pilihan audio tambahan dari sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                                    playerState.audioTracks.forEach { track ->
+                                        Text(
+                                            text = (if (track.selected) "✓ " else "") + track.label,
+                                            color = if (track.selected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.selectTrack(track)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Subtitle" -> {
+                                    Text(
+                                        text = if (playerState.subtitlesDisabled) "✓ Mati" else "Mati",
+                                        color = if (playerState.subtitlesDisabled) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            viewModel.player.disableSubtitles()
+                                            selectedPlayerSetting = null
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                    if (playerState.subtitleTracks.isEmpty()) Text("Tidak ada subtitle dari sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                                    playerState.subtitleTracks.forEach { track ->
+                                        Text(
+                                            text = (if (track.selected) "✓ " else "") + track.label,
+                                            color = if (track.selected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.selectTrack(track)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
