@@ -22,9 +22,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -142,6 +140,8 @@ fun PlayerScreen(
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
     var activeGesture by remember { mutableStateOf<String?>(null) }
+    var isRewindingHeld by remember { mutableStateOf(false) }
+    var isFastForwardHeld by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
@@ -222,6 +222,25 @@ fun PlayerScreen(
         if (activeGesture != null && activeGesture !in setOf("rewind", "fast-forward")) {
             delay(900)
             activeGesture = null
+        }
+    }
+
+    LaunchedEffect(isRewindingHeld) {
+        while (isRewindingHeld) {
+            viewModel.player.seekBackward(500L)
+            delay(250L)
+        }
+    }
+
+    LaunchedEffect(isFastForwardHeld) {
+        if (isFastForwardHeld) {
+            val previousSpeed = playerState.playbackSpeed
+            viewModel.player.setPlaybackSpeed(4f)
+            try {
+                while (isFastForwardHeld) delay(60L)
+            } finally {
+                viewModel.player.setPlaybackSpeed(previousSpeed)
+            }
         }
     }
 
@@ -365,49 +384,46 @@ fun PlayerScreen(
             ) {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                waitForUpOrCancellation()
-                                false
-                            } ?: true
-                            if (longPressed) {
-                                activeGesture = "rewind"
-                                showControls = true
-                                while (true) {
-                                    viewModel.player.seekBackward(500L)
-                                    val event = kotlinx.coroutines.withTimeoutOrNull(250L) { awaitPointerEvent() }
-                                    if (event != null && event.changes.none { it.pressed }) break
+                        detectTapGestures(
+                            onPress = {
+                                val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    tryAwaitRelease()
                                 }
-                                activeGesture = null
+                                if (releasedBeforeLongPress == null) {
+                                    isRewindingHeld = true
+                                    activeGesture = "rewind"
+                                    showControls = true
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isRewindingHeld = false
+                                        activeGesture = null
+                                    }
+                                }
                             }
-                        }
+                        )
                     }
                 )
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                waitForUpOrCancellation()
-                                false
-                            } ?: true
-                            if (longPressed) {
-                                val previousSpeed = playerState.playbackSpeed
-                                viewModel.player.setPlaybackSpeed(4f)
-                                activeGesture = "fast-forward"
-                                showControls = true
-                                try {
-                                    while (true) {
-                                        val event = kotlinx.coroutines.withTimeoutOrNull(60L) { awaitPointerEvent() }
-                                        if (event != null && event.changes.none { it.pressed }) break
+                        detectTapGestures(
+                            onPress = {
+                                val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    tryAwaitRelease()
+                                }
+                                if (releasedBeforeLongPress == null) {
+                                    isFastForwardHeld = true
+                                    activeGesture = "fast-forward"
+                                    showControls = true
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isFastForwardHeld = false
+                                        activeGesture = null
                                     }
-                                } finally {
-                                    viewModel.player.setPlaybackSpeed(previousSpeed)
-                                    activeGesture = null
                                 }
                             }
-                        }
+                        )
                     }
                 )
             }
