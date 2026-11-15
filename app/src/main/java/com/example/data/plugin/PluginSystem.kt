@@ -87,6 +87,36 @@ class PluginManager(private val context: Context) {
         loadInstalledPlugins()
     }
 
+    /**
+     * Stable source keys used to associate imported catalog records with their
+     * CloudStream provider and the repository that distributes it.
+     */
+    fun cloudStreamPluginId(entry: CloudStreamPluginEntry): String =
+        entry.internalName.trim().lowercase().ifBlank { entry.name.trim().lowercase() }
+
+    fun cloudStreamRepositoryId(entry: CloudStreamPluginEntry): String {
+        val repository = _repositories.value.firstOrNull { repo ->
+            repo.plugins.any { installed ->
+                installed.internalName.equals(entry.internalName, ignoreCase = true) &&
+                    installed.url == entry.url
+            }
+        } ?: return ""
+        val source = repository.sourceUrl.ifBlank { repository.pluginLists.firstOrNull().orEmpty() }
+            .trim().lowercase()
+        if (source.isBlank()) return ""
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(source.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    fun cloudStreamRepositoryName(entry: CloudStreamPluginEntry): String =
+        _repositories.value.firstOrNull { repo ->
+            repo.plugins.any { installed ->
+                installed.internalName.equals(entry.internalName, ignoreCase = true) &&
+                    installed.url == entry.url
+            }
+        }?.name.orEmpty()
+
     fun getLocalPluginsDirectory(): File = File(context.filesDir, "Cloudstream3/plugins").also { it.mkdirs() }
     fun getOnlinePluginsDirectory(repoHash: String): File = File(context.filesDir, "Extensions/$repoHash").also { it.mkdirs() }
 
