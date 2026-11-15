@@ -624,17 +624,41 @@ fun HomeScreen(
                                         )
                                     }
                                 }
-                                items(
-                                    items = playlistItems,
-                                    key = { it.id },
-                                    span = { GridItemSpan(1) }
-                                ) { mediaItem ->
-                                    MediaGridCard(
-                                        item = mediaItem,
-                                        onClick = { viewModel.playMedia(mediaItem) },
-                                        onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                        onDownload = { viewModel.downloadMedia(mediaItem) }
-                                    )
+                                if (expandedSourceType == sourceType) {
+                                    items(
+                                        items = playlistItems,
+                                        key = { it.id },
+                                        span = { GridItemSpan(1) }
+                                    ) { mediaItem ->
+                                        MediaGridCard(
+                                            item = mediaItem,
+                                            onClick = { viewModel.playMedia(mediaItem) },
+                                            onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                            onDownload = { viewModel.downloadMedia(mediaItem) }
+                                        )
+                                    }
+                                } else {
+                                    item(
+                                        key = "horizontal_catalog_\${sourceType}_\${playlistId}",
+                                        span = { GridItemSpan(maxLineSpan) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            playlistItems.forEach { mediaItem ->
+                                                MediaGridCard(
+                                                    item = mediaItem,
+                                                    modifier = Modifier.width(148.dp),
+                                                    onClick = { viewModel.playMedia(mediaItem) },
+                                                    onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                                    onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
