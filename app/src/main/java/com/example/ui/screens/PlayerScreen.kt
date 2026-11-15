@@ -87,6 +87,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -765,20 +766,15 @@ fun PlayerScreen(
                     }
                 }
 
-                // Timeline stays near the top edge, directly below the media header.
+                // Slim timeline: the visible glass rail is only 4dp high,
+                // while the Slider keeps a 48dp interaction target for touch/remote.
                 if (usesNativePlayer) Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 104.dp)
                         .fillMaxWidth(0.88f)
-                        .playerLiquidGlass(
-                            shape = RoundedCornerShape(12.dp),
-                            alpha = 0.12f,
-                            borderAlpha = 0.16f,
-                            elevation = 5.dp
-                        )
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .padding(horizontal = 8.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -790,43 +786,63 @@ fun PlayerScreen(
                             val totalFormatted = formatMs(playerState.durationMs)
                             Text(
                                 text = "$currentFormatted / $totalFormatted",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = controlTextColor
                             )
-
                         }
 
                         val total = playerState.durationMs.coerceAtLeast(1L)
                         val displayedPosition = if (isSeeking) seekPreviewMs else playerState.currentPositionMs
                         val currentRatio = (displayedPosition.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 
-                        Slider(
-                            value = currentRatio,
-                            enabled = playerState.isSeekable && playerState.durationMs > 0L,
-                            onValueChange = { ratio ->
-                                isSeeking = true
-                                seekPreviewMs = (ratio * total).toLong().coerceIn(0L, total)
-                            },
-                            onValueChangeFinished = {
-                                if (isSeeking) viewModel.player.seekTo(seekPreviewMs)
-                                isSeeking = false
-                            },
-                            colors = SliderDefaults.colors(
-                                // Liquid Glass timeline: white played track, blue seek head,
-                                // and a subtle frosted-white unplayed track.
-                                thumbColor = Color(0xFF48BFFF),
-                                activeTrackColor = Color.White,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.24f),
-                                disabledThumbColor = Color(0xFF48BFFF).copy(alpha = 0.55f),
-                                disabledActiveTrackColor = Color.White.copy(alpha = 0.55f),
-                                disabledInactiveTrackColor = Color.White.copy(alpha = 0.12f)
-                            ),
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
-                                .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
-                        )
+                                .height(48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Glass housing is exactly 2dp thicker than the 2dp progress rail.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .playerLiquidGlass(
+                                        shape = RoundedCornerShape(50),
+                                        alpha = 0.10f,
+                                        borderAlpha = 0.12f,
+                                        elevation = 1.dp
+                                    )
+                            )
+
+                            Slider(
+                                value = currentRatio,
+                                enabled = playerState.isSeekable && playerState.durationMs > 0L,
+                                onValueChange = { ratio ->
+                                    isSeeking = true
+                                    seekPreviewMs = (ratio * total).toLong().coerceIn(0L, total)
+                                },
+                                onValueChangeFinished = {
+                                    if (isSeeking) viewModel.player.seekTo(seekPreviewMs)
+                                    isSeeking = false
+                                },
+                                colors = SliderDefaults.colors(
+                                    // 2dp white played rail, translucent unplayed rail,
+                                    // and a small circular red seek indicator.
+                                    thumbColor = Color(0xFFFF3030),
+                                    activeTrackColor = Color.White,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.24f),
+                                    disabledThumbColor = Color(0xFFFF3030).copy(alpha = 0.55f),
+                                    disabledActiveTrackColor = Color.White.copy(alpha = 0.55f),
+                                    disabledInactiveTrackColor = Color.White.copy(alpha = 0.12f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .graphicsLayer { scaleY = 0.4f }
+                                    .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
+                            )
+                        }
                     }
                 }
             }
