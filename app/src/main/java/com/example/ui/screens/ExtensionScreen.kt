@@ -1058,6 +1058,7 @@ private fun CloudStreamSearchPanel(
     var homeCatalogPages by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var loadingMoreCatalog by remember { mutableStateOf<Set<String>>(emptySet()) }
     var autoLoadAttempts by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var catalogSectionErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val viewportHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -1103,6 +1104,7 @@ private fun CloudStreamSearchPanel(
                         it.sectionName == section.sectionName
                 }
                 if (matching != null) {
+                    catalogSectionErrors = catalogSectionErrors - sectionKey
                     homeCatalog = homeCatalog.map { pair ->
                         if (pair.first == entry && catalogSectionKey(pair.first, pair.second) == sectionKey) {
                             pair.first to pair.second.copy(
@@ -1113,10 +1115,12 @@ private fun CloudStreamSearchPanel(
                     }
                     homeCatalogPages = homeCatalogPages + (sectionKey to (currentPage + 1))
                 } else {
-                    homeCatalogMessage = "Halaman berikutnya tidak mengembalikan kategori yang cocok."
+                    catalogSectionErrors = catalogSectionErrors +
+                        (sectionKey to "Halaman berikutnya tidak mengembalikan kategori ini.")
                 }
             }.onFailure { error ->
-                homeCatalogMessage = "Gagal memuat halaman berikutnya: ${error.message ?: "error"}"
+                catalogSectionErrors = catalogSectionErrors +
+                    (sectionKey to "Gagal memuat halaman berikutnya: ${error.message ?: "error"}")
             }
             loadingMoreCatalog = loadingMoreCatalog - sectionKey
         }
@@ -1177,6 +1181,7 @@ private fun CloudStreamSearchPanel(
                 homeCatalogPages = emptyMap()
                 loadingMoreCatalog = emptySet()
                 autoLoadAttempts = emptySet()
+                catalogSectionErrors = emptyMap()
                 homeCatalogMessage = ""
                 scope.launch {
                     val sections = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>()
@@ -1252,6 +1257,10 @@ private fun CloudStreamSearchPanel(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
+            val sectionError = catalogSectionErrors[catalogSectionKey(entry, section)]
+            if (!sectionError.isNullOrBlank()) {
+                Text(sectionError, fontSize = 9.sp, color = MaterialTheme.colorScheme.error)
+            }
             if (section.hasNext) {
                 val sectionKey = catalogSectionKey(entry, section)
                 val currentPage = homeCatalogPages[sectionKey] ?: 1
