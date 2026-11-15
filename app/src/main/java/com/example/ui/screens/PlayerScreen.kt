@@ -500,95 +500,72 @@ fun PlayerScreen(
                     }
                 }
 
-                // Center Liquid Glass Orb Controls
-                if (usesNativePlayer) Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Rewind 10s
-                    IconButton(
-                        onClick = { viewModel.player.seekBackward(10000L) },
-                        enabled = playerState.isSeekable,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .playerLiquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.24f)
-                            .liquidGlassTvFocusable(shape = CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay10,
-                            contentDescription = "Mundur 10 Detik",
-                            tint = controlTextColor,
-                            modifier = Modifier.size(29.dp)
-                        )
-                    }
-
-                    // Play / Pause Crystal Orb
-                    IconButton(
-                        onClick = { viewModel.player.togglePlayPause() },
-                        modifier = Modifier
-                            .size(76.dp)
-                            .playerLiquidGlass(shape = CircleShape, alpha = 0.34f, borderAlpha = 0.72f, elevation = 18.dp)
-                            .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.15f)
-                    ) {
-                        Icon(
-                            imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
-                            tint = Color.White,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-
-                    // Forward 10s
-                    IconButton(
-                        onClick = { viewModel.player.seekForward(10000L) },
-                        enabled = playerState.isSeekable,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .playerLiquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
-                            .liquidGlassTvFocusable(shape = CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Forward10,
-                            contentDescription = "Maju 10 Detik",
-                            tint = controlTextColor,
-                            modifier = Modifier.size(29.dp)
-                        )
-                    }
-                }
-
+                // Compact primary transport controls stay in the bottom dock.
                 if (usesNativePlayer) {
                     val queueIndex = mediaList.indexOfFirst { it.id == media.id }
                     val previousItem = mediaList.getOrNull(queueIndex - 1)?.takeIf { it.type != "PHOTO" }
                     val nextItem = mediaList.drop((queueIndex + 1).coerceAtLeast(0)).firstOrNull { it.type != "PHOTO" }
                     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
                     Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp).fillMaxWidth()
-                            .playerLiquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.20f, borderAlpha = 0.22f, elevation = 8.dp)
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 56.dp)
+                            .fillMaxWidth()
+                            .playerLiquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.20f, borderAlpha = 0.28f, elevation = 8.dp)
+                            .padding(horizontal = 4.dp, vertical = 3.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor)
+                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
                         }
+                        IconButton(onClick = { viewModel.player.seekBackward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Replay10, contentDescription = "Mundur 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.player.togglePlayPause() },
+                            modifier = Modifier.size(48.dp)
+                                .playerLiquidGlass(shape = CircleShape, alpha = 0.32f, borderAlpha = 0.62f, elevation = 10.dp)
+                                .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.08f)
+                        ) {
+                            Icon(
+                                imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        IconButton(onClick = { viewModel.player.seekForward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Forward10, contentDescription = "Maju 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
+                        }
+                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
+                        }
+                    }
+
+                    // Secondary playback options remain compact and separate from transport.
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 108.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.15f, borderAlpha = 0.20f, elevation = 6.dp)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         IconButton(onClick = {
                             val currentIndex = speeds.indexOfFirst { kotlin.math.abs(it - playerState.playbackSpeed) < 0.01f }
                             viewModel.player.setPlaybackSpeed(speeds[(currentIndex + 1).mod(speeds.size)])
-                        }, modifier = Modifier.size(42.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                        }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Text("${playerState.playbackSpeed}×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = controlAccentColor)
                         }
-                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor)
+                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor, modifier = Modifier.size(19.dp))
                         }
-                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor)
+                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor, modifier = Modifier.size(19.dp))
                         }
-                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor)
-                        }
-                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor)
+                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor, modifier = Modifier.size(19.dp))
                         }
                     }
                 }
@@ -598,7 +575,7 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 184.dp)
+                            .padding(bottom = 174.dp)
                             .width(132.dp)
                             .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
@@ -637,11 +614,12 @@ fun PlayerScreen(
                     }
                 }
 
-                // Bottom Timeline Scrubber Capsule
+                // Timeline stays near the top edge, directly below the media header.
                 if (usesNativePlayer) Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
+                        .padding(top = 76.dp)
                         .playerLiquidGlass(
                             shape = RoundedCornerShape(16.dp),
                             alpha = 0.16f,
