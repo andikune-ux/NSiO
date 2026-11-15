@@ -992,25 +992,61 @@ private fun PluginRepoTab(
                     items(entries, key = { it.internalName + "-" + it.version }) { entry ->
                         var installed by remember(entry.internalName, entry.version) { mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry)) }
                         var busy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                        var confirmUninstall by remember(entry.internalName, entry.version) { mutableStateOf(false) }
                         Column(modifier = Modifier.fillMaxWidth().padding(6.dp)) {
                             Text(entry.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(entry.internalName + " • v" + entry.version + " • " + if (installed) "terpasang" else "belum dipasang", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Button(
-                                onClick = {
-                                    if (!busy && entry.status != 0) {
-                                        busy = true
-                                        scope.launch {
-                                            runCatching {
-                                                if (!installed) viewModel.pluginManager.installCloudStreamPlugin(entry)
-                                                viewModel.pluginManager.loadCloudStreamPlugin(entry)
-                                            }.onSuccess { installed = true }
-                                             .onFailure { repoFeedback = it.message ?: "Gagal memasang plugin." }
-                                            busy = false
+                            Text(
+                                entry.internalName + " • v" + entry.version + " • API " + entry.apiVersion + " • " +
+                                    viewModel.pluginManager.cloudStreamRepositoryName(entry) + " • " +
+                                    if (installed) "terpasang" else "belum dipasang",
+                                fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Button(
+                                    onClick = {
+                                        if (!busy && entry.status != 0) {
+                                            busy = true
+                                            scope.launch {
+                                                runCatching {
+                                                    if (!installed) viewModel.pluginManager.installCloudStreamPlugin(entry)
+                                                    viewModel.pluginManager.loadCloudStreamPlugin(entry)
+                                                }.onSuccess { installed = true }
+                                                 .onFailure { repoFeedback = it.message ?: "Gagal memasang plugin." }
+                                                busy = false
+                                            }
                                         }
+                                    },
+                                    enabled = !busy && entry.status != 0,
+                                    modifier = Modifier.weight(1f)
+                                ) { if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp) else Text(if (installed) "Aktifkan" else "Pasang & aktifkan", fontSize = 10.sp) }
+                                if (installed) {
+                                    IconButton(onClick = { confirmUninstall = true }, enabled = !busy) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Copot plugin", tint = AccentRed)
                                     }
-                                },
-                                enabled = !busy && entry.status != 0
-                            ) { if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp) else Text(if (installed) "Aktifkan" else "Pasang & aktifkan", fontSize = 10.sp) }
+                                }
+                            }
+                            if (confirmUninstall) {
+                                AlertDialog(
+                                    onDismissRequest = { confirmUninstall = false },
+                                    title = { Text("Copot plugin?") },
+                                    text = { Text("File plugin ${entry.name} versi ${entry.version} dan cache runtime-nya akan dihapus dari perangkat.") },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            confirmUninstall = false
+                                            busy = true
+                                            scope.launch {
+                                                runCatching { viewModel.pluginManager.uninstallCloudStreamPlugin(entry) }
+                                                    .onSuccess { installed = false; repoFeedback = "Plugin ${entry.name} berhasil dicopot." }
+                                                    .onFailure { repoFeedback = it.message ?: "Gagal mencopot plugin." }
+                                                busy = false
+                                            }
+                                        }) { Text("Copot") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { confirmUninstall = false }) { Text("Batal") }
+                                    }
+                                )
+                            }
                         }
                     }
                     items(plugins, key = { it.manifest?.name ?: it.filename }) { plugin ->
