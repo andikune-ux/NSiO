@@ -1192,6 +1192,50 @@ private fun CloudStreamCatalogManagerPanel(
 }
 
 @Composable
+private fun CloudStreamDetailSkeleton() {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "cloudstream_detail_skeleton")
+    val pulse by transition.animateFloat(
+        initialValue = 0.28f, targetValue = 0.62f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(850),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ), label = "skeleton_alpha"
+    )
+    val placeholder = MaterialTheme.colorScheme.onSurface.copy(alpha = pulse)
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.width(72.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+                Box(Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+            }
+            Box(Modifier.fillMaxWidth().height(138.dp).clip(RoundedCornerShape(14.dp)).background(placeholder))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.width(92.dp).height(132.dp).clip(RoundedCornerShape(10.dp)).background(placeholder))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.fillMaxWidth(0.9f).height(17.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+                    Box(Modifier.fillMaxWidth(0.55f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+                    Box(Modifier.fillMaxWidth(0.75f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+                    Box(Modifier.fillMaxWidth(0.48f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+                }
+            }
+            repeat(3) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(placeholder))
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(placeholder))
+            } }
+            Box(Modifier.fillMaxWidth(0.35f).height(14.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+            repeat(3) { Box(Modifier.fillMaxWidth(if (it == 2) 0.68f else 1f).height(9.dp).clip(RoundedCornerShape(5.dp)).background(placeholder)) }
+            Box(Modifier.fillMaxWidth(0.28f).height(14.dp).clip(RoundedCornerShape(6.dp)).background(placeholder))
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                repeat(4) { Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.fillMaxWidth().height(68.dp).clip(RoundedCornerShape(9.dp)).background(placeholder))
+                    Box(Modifier.fillMaxWidth(0.8f).height(8.dp).clip(RoundedCornerShape(5.dp)).background(placeholder))
+                } }
+            }
+        }
+    }
+}
+
+@Composable
 fun CloudStreamSearchPanel(
     viewModel: MainViewModel,
     repos: List<com.example.data.plugin.RepoManifest>,
@@ -1224,6 +1268,8 @@ fun CloudStreamSearchPanel(
         mutableStateOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamContent>?>(null)
     }
     var loadingDetail by remember { mutableStateOf(false) }
+    var detailLoadError by remember { mutableStateOf<String?>(null) }
+    var detailRetry by remember { mutableStateOf<(() -> Unit)?>(null) }
     var resolvingLinks by remember { mutableStateOf(false) }
     var linkMessage by remember { mutableStateOf("") }
     var linkTarget by remember { mutableStateOf("") }
@@ -1294,6 +1340,8 @@ fun CloudStreamSearchPanel(
     LaunchedEffect(pendingCloudStreamDetail?.id, installedEntries) {
         val pendingItem = pendingCloudStreamDetail ?: return@LaunchedEffect
         loadingDetail = true
+        selectedContent = null
+        detailLoadError = null
         runCatching {
             val entry = viewModel.pluginManager.findCloudStreamPlugin(pendingItem.pluginId)
                 ?: throw IllegalStateException("Plugin asal konten tidak ditemukan atau belum terpasang.")
@@ -1307,11 +1355,14 @@ fun CloudStreamSearchPanel(
             )
         }.onSuccess { (entry, content) ->
             selectedContent = entry to content
+            detailLoadError = null
             streams = emptyList()
             linkMessage = ""
             searchMessage = "Detail CloudStream siap. Pilih film atau episode untuk mengambil sumber pemutaran."
         }.onFailure { error ->
-            searchMessage = "Gagal membuka detail CloudStream: ${error.localizedMessage ?: "provider tidak merespons"}"
+            val message = "Gagal membuka detail CloudStream: ${error.localizedMessage ?: "provider tidak merespons"}"
+            detailLoadError = message
+            searchMessage = message
         }
         viewModel.clearPendingCloudStreamDetail(pendingItem.id)
         loadingDetail = false
@@ -1327,6 +1378,9 @@ fun CloudStreamSearchPanel(
     ) {
         if (loadingDetail) return
         loadingDetail = true
+        selectedContent = null
+        detailLoadError = null
+        detailRetry = { openCloudStreamDetail(entry, providerName, contentUrl, fallbackPoster, fallbackYear, fallbackTitle) }
         streams = emptyList()
         scope.launch {
             runCatching {
@@ -1337,9 +1391,12 @@ fun CloudStreamSearchPanel(
                     year = loaded.year ?: fallbackYear,
                     title = loaded.title.ifBlank { fallbackTitle.orEmpty() }
                 )
+                detailLoadError = null
                 linkMessage = ""
             }.onFailure { error ->
-                searchMessage = "Gagal membuka detail konten: ${error.localizedMessage ?: "provider tidak merespons"}"
+                val message = "Gagal membuka detail konten: ${error.localizedMessage ?: "provider tidak merespons"}"
+                detailLoadError = message
+                searchMessage = message
             }
             loadingDetail = false
         }
@@ -1367,6 +1424,7 @@ fun CloudStreamSearchPanel(
         resolvedPlaybackContentUrl = contentUrl
         linkMessage = ""
         streams = emptyList()
+        if (autoPlay) viewModel.beginCloudStreamPlaybackPreparation(contentUrl, resolvedPlaybackTitle, posterUrl, "CloudStream • Film")
         scope.launch {
             runCatching {
                 viewModel.pluginManager.loadCloudStreamLinks(entry, providerName, data)
@@ -1382,6 +1440,7 @@ fun CloudStreamSearchPanel(
                     val selectedStream = playable.maxByOrNull { it.quality }
                     if (selectedStream == null) {
                         linkMessage = "Tidak ada sumber film yang bisa diputar."
+                        viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
                     } else {
                         val headers = selectedStream.headers.toMutableMap().apply {
                             if (selectedStream.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
@@ -1422,7 +1481,9 @@ fun CloudStreamSearchPanel(
                 }
             }.onFailure { error ->
                 linkMessage = error.message ?: "Gagal mengambil link streaming."
+                if (autoPlay) viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
             }
+            if (autoPlay && playable.isEmpty()) viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
             resolvingLinks = false
         }
     }
@@ -1708,6 +1769,30 @@ fun CloudStreamSearchPanel(
         if (loadingDetail) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
+        if ((loadingDetail && selectedContent == null) || detailLoadError != null) {
+            Dialog(onDismissRequest = {
+                loadingDetail = false
+                detailLoadError = null
+                selectedContent = null
+                streams = emptyList()
+            }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                if (detailLoadError == null) {
+                    CloudStreamDetailSkeleton()
+                } else {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Konten belum dapat dimuat", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            Text(detailLoadError.orEmpty(), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Button(onClick = { detailRetry?.invoke() }, enabled = !loadingDetail, modifier = Modifier.fillMaxWidth()) {
+                                if (loadingDetail) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Coba Lagi")
+                            }
+                            TextButton(onClick = { detailLoadError = null; selectedContent = null }) { Text("Kembali") }
+                        }
+                    }
+                }
+            }
+        }
+
         selectedContent?.let { (entry, content) ->
             Dialog(
                 onDismissRequest = {
@@ -1823,25 +1908,6 @@ fun CloudStreamSearchPanel(
                     }
                 }
             }
-            content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
-                Text("Pemeran / Artis", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cast.take(10).forEach { person ->
-                        Column(modifier = Modifier.width(76.dp)) {
-                            if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = person.imageUrl, contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
-                            Text(person.name, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            person.role?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
-                            person.voiceActorImageUrl?.takeIf { it.isNotBlank() }?.let { voiceImage ->
-                                AsyncImage(model = voiceImage, contentDescription = "Pengisi suara", modifier = Modifier.size(42.dp).clip(CircleShape))
-                            }
-                            person.voiceActorName?.takeIf { it.isNotBlank() }?.let {
-                                Text("Suara: $it", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                    }
-                }
-            }
             content.trailers.forEachIndexed { index, trailer ->
                 TextButton(
                     enabled = !resolvingLinks && (trailer.url.startsWith("https://", true) || trailer.url.startsWith("http://", true)),
@@ -1945,6 +2011,25 @@ fun CloudStreamSearchPanel(
                     },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
                 ) { Text("Bagikan", fontSize = 10.sp) }
+            }
+            content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
+                Text("Pemeran / Artis", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    cast.take(10).forEach { person ->
+                        Column(modifier = Modifier.width(76.dp)) {
+                            if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = person.imageUrl, contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
+                            Text(person.name, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            person.role?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
+                            person.voiceActorImageUrl?.takeIf { it.isNotBlank() }?.let { voiceImage ->
+                                AsyncImage(model = voiceImage, contentDescription = "Pengisi suara", modifier = Modifier.size(42.dp).clip(CircleShape))
+                            }
+                            person.voiceActorName?.takeIf { it.isNotBlank() }?.let {
+                                Text("Suara: $it", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
             }
             if (content.episodes.isNotEmpty()) {
                 val availableDubStatuses = content.episodes.mapNotNull { it.dubStatus }
