@@ -399,8 +399,11 @@ fun PlayerScreen(
                                 else -> 0
                             }
                             if (direction != 0) {
-                                if (usesNativePlayer) viewModel.skipPlayback(direction)
-                                else adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
+                                if (media.type.equals("PHOTO", ignoreCase = true)) {
+                                    adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
+                                } else {
+                                    viewModel.skipPlayback(direction)
+                                }
                                 showControls = true
                             }
                             horizontalDistance = 0f
