@@ -1916,6 +1916,12 @@ fun CloudStreamSearchPanel(
                     onClick = {
                         resolvingLinks = true
                         linkMessage = "Menyiapkan trailer di pemutar NSiO..."
+                        viewModel.beginCloudStreamPlaybackPreparation(
+                            contentUrl = trailer.url,
+                            title = "Trailer • ${content.title}",
+                            posterUrl = content.posterUrl,
+                            category = "CloudStream • Trailer"
+                        )
                         scope.launch {
                             runCatching {
                                 viewModel.pluginManager.resolveCloudStreamTrailer(entry, content.providerName, trailer)
@@ -1927,6 +1933,7 @@ fun CloudStreamSearchPanel(
                                 viewModel.playCloudStreamTrailer(content.title, content.posterUrl, trailerStream)
                             }.onFailure { error ->
                                 linkMessage = "Trailer gagal disiapkan: ${error.localizedMessage ?: "stream tidak tersedia"}"
+                                viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
                             }
                             resolvingLinks = false
                         }
