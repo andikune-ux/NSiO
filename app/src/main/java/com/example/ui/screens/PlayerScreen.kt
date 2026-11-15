@@ -266,9 +266,9 @@ fun PlayerScreen(
         val sessionManager = castContext?.sessionManager
         // Prefer the provider's selected stream, but fall back to the URL
         // currently opened in the player for ordinary catalogue/network media.
-        val activeUrl = playerState.selectedPluginStreamUrl
+        val activeUrl = latestCastPlayerState.selectedPluginStreamUrl
             ?.takeIf { it.isNotBlank() }
-            ?: media.url
+            ?: latestCastMedia.url
         fun sendCurrentMedia(session: CastSession?): Boolean {
             if (session == null || activeUrl.isBlank()) return false
             val selectedStream = latestCastPlayerState.pluginStreams.firstOrNull { it.url == activeUrl }
@@ -300,15 +300,15 @@ fun PlayerScreen(
             }
             val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
                 putString(MediaMetadata.KEY_TITLE, latestCastPlayerState.title.ifBlank { latestCastMedia.title })
-                if (latestCastMedia.thumbnailUrl.isNotBlank() && media.thumbnailUrl.startsWith("http", true)) {
-                    addImage(WebImage(Uri.parse(media.thumbnailUrl)))
+                if (latestCastMedia.thumbnailUrl.isNotBlank() && latestCastMedia.thumbnailUrl.startsWith("http", true)) {
+                    addImage(WebImage(Uri.parse(latestCastMedia.thumbnailUrl)))
                 }
             }
             val info = MediaInfo.Builder(activeUrl)
                 .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
                 .setContentType(contentType)
                 .setMetadata(metadata)
-                .apply { if (latestCastPlayerState.durationMs > 0L) setStreamDuration(playerState.durationMs) }
+                .apply { if (latestCastPlayerState.durationMs > 0L) setStreamDuration(latestCastPlayerState.durationMs) }
                 .build()
             val request = MediaLoadRequestData.Builder()
                 .setMediaInfo(info)
