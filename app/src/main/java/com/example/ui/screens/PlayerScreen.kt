@@ -138,6 +138,8 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = remember(context) { context.findPlayerActivity() }
     val originalBrightness = remember(activity) { activity?.window?.attributes?.screenBrightness ?: -1f }
+    val originalRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    val originalSystemUiVisibility = remember(activity) { activity?.window?.decorView?.systemUiVisibility ?: 0 }
     var brightnessLevel by remember(activity) { mutableStateOf(if (originalBrightness < 0f) 0.5f else originalBrightness.coerceIn(0.05f, 1f)) }
     val isPhoto = media.type == "PHOTO"
     val usesNativePlayer = !isPhoto
@@ -171,8 +173,8 @@ fun PlayerScreen(
                 val attributes = window.attributes
                 attributes.screenBrightness = originalBrightness
                 window.attributes = attributes
-                window.decorView.systemUiVisibility = ViewGroup.SYSTEM_UI_FLAG_VISIBLE
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                window.decorView.systemUiVisibility = originalSystemUiVisibility
+                activity.requestedOrientation = originalRequestedOrientation
             }
         }
     }
@@ -491,8 +493,8 @@ fun PlayerScreen(
                                                 }
                                             }
                                         } else {
-                                            decor.systemUiVisibility = ViewGroup.SYSTEM_UI_FLAG_VISIBLE
-                                            host.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                            decor.systemUiVisibility = originalSystemUiVisibility
+                                            host.requestedOrientation = originalRequestedOrientation
                                         }
                                     }
                                 },
