@@ -7,11 +7,11 @@ import com.example.data.extractor.LinkExtractor
 import com.example.data.extractor.ParseResult
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
+import com.example.data.model.MediaRefreshPolicy
 import com.example.data.plugin.PluginManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.UUID
 
 /**
  * Periodically refreshes saved HTTP catalogs. A failed source never clears its cached items.
@@ -106,9 +106,8 @@ class CatalogRefreshWorker(
                         val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
                         val fetched = sections.flatMap { section ->
                             section.items.map { item ->
-                                val stableKey = "$pluginId|${item.providerName}|${item.url}"
                                 MediaItem(
-                                    id = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString(),
+                                    id = MediaRefreshPolicy.cloudStreamId(profile.id, pluginId, item.providerName, item.url),
                                     profileId = profile.id,
                                     title = item.title,
                                     url = item.url,
@@ -128,19 +127,19 @@ class CatalogRefreshWorker(
                             return@entryLoop
                         }
                         val previous = database.mediaDao()
-                            .getCloudStreamCatalog(profile.id, pluginId).associateBy { it.id }
-                        val refreshedRows = fetched.map { item ->
-                            previous[item.id]?.let { old -> item.copy(
-                                durationMs = old.durationMs,
-                                progressMs = old.progressMs,
-                                lastWatchedAt = old.lastWatchedAt,
-                                isFavorite = old.isFavorite,
-                                createdAt = old.createdAt
-                            ) } ?: item
+                            .getCloudStreamCatalog(profile.id, pluginId)
+                        val refreshedRows = MediaRefreshPolicy.mergeCloudStream(
+                            profileId = profile.id,
+                            pluginId = pluginId,
+                            incoming = fetched,
+                            existing = previous
+                        )
+                        val refreshedSourceKeys = refreshedRows.mapTo(hashSetOf()) {
+                            "${it.pluginId}|${it.extraInfo}|${it.url}"
                         }
-                        val fetchedIds = refreshedRows.mapTo(hashSetOf()) { it.id }
-                        val mergedRows = (refreshedRows + previous.values.filterNot { it.id in fetchedIds })
-                            .distinctBy { it.id }
+                        val mergedRows = (refreshedRows + previous.filterNot {
+                            "${it.pluginId}|${it.extraInfo}|${it.url}" in refreshedSourceKeys
+                        }).distinctBy { it.id }
                         database.mediaDao().replaceCloudStreamCatalog(profile.id, pluginId, mergedRows)
                         refreshed += mergedRows.size
                     } catch (cancelled: CancellationException) {
