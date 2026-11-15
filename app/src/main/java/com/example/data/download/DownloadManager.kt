@@ -145,6 +145,9 @@ class VideoDownloadManager private constructor(private val context: Context) {
     } }
 
     suspend fun retryDownload(id: String) = withContext(Dispatchers.IO) { operationMutex.withLock {
+        // A worker may have persisted FAILED just before returning; wait for its terminal
+        // WorkManager state before resetting files or enqueueing a replacement request.
+        awaitWorkerStopped(id)
         val item = downloadDao.getDownloadById(id) ?: throw IllegalArgumentException("Unduhan tidak ditemukan.")
         require(item.status == "FAILED") { "Hanya unduhan gagal yang dapat dicoba ulang." }
         val retry = item.copy(
