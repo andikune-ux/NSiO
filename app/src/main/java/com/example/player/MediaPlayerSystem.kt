@@ -16,6 +16,9 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import okhttp3.OkHttpClient
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +58,8 @@ data class PlayerState(
     val videoTracks: List<PlayerTrackOption> = emptyList(),
     val subtitlesDisabled: Boolean = true,
     val pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
-    val selectedPluginStreamUrl: String? = null
+    val selectedPluginStreamUrl: String? = null,
+    val audioDelayMs: Int = 0
 )
 
 interface IPlayer {
@@ -68,6 +72,7 @@ interface IPlayer {
     fun seekForward(offsetMs: Long = 10000L)
     fun seekBackward(offsetMs: Long = 10000L)
     fun setPlaybackSpeed(speed: Float)
+    fun setAudioDelay(delayMs: Int)
     fun toggleRepeatMode()
     fun toggleShuffle()
     fun setVolume(volume: Float)
@@ -101,6 +106,7 @@ class CS3IPlayer(
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private var lastNonZeroVolume: Float = 1f
+    private var audioDelayMs: Int = 0
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
@@ -161,7 +167,20 @@ class CS3IPlayer(
         }
         val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
 
-        exoPlayer = ExoPlayer.Builder(context)
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(AudioDelayProcessor(audioDelayMs)))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }
+        exoPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
@@ -405,7 +424,8 @@ class CS3IPlayer(
                     shuffleEnabled = logicalShuffleEnabled,
                     volume = player.volume,
                     pluginStreams = pluginStreams,
-                    selectedPluginStreamUrl = url
+                    selectedPluginStreamUrl = url,
+                    audioDelayMs = audioDelayMs
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
@@ -495,7 +515,7 @@ class CS3IPlayer(
         lastPositionMs = 0L
         lastHeaders = emptyMap()
         lastMimeType = null
-        _playerState.value = PlayerState()
+        _playerState.value = PlayerState(audioDelayMs = audioDelayMs)
     }
 
     override fun seekTo(positionMs: Long) {
@@ -534,6 +554,44 @@ class CS3IPlayer(
         if (speed <= 0f) return
         player.setPlaybackSpeed(speed)
         _playerState.value = _playerState.value.copy(playbackSpeed = speed)
+    }
+
+    override fun setAudioDelay(delayMs: Int) {
+        val safeDelay = delayMs.coerceIn(-2000, 2000)
+        if (safeDelay == audioDelayMs) return
+        audioDelayMs = safeDelay
+        val player = exoPlayer
+        val currentPosition = player?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
+        val wasPlaying = player?.isPlaying ?: false
+        val speed = player?.playbackParameters?.speed ?: _playerState.value.playbackSpeed
+        val volume = player?.volume ?: _playerState.value.volume
+        if (lastUrl.isBlank()) {
+            _playerState.value = _playerState.value.copy(audioDelayMs = audioDelayMs)
+            return
+        }
+
+        progressJob?.cancel()
+        player?.release()
+        exoPlayer = null
+        initExoPlayer()
+        playInternal(
+            url = lastUrl,
+            title = lastTitle,
+            startPositionMs = currentPosition,
+            requestHeaders = lastHeaders,
+            mimeType = lastMimeType,
+            externalSubtitles = lastExternalSubtitles,
+            videoInterceptor = lastVideoInterceptor,
+            pluginStreams = lastPluginStreams
+        )
+        exoPlayer?.setPlaybackSpeed(speed)
+        exoPlayer?.volume = volume
+        if (!wasPlaying) exoPlayer?.pause()
+        _playerState.value = _playerState.value.copy(
+            playbackSpeed = speed,
+            volume = volume,
+            audioDelayMs = audioDelayMs
+        )
     }
     override fun toggleRepeatMode() {
         logicalRepeatMode = when (logicalRepeatMode) {
