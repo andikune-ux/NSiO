@@ -143,10 +143,51 @@ object BackupUtils {
     /**
      * Restore database and settings from any backup JSON file.
      */
+    private fun validateBackupRoot(root: JSONObject, backupType: String) {
+        require(backupType == "FULL_BACKUP_AMAN" || backupType == "PROFILE_BACKUP") {
+            "Jenis file backup tidak didukung."
+        }
+        val version = root.optInt("version", 1)
+        require(version in 1..2) { "Versi backup $version belum didukung aplikasi ini." }
+        val media = root.optJSONArray("mediaItems")
+            ?: throw IllegalArgumentException("Backup tidak memiliki daftar media.")
+        require(media.length() <= 50_000) { "Backup berisi terlalu banyak item media." }
+        if (backupType == "FULL_BACKUP_AMAN") {
+            val profiles = root.optJSONArray("profiles")
+                ?: throw IllegalArgumentException("Backup penuh tidak memiliki daftar profil.")
+            require(profiles.length() in 1..100) { "Jumlah profil dalam backup tidak valid." }
+            require(root.optJSONArray("settings") != null) {
+                "Backup penuh tidak memiliki pengaturan profil."
+            }
+        } else {
+            require(root.optJSONObject("profile") != null) {
+                "Backup profil tidak memiliki metadata profil."
+            }
+        }
+        val seenIds = HashSet<String>(media.length())
+        for (index in 0 until media.length()) {
+            val item = media.optJSONObject(index)
+                ?: throw IllegalArgumentException("Item media ke-${index + 1} tidak valid.")
+            val id = item.optString("id").trim()
+            val profileId = item.optString("profileId").trim()
+            val title = item.optString("title").trim()
+            val url = item.optString("url").trim()
+            require(id.isNotEmpty() && profileId.isNotEmpty() && title.isNotEmpty() && url.isNotEmpty()) {
+                "Item media ke-${index + 1} memiliki identitas atau URL kosong."
+            }
+            require(seenIds.add(id)) { "Backup memiliki ID media duplikat: $id" }
+            require(item.optLong("progressMs", 0L) >= 0L && item.optLong("durationMs", 0L) >= 0L) {
+                "Durasi atau posisi tontonan item ke-${index + 1} tidak valid."
+            }
+        }
+    }
+
     suspend fun restoreFromFile(context: Context, database: AppDatabase, jsonContent: String): BackupResult = withContext(Dispatchers.IO) {
         try {
+            require(jsonContent.length <= 64 * 1024 * 1024) { "File backup melebihi batas 64 MB." }
             val root = JSONObject(BackupAmanManager.extractJson(jsonContent))
             val backupType = root.optString("backupType", "UNKNOWN")
+            validateBackupRoot(root, backupType)
             val result = database.withTransaction {
                 val profileDao = database.profileDao()
                 val mediaDao = database.mediaDao()
