@@ -834,33 +834,59 @@ fun PlayerScreen(
                         modifier = Modifier.align(Alignment.BottomCenter)
                             .padding(bottom = 56.dp)
                             .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.10f, borderAlpha = 0.16f, elevation = 3.dp)
-                            .padding(horizontal = 1.dp, vertical = 0.dp),
+                            .padding(horizontal = 2.dp, vertical = 1.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Keep each 48dp hit target comfortable while shrinking the visible glass controls.
                         IconButton(onClick = { viewModel.skipPlayback(-1) }, enabled = hasPrevious, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (hasPrevious) controlTextColor else controlMutedColor, modifier = Modifier.size(20.dp))
+                            Box(
+                                modifier = Modifier.size(30.dp).playerLiquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.28f, elevation = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (hasPrevious) controlTextColor else controlMutedColor, modifier = Modifier.size(19.dp))
+                            }
                         }
                         IconButton(onClick = { viewModel.player.seekBackward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.Replay10, contentDescription = "Mundur 10 Detik", tint = controlTextColor, modifier = Modifier.size(20.dp))
+                            Box(
+                                modifier = Modifier.size(34.dp).playerLiquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.28f, elevation = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Replay10, contentDescription = "Mundur 10 Detik", tint = controlTextColor, modifier = Modifier.size(20.dp))
+                            }
                         }
                         IconButton(
                             onClick = { viewModel.player.togglePlayPause() },
                             modifier = Modifier.size(48.dp)
                                 .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.05f)
                         ) {
-                            Icon(
-                                imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Box(
+                                modifier = Modifier.size(42.dp).playerLiquidGlass(shape = CircleShape, alpha = 0.24f, borderAlpha = 0.38f, elevation = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                         IconButton(onClick = { viewModel.player.seekForward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.Forward10, contentDescription = "Maju 10 Detik", tint = controlTextColor, modifier = Modifier.size(20.dp))
+                            Box(
+                                modifier = Modifier.size(34.dp).playerLiquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.28f, elevation = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Forward10, contentDescription = "Maju 10 Detik", tint = controlTextColor, modifier = Modifier.size(20.dp))
+                            }
                         }
                         IconButton(onClick = { viewModel.skipPlayback(1) }, enabled = hasNext, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (hasNext) controlTextColor else controlMutedColor, modifier = Modifier.size(20.dp))
+                            Box(
+                                modifier = Modifier.size(30.dp).playerLiquidGlass(shape = CircleShape, alpha = 0.18f, borderAlpha = 0.28f, elevation = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (hasNext) controlTextColor else controlMutedColor, modifier = Modifier.size(19.dp))
+                            }
                         }
                     }
 
@@ -914,7 +940,7 @@ fun PlayerScreen(
                     }
                 }
 
-                // Minimal timeline: a 2dp glass rail with a small blue dot.
+                // Minimal timeline: a 1.5dp glass rail with a tiny red scrubber dot.
                 // Keep the full 48dp interaction target without enlarging the visible control.
                 if (usesNativePlayer) Box(
                     modifier = Modifier
