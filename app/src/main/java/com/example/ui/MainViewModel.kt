@@ -1043,6 +1043,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 entries.forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
                     val pluginId = pluginManager.cloudStreamPluginId(entry)
+                    val requestStartedAt = System.currentTimeMillis()
                     runCatching {
                         pluginManager.loadCloudStreamHomePage(entry, 1)
                     }.onSuccess { sections ->
