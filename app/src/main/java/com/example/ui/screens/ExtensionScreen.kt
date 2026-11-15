@@ -55,6 +55,7 @@ import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,7 +97,12 @@ fun ExtensionScreen(
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
+    val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
     var showServerPinDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pendingCloudStreamDetail?.id) {
+        if (pendingCloudStreamDetail != null) selectedTabIndex = 3
+    }
 
     val tabs = listOf("Sumber Link", "Sumber File", "Sumber Server (PIN)", "Plugin & Repo")
 
@@ -1178,6 +1184,33 @@ private fun CloudStreamSearchPanel(
     val installedEntries = repos.flatMap { it.plugins }
         .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
         .distinctBy { it.internalName to it.version }
+
+    val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
+    LaunchedEffect(pendingCloudStreamDetail?.id, installedEntries) {
+        val pendingItem = pendingCloudStreamDetail ?: return@LaunchedEffect
+        loadingDetail = true
+        runCatching {
+            val entry = viewModel.pluginManager.findCloudStreamPlugin(pendingItem.pluginId)
+                ?: throw IllegalStateException("Plugin asal konten tidak ditemukan atau belum terpasang.")
+            val metadata = runCatching { org.json.JSONObject(pendingItem.extraInfo) }.getOrNull()
+            val providerName = metadata?.optString("providerName")
+                ?.takeIf { it.isNotBlank() } ?: pendingItem.extraInfo
+            val content = viewModel.pluginManager.loadCloudStreamContent(entry, providerName, pendingItem.url)
+            entry to content.copy(
+                posterUrl = content.posterUrl?.takeIf { it.isNotBlank() } ?: pendingItem.thumbnailUrl,
+                title = content.title.ifBlank { pendingItem.title }
+            )
+        }.onSuccess { (entry, content) ->
+            selectedContent = entry to content
+            streams = emptyList()
+            linkMessage = ""
+            searchMessage = "Detail CloudStream siap. Pilih film atau episode untuk mengambil sumber pemutaran."
+        }.onFailure { error ->
+            searchMessage = "Gagal membuka detail CloudStream: ${error.localizedMessage ?: "provider tidak merespons"}"
+        }
+        viewModel.clearPendingCloudStreamDetail(pendingItem.id)
+        loadingDetail = false
+    }
 
     fun resolveLinks(
         entry: com.example.data.plugin.CloudStreamPluginEntry,
