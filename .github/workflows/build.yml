@@ -90,27 +90,37 @@ jobs:
             --title "NSiO $NSIO_VERSION_TAG" \
             --generate-notes
 
-      - name: 🧹 Retain only 3 newest artifacts
+      - name: 🧹 Retain only 3 newest artifacts (best effort)
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-              owner, repo, per_page: 100
-            });
-            const buildRuns = runs.filter(run => run.path === ".github/workflows/build.yml");
-            const artifacts = [];
-            for (const run of buildRuns) {
-              const items = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                owner, repo, run_id: run.id, per_page: 100
+            try {
+              const { owner, repo } = context.repo;
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner, repo, per_page: 100
               });
-              artifacts.push(...items.filter(item => !item.expired));
-            }
-            artifacts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-            for (const artifact of artifacts.slice(3)) {
-              try {
-                await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
-              } catch (error) {
-                if (error.status !== 404) throw error;
+              const buildRuns = runs.filter(run => run.path === ".github/workflows/build.yml");
+              const artifacts = [];
+              for (const run of buildRuns) {
+                const items = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  owner, repo, run_id: run.id, per_page: 100
+                });
+                artifacts.push(...items.filter(item => !item.expired));
               }
+              artifacts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+              for (const artifact of artifacts.slice(3)) {
+                try {
+                  await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+                } catch (error) {
+                  if (error.status === 404) continue;
+                  if (error.status === 403 || error.status === 429 || error.status >= 500) {
+                    core.warning(`Artifact cleanup paused by GitHub API (HTTP ${error.status}); build remains successful.`);
+                    break;
+                  }
+                  throw error;
+                }
+              }
+            } catch (error) {
+              core.warning(`Artifact retention skipped; build/package result is unaffected: ${error.message}`);
             }
