@@ -161,6 +161,7 @@ fun HomeScreen(
 
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
+    var cloudStreamSearchRequest by rememberSaveable { mutableStateOf(0) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
     var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
@@ -512,7 +513,7 @@ fun HomeScreen(
                 val showCloudStreamHome = cloudStreamPluginFilters.isNotEmpty() &&
                     (selectedFilter in setOf("ALL", "ALL_SOURCES", "CLOUDSTREAM_ALL", "CLOUDSTREAM") ||
                         selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:"))
-                if (filteredList.isEmpty() && !showCloudStreamHome) {
+                if (filteredList.isEmpty() && !showCloudStreamHome && cloudStreamPluginFilters.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -582,12 +583,12 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        if (showCloudStreamHome) {
+                        if (cloudStreamPluginFilters.isNotEmpty()) {
                             item(
                                 key = "cloudstream_home_catalog_browser",
                                 span = { GridItemSpan(maxLineSpan) }
                             ) {
-                                CloudStreamSearchPanel(viewModel, cloudStreamRepositories)
+                                CloudStreamSearchPanel(viewModel, cloudStreamRepositories, searchQuery, cloudStreamSearchRequest)
                             }
                         }
                         val sourceGroups = filteredList
@@ -924,13 +925,31 @@ fun HomeScreen(
                                         )
                                     },
                                     trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (searchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                    Icon(
+                                                        Icons.Default.Clear,
+                                                        contentDescription = "Hapus teks",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                            IconButton(
+                                                enabled = searchQuery.isNotBlank() && cloudStreamPluginFilters.isNotEmpty(),
+                                                onClick = {
+                                                    cloudStreamSearchRequest++
+                                                    isSearchExpanded = false
+                                                },
+                                                modifier = Modifier.testTag("home_cloudstream_search_button")
+                                            ) {
                                                 Icon(
-                                                    Icons.Default.Clear,
-                                                    contentDescription = "Hapus teks",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(16.dp)
+                                                    Icons.Default.Search,
+                                                    contentDescription = "Cari juga di CloudStream",
+                                                    tint = if (searchQuery.isNotBlank() && cloudStreamPluginFilters.isNotEmpty()) accentColor
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                                    modifier = Modifier.size(19.dp)
                                                 )
                                             }
                                         }
