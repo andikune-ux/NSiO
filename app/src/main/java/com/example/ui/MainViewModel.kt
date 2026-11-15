@@ -1554,6 +1554,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Resolves the best CloudStream film source in ViewModel scope so navigation to
+     * PlayerScreen cannot cancel provider work when the detail composable is disposed.
+     */
+    fun playCloudStreamFilmImmediately(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        contentUrl: String,
+        providerName: String,
+        playbackData: String,
+        title: String,
+        posterUrl: String?,
+        durationMs: Long = 0L
+    ) {
+        beginCloudStreamPlaybackPreparation(contentUrl, title, posterUrl, "CloudStream • Film")
+        viewModelScope.launch {
+            runCatching {
+                val playable = pluginManager.loadCloudStreamLinks(entry, providerName, playbackData)
+                    .filter { it.url.isNotBlank() }
+                val stream = playable.maxByOrNull { it.quality }
+                    ?: throw IllegalStateException("Provider belum menemukan sumber film yang dapat diputar.")
+                val headers = stream.headers.toMutableMap().apply {
+                    if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
+                        put("Referer", stream.referer)
+                    }
+                }
+                val streamType = stream.streamType.substringAfterLast('.').uppercase()
+                val extension = runCatching {
+                    java.net.URI(stream.url).path.substringAfterLast('.', "").uppercase()
+                }.getOrDefault("")
+                val mimeType = when {
+                    streamType.contains("M3U8") || streamType.contains("HLS") || extension == "M3U8" -> "application/x-mpegURL"
+                    streamType.contains("DASH") || streamType == "MPD" || extension == "MPD" -> "application/dash+xml"
+                    streamType.contains("WEBM") || extension == "WEBM" -> "video/webm"
+                    streamType.contains("MKV") || streamType.contains("MATROSKA") || extension == "MKV" -> "video/x-matroska"
+                    streamType.contains("MP4") || streamType.contains("VIDEO") || extension == "MP4" -> "video/mp4"
+                    else -> null
+                }
+                playCloudStreamEpisode(
+                    entry = entry,
+                    contentUrl = contentUrl,
+                    providerName = providerName,
+                    playbackData = playbackData,
+                    title = title,
+                    posterUrl = posterUrl,
+                    durationMs = durationMs,
+                    streamUrl = stream.url,
+                    requestHeaders = headers,
+                    mimeType = mimeType,
+                    externalSubtitles = stream.subtitles,
+                    extractorData = stream.extractorData,
+                    videoInterceptor = stream.videoInterceptor,
+                    availablePluginStreams = playable,
+                    category = "CloudStream • Film"
+                )
+            }.onFailure { error ->
+                cancelCloudStreamPlaybackPreparation(
+                    error.localizedMessage ?: "Gagal mengambil sumber film dari plugin."
+                )
+            }
+        }
+    }
+
+    fun playCloudStreamTrailerFromPlugin(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        providerName: String,
+        trailer: com.example.data.plugin.CloudStreamTrailer,
+        title: String,
+        posterUrl: String?
+    ) {
+        beginCloudStreamPlaybackPreparation(trailer.url, "Trailer • $title", posterUrl, "CloudStream • Trailer")
+        viewModelScope.launch {
+            runCatching {
+                pluginManager.resolveCloudStreamTrailer(entry, providerName, trailer)
+                    .sortedWith(compareByDescending<com.example.data.plugin.CloudStreamStream> { it.quality })
+                    .firstOrNull()
+                    ?: throw IllegalStateException("Extractor tidak menghasilkan stream trailer.")
+            }.onSuccess { stream ->
+                playCloudStreamTrailer(title, posterUrl, stream)
+            }.onFailure { error ->
+                cancelCloudStreamPlaybackPreparation(
+                    "Trailer gagal disiapkan: ${error.localizedMessage ?: "stream tidak tersedia"}"
+                )
+            }
+        }
+    }
+
+    /**
      * Saves a stable, episode-specific CloudStream history item before playback.
      * The original provider URL and playback data are retained so resume can
      * re-resolve a fresh stream URL after temporary CDN links expire.
