@@ -2,6 +2,7 @@ package com.example
 
 import android.app.Application
 import com.lagradost.cloudstream3.setCloudstreamHttpClient
+import com.example.data.work.CatalogRefreshScheduler
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -16,5 +17,6 @@ class NSiOApplication : Application() {
                 .build()
         )
         CrashLogStore.install(this)
+        CatalogRefreshScheduler.schedule(this)
     }
 }
