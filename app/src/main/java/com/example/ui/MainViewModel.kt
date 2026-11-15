@@ -245,6 +245,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val waitMs = (retryAt - System.currentTimeMillis()).coerceAtLeast(0L)
                 if (waitMs > 0L) kotlinx.coroutines.delay(waitMs)
+                while (_activeProfile.value?.id == profileId &&
+                    (cloudStreamHomeRefreshJob?.isActive == true ||
+                        cloudStreamHomeLoadMoreJob?.isActive == true ||
+                        _refreshingCloudStreamPluginId.value != null)) {
+                    kotlinx.coroutines.delay(30_000L)
+                }
                 if (_activeProfile.value?.id != profileId) return@launch
                 val health = _cloudStreamSourceHealth.value[pluginId] ?: return@launch
                 if (health.consecutiveFailures < 2 || health.nextAutoRetryAt > System.currentTimeMillis()) return@launch
