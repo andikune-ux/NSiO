@@ -114,24 +114,42 @@ class CS3IPlayer(
         initExoPlayer()
     }
 
-    private fun createHttpDataSourceFactory(interceptor: okhttp3.Interceptor?): HttpDataSource.Factory {
+    private fun createHttpDataSourceFactory(
+        interceptor: okhttp3.Interceptor?,
+        subtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+    ): HttpDataSource.Factory {
         val baseHeaders = mapOf(
             "Accept" to "*/*",
             "User-Agent" to STANDARD_USER_AGENT,
             "Connection" to "keep-alive"
         )
-        return if (interceptor != null) {
-            OkHttpDataSource.Factory(
-                OkHttpClient.Builder().addInterceptor(interceptor).build()
-            ).setDefaultRequestProperties(baseHeaders)
-        } else {
-            DefaultHttpDataSource.Factory()
-                .setUserAgent(STANDARD_USER_AGENT)
-                .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(15000)
-                .setReadTimeoutMs(20000)
-                .setDefaultRequestProperties(baseHeaders)
+        val subtitleHeaderMap = subtitles
+            .filter { it.url.isNotBlank() && it.headers.isNotEmpty() }
+            .associate { normalizePlaybackUrl(it.url) to it.headers }
+        if (interceptor != null || subtitleHeaderMap.isNotEmpty()) {
+            val client = OkHttpClient.Builder().apply {
+                interceptor?.let(::addInterceptor)
+                if (subtitleHeaderMap.isNotEmpty()) {
+                    addInterceptor { chain ->
+                        val request = chain.request()
+                        val headers = subtitleHeaderMap.entries.firstOrNull { (url, _) ->
+                            runCatching { normalizePlaybackUrl(request.url.toString()) == url }.getOrDefault(false)
+                        }?.value
+                        val updated = request.newBuilder().apply {
+                            headers?.forEach { (name, value) -> header(name, value) }
+                        }.build()
+                        chain.proceed(updated)
+                    }
+                }
+            }.build()
+            return OkHttpDataSource.Factory(client).setDefaultRequestProperties(baseHeaders)
         }
+        return DefaultHttpDataSource.Factory()
+            .setUserAgent(STANDARD_USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(20000)
+            .setDefaultRequestProperties(baseHeaders)
     }
 
     private fun initExoPlayer() {
@@ -368,14 +386,13 @@ class CS3IPlayer(
         lastExternalSubtitles = externalSubtitles
         lastVideoInterceptor = videoInterceptor
         lastPluginStreams = pluginStreams
-        httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor)
+        httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, externalSubtitles)
 
         exoPlayer?.let { player ->
             try {
                 require(url.isNotBlank()) { "URL media kosong" }
-                val subtitleHeaders = externalSubtitles.flatMap { it.headers.entries }.associate { it.toPair() }
                 httpDataSourceFactory.setDefaultRequestProperties(
-                    mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders + subtitleHeaders
+                    mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders
                 )
                 _playerState.value = PlayerState(
                     title = title,
