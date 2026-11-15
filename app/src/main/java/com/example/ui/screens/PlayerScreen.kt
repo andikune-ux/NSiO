@@ -257,9 +257,13 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(castContext, media.id, playerState.selectedPluginStreamUrl) {
+    DisposableEffect(castContext, media.id, media.url, playerState.selectedPluginStreamUrl) {
         val sessionManager = castContext?.sessionManager
-        val activeUrl = playerState.selectedPluginStreamUrl.orEmpty()
+        // Prefer the provider's selected stream, but fall back to the URL
+        // currently opened in the player for ordinary catalogue/network media.
+        val activeUrl = playerState.selectedPluginStreamUrl
+            ?.takeIf { it.isNotBlank() }
+            ?: media.url
         fun sendCurrentMedia(session: CastSession?) {
             if (session == null || activeUrl.isBlank()) return
             val extension = runCatching { Uri.parse(activeUrl).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
@@ -684,7 +688,7 @@ fun PlayerScreen(
                                     MediaRouteButton(viewContext).apply {
                                         minimumWidth = 40
                                         minimumHeight = 40
-                                        runCatching { CastButtonFactory.setUpMediaRouteButton(viewContext.applicationContext, this) }
+                                        runCatching { CastButtonFactory.setUpMediaRouteButton(viewContext, this) }
                                     }
                                 },
                                 modifier = Modifier.size(40.dp)
