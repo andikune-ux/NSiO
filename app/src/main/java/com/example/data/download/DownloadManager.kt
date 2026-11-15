@@ -29,6 +29,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
     private val downloadDao = database.downloadDao()
     private val _activeDownloads = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Int>>(emptyMap())
     val activeDownloads: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> = _activeDownloads
+    val downloads = downloadDao.getAllDownloads()
 
     companion object {
         const val KEY_URL = "download_url"
@@ -81,7 +82,10 @@ class VideoDownloadManager private constructor(private val context: Context) {
                 .also { downloadDao.insertDownload(it) }
         }
 
-        val savedItem = item.copy(requestHeadersJson = JSONObject(requestHeaders).toString())
+        val savedItem = item.copy(
+            status = if (item.status == "DOWNLOADING") "DOWNLOADING" else "PENDING",
+            requestHeadersJson = JSONObject(requestHeaders).toString()
+        )
         if (savedItem != item) downloadDao.updateDownload(savedItem)
         scheduleDownload(savedItem, requestHeaders)
     }
@@ -103,7 +107,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             "NSIO_DOWNLOAD_${item.id}",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             request
         )
     }
