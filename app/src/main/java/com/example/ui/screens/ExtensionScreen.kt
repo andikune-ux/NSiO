@@ -1050,6 +1050,8 @@ private fun CloudStreamSearchPanel(
     var homeCatalog by remember {
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>>(emptyList())
     }
+    var homeCatalogPages by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var loadingMoreCatalog by remember { mutableStateOf<Set<String>>(emptySet()) }
     var searching by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf("") }
     var results by remember {
@@ -1066,6 +1068,10 @@ private fun CloudStreamSearchPanel(
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamStream>>>(emptyList())
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun catalogSectionKey(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        section: com.example.data.plugin.CloudStreamHomeSection
+    ): String = "${viewModel.pluginManager.cloudStreamPluginId(entry)}|${section.providerName}|${section.sectionName}"
     val installedEntries = repos.flatMap { it.plugins }
         .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
         .distinctBy { it.internalName to it.version }
@@ -1118,6 +1124,8 @@ private fun CloudStreamSearchPanel(
             onClick = {
                 loadingHomeCatalog = true
                 homeCatalog = emptyList()
+                homeCatalogPages = emptyMap()
+                loadingMoreCatalog = emptySet()
                 homeCatalogMessage = ""
                 scope.launch {
                     val sections = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>()
@@ -1134,6 +1142,7 @@ private fun CloudStreamSearchPanel(
                         }
                     }
                     homeCatalog = sections
+                    homeCatalogPages = sections.associate { (entry, section) -> catalogSectionKey(entry, section) to 1 }
                     homeCatalogMessage = when {
                         sections.isNotEmpty() && failures.isNotEmpty() ->
                             "${sections.sumOf { it.second.items.size }} item dari ${sections.size} kategori; ${failures.size} plugin bermasalah."
@@ -1192,6 +1201,48 @@ private fun CloudStreamSearchPanel(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
+            if (section.hasNext) {
+                val sectionKey = catalogSectionKey(entry, section)
+                val currentPage = homeCatalogPages[sectionKey] ?: 1
+                TextButton(
+                    enabled = sectionKey !in loadingMoreCatalog,
+                    onClick = {
+                        loadingMoreCatalog = loadingMoreCatalog + sectionKey
+                        scope.launch {
+                            runCatching {
+                                viewModel.pluginManager.loadCloudStreamHomePage(entry, currentPage + 1)
+                            }.onSuccess { nextSections ->
+                                val matching = nextSections.firstOrNull {
+                                    it.providerName == section.providerName &&
+                                        it.sectionName == section.sectionName
+                                }
+                                if (matching != null) {
+                                    homeCatalog = homeCatalog.map { pair ->
+                                        if (pair.first == entry && catalogSectionKey(pair.first, pair.second) == sectionKey) {
+                                            pair.first to pair.second.copy(
+                                                items = (pair.second.items + matching.items).distinctBy { it.url },
+                                                hasNext = matching.hasNext
+                                            )
+                                        } else pair
+                                    }
+                                    homeCatalogPages = homeCatalogPages + (sectionKey to (currentPage + 1))
+                                } else {
+                                    homeCatalogMessage = "Halaman berikutnya tidak mengembalikan kategori yang cocok."
+                                }
+                            }.onFailure { error ->
+                                homeCatalogMessage = "Gagal memuat halaman berikutnya: ${error.message ?: "error"}"
+                            }
+                            loadingMoreCatalog = loadingMoreCatalog - sectionKey
+                        }
+                    }
+                ) {
+                    if (sectionKey in loadingMoreCatalog) {
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Muat lainnya • halaman ${currentPage + 1}", fontSize = 9.sp)
+                    }
+                }
+            }
             section.items.forEach { item ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
