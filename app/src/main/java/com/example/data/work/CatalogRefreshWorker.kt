@@ -133,6 +133,7 @@ class CatalogRefreshWorker(
                             previous[item.id]?.let { old -> item.copy(
                                 durationMs = old.durationMs,
                                 progressMs = old.progressMs,
+                                lastWatchedAt = old.lastWatchedAt,
                                 isFavorite = old.isFavorite,
                                 createdAt = old.createdAt
                             ) } ?: item
