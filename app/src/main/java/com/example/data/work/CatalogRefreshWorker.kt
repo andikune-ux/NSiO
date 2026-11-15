@@ -6,7 +6,7 @@ import androidx.work.WorkerParameters
 import com.example.data.extractor.LinkExtractor
 import com.example.data.extractor.ParseResult
 import com.example.data.local.AppDatabase
-import com.example.data.model.MediaItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,16 +21,24 @@ class CatalogRefreshWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val database = AppDatabase.getInstance(applicationContext)
-        val playlists = runCatching {
+        val playlists = try {
             database.profileDao().getAllProfilesList().flatMap { profile ->
                 database.sourcePlaylistDao().getForProfile(profile.id)
             }
-        }.getOrElse { return@withContext Result.retry() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return@withContext Result.retry()
+        }
 
         var failures = 0
         var refreshed = 0
         playlists
-            .filter { it.sourceType in REFRESHABLE_SOURCE_TYPES && it.url.startsWith("http", ignoreCase = true) }
+            .filter {
+                it.sourceType in REFRESHABLE_SOURCE_TYPES &&
+                    (it.url.startsWith("https://", ignoreCase = true) ||
+                        it.url.startsWith("http://", ignoreCase = true))
+            }
             .forEach { playlist ->
                 if (isStopped) return@withContext Result.retry()
                 try {
@@ -69,6 +77,8 @@ class CatalogRefreshWorker(
                         }
                         is ParseResult.Error -> failures++
                     }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (_: Exception) {
                     // Preserve the last successful catalog and continue with other sources.
                     failures++
