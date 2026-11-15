@@ -77,6 +77,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.Headers
 import com.example.ui.MainViewModel
 import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
@@ -1570,10 +1572,18 @@ fun CloudStreamSearchPanel(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         selectedContent?.let { (entry, content) ->
+            val contentImageHeaders = remember(content.url, content.posterHeaders) {
+                Headers.Builder().apply {
+                    content.posterHeaders.forEach { (key, value) -> add(key, value) }
+                }.build()
+            }
+            fun contentImageRequest(url: String?): ImageRequest? = url?.takeIf { it.isNotBlank() }?.let {
+                ImageRequest.Builder(trailerContext).data(it).headers(contentImageHeaders).build()
+            }
             Spacer(modifier = Modifier.height(6.dp))
-            if (!content.backgroundPosterUrl.isNullOrBlank()) AsyncImage(model = content.backgroundPosterUrl, contentDescription = "Backdrop", modifier = Modifier.fillMaxWidth().height(145.dp).clip(RoundedCornerShape(14.dp)))
+            if (!content.backgroundPosterUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(content.backgroundPosterUrl), contentDescription = "Backdrop", modifier = Modifier.fillMaxWidth().height(145.dp).clip(RoundedCornerShape(14.dp)))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                if (!content.posterUrl.isNullOrBlank()) AsyncImage(model = content.posterUrl, contentDescription = "Poster", modifier = Modifier.width(84.dp).height(122.dp).clip(RoundedCornerShape(9.dp)))
+                if (!content.posterUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(content.posterUrl), contentDescription = "Poster", modifier = Modifier.width(84.dp).height(122.dp).clip(RoundedCornerShape(9.dp)))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(content.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Text(listOfNotNull(content.year?.toString(), content.contentType, content.durationMinutes?.let { "$it menit" }, content.contentRating).joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1652,6 +1662,9 @@ fun CloudStreamSearchPanel(
                             if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = person.imageUrl, contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
                             Text(person.name, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             person.role?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
+                            person.voiceActorImageUrl?.takeIf { it.isNotBlank() }?.let { voiceImage ->
+                                AsyncImage(model = voiceImage, contentDescription = "Pengisi suara", modifier = Modifier.size(42.dp).clip(CircleShape))
+                            }
                             person.voiceActorName?.takeIf { it.isNotBlank() }?.let {
                                 Text("Suara: $it", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
@@ -1681,6 +1694,41 @@ fun CloudStreamSearchPanel(
                         }
                     }
                 ) { Text("Putar trailer ${index + 1} di NSiO", fontSize = 9.sp) }
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            trailerContext.startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(trailer.url)),
+                                    "Buka trailer"
+                                )
+                            )
+                        }.onFailure { linkMessage = "Tidak dapat membuka tautan trailer." }
+                    }
+                ) { Text("Buka trailer", fontSize = 9.sp) }
+            }
+            content.magnetUrl?.takeIf { it.startsWith("magnet:", true) }?.let { magnet ->
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            trailerContext.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(magnet)))
+                        }.onFailure { linkMessage = "Tidak ada aplikasi yang dapat membuka magnet link." }
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                ) { Text("Buka Magnet", fontSize = 10.sp) }
+            }
+            content.torrentUrl?.takeIf { it.startsWith("https://", true) || it.startsWith("http://", true) }?.let { torrent ->
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            trailerContext.startActivity(Intent.createChooser(
+                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(torrent)),
+                                "Buka file torrent"
+                            ))
+                        }.onFailure { linkMessage = "Tidak dapat membuka tautan torrent." }
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                ) { Text("Buka Torrent", fontSize = 10.sp) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
