@@ -91,8 +91,11 @@ class PluginManager(private val context: Context) {
      * Stable source keys used to associate imported catalog records with their
      * CloudStream provider and the repository that distributes it.
      */
-    fun cloudStreamPluginId(entry: CloudStreamPluginEntry): String =
-        entry.internalName.trim().lowercase().ifBlank { entry.name.trim().lowercase() }
+    fun cloudStreamPluginId(entry: CloudStreamPluginEntry): String {
+        val internalName = entry.internalName.trim().lowercase().ifBlank { entry.name.trim().lowercase() }
+        val repositoryId = cloudStreamRepositoryId(entry)
+        return if (repositoryId.isBlank()) internalName else "$repositoryId:$internalName"
+    }
 
     fun cloudStreamRepositoryId(entry: CloudStreamPluginEntry): String {
         val repository = _repositories.value.firstOrNull { repo ->
@@ -101,9 +104,20 @@ class PluginManager(private val context: Context) {
                     installed.url == entry.url
             }
         } ?: return ""
-        val source = repository.sourceUrl.ifBlank { repository.pluginLists.firstOrNull().orEmpty() }
-            .trim().lowercase()
-        if (source.isBlank()) return ""
+        val rawSource = repository.sourceUrl.ifBlank { repository.pluginLists.firstOrNull().orEmpty() }.trim()
+        if (rawSource.isBlank()) return ""
+        val source = runCatching {
+            val uri = URI(rawSource).normalize()
+            URI(
+                uri.scheme?.lowercase(),
+                uri.userInfo,
+                uri.host?.lowercase(),
+                uri.port,
+                uri.path,
+                uri.query,
+                uri.fragment
+            ).toASCIIString()
+        }.getOrDefault(rawSource)
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(source.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
