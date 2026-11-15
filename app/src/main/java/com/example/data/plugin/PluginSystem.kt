@@ -470,6 +470,15 @@ class PluginManager(private val context: Context) {
         return cloudStreamRuntime.loadLinks(artifact, providerName, data)
     }
 
+    suspend fun runCloudStreamExtractorVerifier(
+        entry: CloudStreamPluginEntry,
+        providerName: String,
+        extractorData: String?
+    ) {
+        val artifact = getCloudStreamArtifact(entry) ?: return
+        cloudStreamRuntime.runExtractorVerifier(artifact, providerName, extractorData)
+    }
+
     suspend fun unloadCloudStreamPlugin(entry: CloudStreamPluginEntry) {
         getCloudStreamArtifact(entry)?.let { cloudStreamRuntime.unload(it) }
     }
