@@ -1782,6 +1782,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playMedia(item: MediaItem) {
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
+            player.clearError()
+            player.stop()
             _playbackPreparationMessage.value = "Mencari sumber video dari plugin..."
             _currentlyPlaying.value = item
             playCloudStreamMedia(item)
