@@ -101,6 +101,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -439,6 +443,15 @@ fun PlayerScreen(
                     .fillMaxWidth(0.28f)
                     .fillMaxHeight()
                     .pointerInput(media.id) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                            if (up != null && (up.position - down.position).getDistance() <= viewConfiguration.touchSlop) {
+                                showControls = true
+                            }
+                        }
+                    }
+                    .pointerInput(media.id) {
                         var currentBrightness = brightnessLevel
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
@@ -461,6 +474,15 @@ fun PlayerScreen(
                     .align(Alignment.CenterEnd)
                     .fillMaxWidth(0.28f)
                     .fillMaxHeight()
+                    .pointerInput(media.id) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                            if (up != null && (up.position - down.position).getDistance() <= viewConfiguration.touchSlop) {
+                                showControls = true
+                            }
+                        }
+                    }
                     .pointerInput(media.id) {
                         var currentVolume = viewModel.player.exoPlayer?.volume ?: playerState.volume
                         detectVerticalDragGestures(
@@ -485,6 +507,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
                         detectTapGestures(
+                            onTap = { showControls = true },
                             onPress = {
                                 val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
