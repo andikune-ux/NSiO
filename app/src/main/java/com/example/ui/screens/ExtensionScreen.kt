@@ -1045,6 +1045,7 @@ private fun CloudStreamSearchPanel(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var loadingHomeCatalog by remember { mutableStateOf(false) }
+    var savingHomeCatalog by remember { mutableStateOf(false) }
     var homeCatalogMessage by remember { mutableStateOf("") }
     var homeCatalog by remember {
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>>(emptyList())
@@ -1154,6 +1155,35 @@ private fun CloudStreamSearchPanel(
         }
         if (homeCatalogMessage.isNotBlank()) {
             Text(homeCatalogMessage, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (homeCatalog.isNotEmpty()) {
+            Button(
+                onClick = {
+                    savingHomeCatalog = true
+                    scope.launch {
+                        var saved = 0
+                        val failures = mutableListOf<String>()
+                        homeCatalog.groupBy { it.first }.forEach { (entry, rows) ->
+                            runCatching {
+                                viewModel.persistCloudStreamCatalog(entry, rows.map { it.second })
+                            }.onSuccess { saved += it }
+                                .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
+                        }
+                        homeCatalogMessage = if (failures.isEmpty()) {
+                            "Berhasil menyimpan $saved item katalog ke Home."
+                        } else {
+                            "$saved item tersimpan; " + failures.take(3).joinToString(" • ")
+                        }
+                        savingHomeCatalog = false
+                    }
+                },
+                enabled = !savingHomeCatalog,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                if (savingHomeCatalog) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                else Text("Simpan katalog ke Home", fontSize = 11.sp)
+            }
         }
         homeCatalog.forEach { (entry, section) ->
             Text(
