@@ -12,6 +12,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import okhttp3.OkHttpClient
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CoroutineScope
@@ -92,10 +95,11 @@ class CS3IPlayer(
     private var lastHeaders: Map<String, String> = emptyMap()
     private var lastMimeType: String? = null
     private var lastExternalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+    private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastNonZeroVolume: Float = 1f
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
-    private lateinit var httpDataSourceFactory: DefaultHttpDataSource.Factory
+    private lateinit var httpDataSourceFactory: HttpDataSource.Factory
 
     companion object {
         const val DEFAULT_FALLBACK_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
@@ -106,21 +110,33 @@ class CS3IPlayer(
         initExoPlayer()
     }
 
-    private fun initExoPlayer() {
-        httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(STANDARD_USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(20000)
-            .setDefaultRequestProperties(
-                mapOf(
-                    "Accept" to "*/*",
-                    "User-Agent" to STANDARD_USER_AGENT,
-                    "Connection" to "keep-alive"
-                )
-            )
+    private fun createHttpDataSourceFactory(interceptor: okhttp3.Interceptor?): HttpDataSource.Factory {
+        val baseHeaders = mapOf(
+            "Accept" to "*/*",
+            "User-Agent" to STANDARD_USER_AGENT,
+            "Connection" to "keep-alive"
+        )
+        return if (interceptor != null) {
+            OkHttpDataSource.Factory(
+                OkHttpClient.Builder().addInterceptor(interceptor).build()
+            ).setDefaultRequestProperties(baseHeaders)
+        } else {
+            DefaultHttpDataSource.Factory()
+                .setUserAgent(STANDARD_USER_AGENT)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(20000)
+                .setDefaultRequestProperties(baseHeaders)
+        }
+    }
 
-        val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+    private fun initExoPlayer() {
+        httpDataSourceFactory = createHttpDataSourceFactory(null)
+        val dataSourceFactory = object : DataSource.Factory {
+            override fun createDataSource(): DataSource {
+                return DefaultDataSource.Factory(context, httpDataSourceFactory).createDataSource()
+            }
+        }
         val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
 
         exoPlayer = ExoPlayer.Builder(context)
@@ -297,9 +313,10 @@ class CS3IPlayer(
         startPositionMs: Long = 0L,
         requestHeaders: Map<String, String> = emptyMap(),
         mimeType: String? = null,
-        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
+        videoInterceptor: okhttp3.Interceptor? = null
     ) {
-        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles)
+        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor)
     }
 
     private fun playInternal(
@@ -308,7 +325,8 @@ class CS3IPlayer(
         startPositionMs: Long,
         requestHeaders: Map<String, String>,
         mimeType: String?,
-        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
+        videoInterceptor: okhttp3.Interceptor? = null
     ) {
         lastUrl = url
         lastTitle = title
@@ -316,6 +334,8 @@ class CS3IPlayer(
         lastHeaders = requestHeaders
         lastMimeType = mimeType
         lastExternalSubtitles = externalSubtitles
+        lastVideoInterceptor = videoInterceptor
+        httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor)
 
         exoPlayer?.let { player ->
             try {
@@ -376,7 +396,7 @@ class CS3IPlayer(
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
             val current = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
-            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles)
+            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor)
         }
     }
 
