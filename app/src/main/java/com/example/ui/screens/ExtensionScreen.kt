@@ -1169,6 +1169,21 @@ private fun CloudStreamSearchPanel(
                         fontSize = 9.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text(
+                        buildString {
+                            append("Plugin: ")
+                            append(entry.name)
+                            val repositoryName = viewModel.pluginManager.cloudStreamRepositoryName(entry)
+                            if (repositoryName.isNotBlank()) {
+                                append(" • Repo: ")
+                                append(repositoryName)
+                            }
+                        },
+                        fontSize = 8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 TextButton(
                     enabled = !loadingDetail,
