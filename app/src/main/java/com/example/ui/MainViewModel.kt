@@ -692,6 +692,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    suspend fun persistCloudStreamCatalog(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        sections: List<com.example.data.plugin.CloudStreamHomeSection>
+    ): Int {
+        val profileId = _activeProfile.value?.id
+            ?: throw IllegalStateException("Profil aktif tidak ditemukan.")
+        val pluginId = pluginManager.cloudStreamPluginId(entry)
+        val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
+        val records = sections.flatMap { section ->
+            section.items.map { item ->
+                val stableKey = "${pluginId}|${item.providerName}|${item.url}"
+                MediaItem(
+                    id = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString(),
+                    profileId = profileId,
+                    title = item.title,
+                    url = item.url,
+                    thumbnailUrl = item.posterUrl.orEmpty(),
+                    type = "CLOUDSTREAM",
+                    sourceType = "CLOUDSTREAM",
+                    category = section.sectionName.ifBlank { "CloudStream" },
+                    sourceUrl = entry.url,
+                    pluginId = pluginId,
+                    repositoryId = repositoryId,
+                    extraInfo = item.providerName
+                )
+            }
+        }.distinctBy { it.id }
+        if (records.isEmpty()) {
+            throw IllegalStateException("Katalog kosong; data terakhir tidak dihapus.")
+        }
+        mediaDao.replaceCloudStreamCatalog(profileId, pluginId, records)
+        showStatus("Katalog ${entry.name} disimpan: ${records.size} item.")
+        return records.size
+    }
+
     fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
         viewModelScope.launch {
             runCatching { pluginManager.refreshRepositoryCatalog(repo) }
