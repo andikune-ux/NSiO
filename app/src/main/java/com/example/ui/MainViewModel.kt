@@ -31,6 +31,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+data class CloudStreamHealthEvent(
+    val timestamp: Long,
+    val succeeded: Boolean,
+    val responseTimeMs: Long,
+    val message: String? = null
+)
+
 data class CloudStreamSourceHealth(
     val lastSuccessAt: Long = 0L,
     val lastError: String? = null,
@@ -38,7 +45,8 @@ data class CloudStreamSourceHealth(
     val consecutiveFailures: Int = 0,
     val lastAttemptAt: Long = 0L,
     val nextAutoRetryAt: Long = 0L,
-    val lastResponseTimeMs: Long = 0L
+    val lastResponseTimeMs: Long = 0L,
+    val history: List<CloudStreamHealthEvent> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -189,7 +197,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         consecutiveFailures = values.optInt("consecutiveFailures", 0).coerceAtLeast(0),
                         lastAttemptAt = values.optLong("lastAttemptAt", 0L),
                         nextAutoRetryAt = values.optLong("nextAutoRetryAt", 0L),
-                        lastResponseTimeMs = values.optLong("lastResponseTimeMs", 0L).coerceAtLeast(0L)
+                        lastResponseTimeMs = values.optLong("lastResponseTimeMs", 0L).coerceAtLeast(0L),
+                        history = runCatching {
+                            val events = values.optJSONArray("history") ?: org.json.JSONArray()
+                            (0 until events.length()).mapNotNull { index ->
+                                val event = events.optJSONObject(index) ?: return@mapNotNull null
+                                CloudStreamHealthEvent(
+                                    timestamp = event.optLong("timestamp", 0L),
+                                    succeeded = event.optBoolean("succeeded", false),
+                                    responseTimeMs = event.optLong("responseTimeMs", 0L).coerceAtLeast(0L),
+                                    message = event.optString("message").takeIf { it.isNotBlank() && it != "null" }
+                                )
+                            }.takeLast(10)
+                        }.getOrDefault(emptyList())
                     )
                 }.getOrNull()
             }.toMap()
@@ -209,7 +229,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val failureCount = if (succeeded) 0 else previous.consecutiveFailures + 1
         val retryDelay = if (succeeded || failureCount < 2) 0L else
             (60_000L * (1L shl (failureCount - 2).coerceIn(0, 5))).coerceAtMost(30 * 60_000L)
+        val event = CloudStreamHealthEvent(
+            timestamp = now,
+            succeeded = succeeded,
+            responseTimeMs = responseTimeMs?.coerceAtLeast(0L) ?: 0L,
+            message = if (succeeded) "Berhasil" else (error ?: previous.lastError ?: "Gagal memuat sumber")
+        )
         val updated = previous.copy(
+            history = (previous.history + event).takeLast(10),
             lastSuccessAt = if (succeeded) now else previous.lastSuccessAt,
             lastError = if (succeeded) null else error ?: previous.lastError,
             hasNext = hasNext ?: previous.hasNext,
@@ -227,6 +254,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .put("lastAttemptAt", updated.lastAttemptAt)
             .put("nextAutoRetryAt", updated.nextAutoRetryAt)
             .put("lastResponseTimeMs", updated.lastResponseTimeMs)
+            .put("history", org.json.JSONArray().apply {
+                updated.history.forEach { event ->
+                    put(org.json.JSONObject()
+                        .put("timestamp", event.timestamp)
+                        .put("succeeded", event.succeeded)
+                        .put("responseTimeMs", event.responseTimeMs)
+                        .put("message", event.message ?: org.json.JSONObject.NULL))
+                }
+            })
         cloudStreamHealthPreferences.edit()
             .putString("$profileId|$pluginId", values.toString())
             .apply()
