@@ -1537,7 +1537,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
         extractorData: String? = null,
         videoInterceptor: okhttp3.Interceptor? = null,
-        availablePluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
+        availablePluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
+        category: String = "CloudStream • Episode"
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             showStatus("Profil aktif tidak ditemukan.")
@@ -1570,7 +1571,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailUrl = posterUrl.orEmpty(),
                     type = "CLOUDSTREAM",
                     sourceType = "CLOUDSTREAM",
-                    category = "CloudStream • Episode",
+                    category = category,
                     sourceUrl = entry.url,
                     pluginId = pluginId,
                     repositoryId = repositoryId,
