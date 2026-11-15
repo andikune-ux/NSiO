@@ -217,10 +217,18 @@ fun PlayerScreen(
         }
     }
 
-    // Handle Android system back
+    // Back exits immersive fullscreen first; a second Back closes the player.
     BackHandler {
-        viewModel.player.clearError()
-        onClose()
+        if (isFullscreen) {
+            isFullscreen = false
+            activity?.let { host ->
+                host.window.decorView.systemUiVisibility = originalSystemUiVisibility
+                host.requestedOrientation = originalRequestedOrientation
+            }
+        } else {
+            viewModel.player.clearError()
+            onClose()
+        }
     }
 
     // Auto-hide controls after 4 seconds of playback
