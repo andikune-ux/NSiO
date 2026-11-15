@@ -108,7 +108,10 @@ data class CloudStreamContent(
     val synonyms: List<String> = emptyList(),
     val nextAiringEpisode: Int? = null,
     val nextAiringUnixTime: Long? = null,
-    val nextAiringSeason: Int? = null
+    val nextAiringSeason: Int? = null,
+    val posterHeaders: Map<String, String> = emptyMap(),
+    val magnetUrl: String? = null,
+    val torrentUrl: String? = null
 )
 
 data class CloudStreamSubtitle(
@@ -685,7 +688,13 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 ?.mapNotNull { it?.toString()?.takeIf(String::isNotBlank) }.orEmpty(),
             nextAiringEpisode = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "episode") as? Int,
             nextAiringUnixTime = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "unixTime") as? Long,
-            nextAiringSeason = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "season") as? Int
+            nextAiringSeason = readProperty(readProperty(this@toCloudStreamContent, "nextAiring") ?: this@toCloudStreamContent, "season") as? Int,
+            posterHeaders = (readProperty(this@toCloudStreamContent, "posterHeaders") as? Map<*, *>)
+                ?.mapNotNull { (key, value) ->
+                    if (key is String && value != null) key to value.toString() else null
+                }?.toMap().orEmpty(),
+            magnetUrl = readProperty(this@toCloudStreamContent, "magnet") as? String,
+            torrentUrl = readProperty(this@toCloudStreamContent, "torrent") as? String
         )
     }
 
