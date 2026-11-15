@@ -759,7 +759,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 174.dp)
-                            .offset(x = (((if (playerState.durationMs > 0L) seekPreviewMs.toFloat() / playerState.durationMs.toFloat() else 0.5f) - 0.5f) * (screenWidth - 36.dp) * 0.88f).coerceIn(-((screenWidth - 36.dp) / 2f - 66.dp), (screenWidth - 36.dp) / 2f - 66.dp))
+                            .offset(x = ((screenWidth - 36.dp) * ((if (playerState.durationMs > 0L) seekPreviewMs.toFloat() / playerState.durationMs.toFloat() else 0.5f) - 0.5f) * 0.88f).coerceIn(-((screenWidth - 36.dp) / 2f - 66.dp), (screenWidth - 36.dp) / 2f - 66.dp))
                             .width(132.dp)
                             .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
