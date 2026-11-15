@@ -34,6 +34,9 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -99,6 +102,7 @@ fun SettingsScreen(
     val devMode by viewModel.devMode.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
+    val downloads by viewModel.downloads.collectAsState(initial = emptyList())
 
     var showServerPinDialog by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
@@ -234,6 +238,53 @@ fun SettingsScreen(
                         )
                     }
                     Switch(checked = devMode, onCheckedChange = { viewModel.setDevModeEnabled(it) })
+                }
+            }
+        }
+
+        item {
+            SettingsGlassCard(
+                icon = Icons.Default.CloudDownload,
+                title = "Download Manager",
+                subtitle = "Antrean unduhan tersimpan dan dapat dilanjutkan setelah aplikasi dibuka kembali."
+            ) {
+                if (downloads.isEmpty()) {
+                    Text("Belum ada unduhan.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        downloads.take(12).forEach { download ->
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(download.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "${download.status} • ${download.progressPercent.coerceIn(0, 100)}% • " +
+                                        if (download.totalBytes > 0L) "${download.downloadedBytes / (1024 * 1024)} / ${download.totalBytes / (1024 * 1024)} MB"
+                                        else "Ukuran belum diketahui",
+                                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    when (download.status) {
+                                        "DOWNLOADING", "PENDING" -> IconButton(onClick = { viewModel.pauseDownload(download.id) }) {
+                                            Icon(Icons.Default.Pause, contentDescription = "Jeda unduhan")
+                                        }
+                                        "PAUSED" -> IconButton(onClick = { viewModel.resumeDownload(download.id) }) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = "Lanjutkan unduhan")
+                                        }
+                                        "FAILED" -> IconButton(onClick = { viewModel.retryDownload(download.id) }) {
+                                            Icon(Icons.Default.Refresh, contentDescription = "Coba lagi")
+                                        }
+                                    }
+                                    IconButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Hapus unduhan")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
