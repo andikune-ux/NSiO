@@ -1342,6 +1342,7 @@ fun CloudStreamSearchPanel(
         loadingDetail = true
         selectedContent = null
         detailLoadError = null
+        detailRetry = { viewModel.requestCloudStreamDetail(pendingItem) }
         runCatching {
             val entry = viewModel.pluginManager.findCloudStreamPlugin(pendingItem.pluginId)
                 ?: throw IllegalStateException("Plugin asal konten tidak ditemukan atau belum terpasang.")
@@ -1483,7 +1484,6 @@ fun CloudStreamSearchPanel(
                 linkMessage = error.message ?: "Gagal mengambil link streaming."
                 if (autoPlay) viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
             }
-            if (autoPlay && playable.isEmpty()) viewModel.cancelCloudStreamPlaybackPreparation(linkMessage)
             resolvingLinks = false
         }
     }
