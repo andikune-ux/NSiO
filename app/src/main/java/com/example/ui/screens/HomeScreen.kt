@@ -153,6 +153,7 @@ fun HomeScreen(
             "LINK" -> item.sourceType == "LINK"
             "STREAM" -> item.sourceType == "STREAM"
             "REPO" -> item.sourceType == "REPO"
+            "CLOUDSTREAM" -> item.sourceType == "CLOUDSTREAM"
             "FILE" -> item.sourceType == "FILE"
             "SERVER" -> item.sourceType == "SERVER"
             "FAV" -> item.isFavorite
@@ -512,8 +513,9 @@ fun HomeScreen(
                                     "LINK" -> 0
                                     "STREAM" -> 1
                                     "REPO" -> 2
-                                    "FILE" -> 3
-                                    "SERVER" -> 4
+                                    "CLOUDSTREAM" -> 3
+                                    "FILE" -> 4
+                                    "SERVER" -> 5
                                     else -> 5
                                 }
                             }.thenBy { it })
@@ -534,6 +536,7 @@ fun HomeScreen(
                                             "LINK" -> "Playlist / Link"
                                             "STREAM" -> "Stream"
                                             "REPO" -> "Repository"
+                                            "CLOUDSTREAM" -> "CloudStream"
                                             "FILE" -> "File Lokal"
                                             "SERVER" -> "Server"
                                             else -> sourceType.ifBlank { "Sumber Lain" }
