@@ -225,8 +225,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         cloudStreamHealthPreferences.edit()
             .putString("$profileId|$pluginId", values.toString())
             .apply()
+        val retryKey = "$profileId|$pluginId"
         if (succeeded) {
-            cloudStreamAutoRetryJobs.remove(pluginId)?.cancel()
+            cloudStreamAutoRetryJobs.remove(retryKey)?.cancel()
         } else if (updated.consecutiveFailures >= 2) {
             scheduleCloudStreamAutoRetry(profileId, pluginId, updated.nextAutoRetryAt)
         }
@@ -238,8 +239,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Retries are profile-scoped and never run concurrently for the same provider.
      */
     private fun scheduleCloudStreamAutoRetry(profileId: String, pluginId: String, retryAt: Long) {
-        if (retryAt <= 0L || cloudStreamAutoRetryJobs[pluginId]?.isActive == true) return
-        cloudStreamAutoRetryJobs[pluginId] = viewModelScope.launch {
+        val retryKey = "$profileId|$pluginId"
+        if (retryAt <= 0L || cloudStreamAutoRetryJobs[retryKey]?.isActive == true) return
+        cloudStreamAutoRetryJobs[retryKey] = viewModelScope.launch {
             try {
                 val waitMs = (retryAt - System.currentTimeMillis()).coerceAtLeast(0L)
                 if (waitMs > 0L) kotlinx.coroutines.delay(waitMs)
@@ -248,7 +250,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (health.consecutiveFailures < 2 || health.nextAutoRetryAt > System.currentTimeMillis()) return@launch
                 refreshCloudStreamPluginOnHome(pluginId)
             } finally {
-                cloudStreamAutoRetryJobs.remove(pluginId)
+                cloudStreamAutoRetryJobs.remove(retryKey)
             }
         }
     }
