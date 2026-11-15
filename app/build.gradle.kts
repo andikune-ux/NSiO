@@ -149,6 +149,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.androidx.media3.exoplayer)
+  implementation("androidx.media3:media3-datasource-okhttp:${libs.versions.media3.get()}")
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.exoplayer.dash)
   implementation(libs.androidx.media3.ui)
