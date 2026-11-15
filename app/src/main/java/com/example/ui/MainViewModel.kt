@@ -1433,13 +1433,94 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /**
+     * Saves a stable, episode-specific CloudStream history item before playback.
+     * The original provider URL and playback data are retained so resume can
+     * re-resolve a fresh stream URL after temporary CDN links expire.
+     */
+    fun playCloudStreamEpisode(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        contentUrl: String,
+        providerName: String,
+        playbackData: String,
+        title: String,
+        posterUrl: String?,
+        streamUrl: String,
+        requestHeaders: Map<String, String> = emptyMap(),
+        mimeType: String? = null,
+        sourceUrl: String = ""
+    ) {
+        val profileId = _activeProfile.value?.id ?: run {
+            showStatus("Profil aktif tidak ditemukan.")
+            return
+        }
+        if (contentUrl.isBlank() || providerName.isBlank() || playbackData.isBlank() || streamUrl.isBlank()) {
+            showStatus("Informasi episode CloudStream belum lengkap.")
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                val pluginId = pluginManager.cloudStreamPluginId(entry)
+                val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
+                val stableKey = "$profileId|$pluginId|$providerName|$contentUrl|$playbackData"
+                val mediaId = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString()
+                val previous = mediaDao.getMediaListForProfile(profileId).firstOrNull { it.id == mediaId }
+                val metadata = org.json.JSONObject()
+                    .put("kind", "cloudstream_episode")
+                    .put("providerName", providerName)
+                    .put("playbackData", playbackData)
+                    .toString()
+                val item = MediaItem(
+                    id = mediaId,
+                    profileId = profileId,
+                    title = title.ifBlank { "CloudStream Episode" },
+                    url = contentUrl,
+                    thumbnailUrl = posterUrl.orEmpty(),
+                    type = "CLOUDSTREAM",
+                    sourceType = "CLOUDSTREAM",
+                    category = "CloudStream • Episode",
+                    sourceUrl = entry.url,
+                    pluginId = pluginId,
+                    repositoryId = repositoryId,
+                    progressMs = previous?.progressMs ?: 0L,
+                    durationMs = previous?.durationMs ?: 0L,
+                    lastWatchedAt = previous?.lastWatchedAt ?: 0L,
+                    isFavorite = previous?.isFavorite ?: false,
+                    createdAt = previous?.createdAt ?: System.currentTimeMillis(),
+                    extraInfo = metadata
+                )
+                mediaDao.insertMedia(item)
+                _currentlyPlaying.value = item
+                player.playWithMimeType(
+                    url = streamUrl,
+                    title = item.title,
+                    startPositionMs = item.progressMs.coerceAtLeast(0L),
+                    requestHeaders = requestHeaders,
+                    mimeType = mimeType
+                )
+                startPlaybackProgressPersistence(item)
+                authManager.currentUser?.let { user ->
+                    runCatching { cloudRepository.saveMediaItem(user.uid, item) }
+                }
+                showStatus("Memutar ${item.title}. Riwayat episode tersimpan.")
+            }.onFailure { error ->
+                showStatus("Gagal menyimpan riwayat episode: ${error.localizedMessage ?: "kesalahan database"}")
+            }
+        }
+    }
+
     private fun playCloudStreamMedia(item: MediaItem) {
         viewModelScope.launch {
             runCatching {
                 val entry = pluginManager.findCloudStreamPlugin(item.pluginId)
                     ?: throw IllegalStateException("Plugin asal tidak ditemukan atau belum terpasang.")
-                val content = pluginManager.loadCloudStreamContent(entry, item.extraInfo, item.url)
-                val playbackData = content.dataUrl?.takeIf { it.isNotBlank() }
+                val metadata = runCatching { org.json.JSONObject(item.extraInfo) }.getOrNull()
+                val providerName = metadata?.optString("providerName")
+                    ?.takeIf { it.isNotBlank() } ?: item.extraInfo
+                val content = pluginManager.loadCloudStreamContent(entry, providerName, item.url)
+                val playbackData = metadata?.optString("playbackData")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: content.dataUrl?.takeIf { it.isNotBlank() }
                     ?: content.episodes.firstOrNull()?.data?.takeIf { it.isNotBlank() }
                     ?: throw IllegalStateException("Provider tidak menyediakan data film atau episode untuk diputar.")
                 val streams = pluginManager.loadCloudStreamLinks(entry, content.providerName, playbackData)
