@@ -552,10 +552,10 @@ fun HomeScreen(
                             val playlistNames = sourcePlaylists.associate { it.id to it.name }
                             val playlistGroups = sourceItems
                                 .groupBy { it.playlistId.ifBlank { "__no_playlist__" } }
-                                .toSortedMap(compareBy<String> { playlistId ->
-                                    if (playlistId == "__no_playlist__") "\\uFFFF"
-                                    else playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
-                                }.thenBy { it })
+                                .toSortedMap(compareBy<String> { it == "__no_playlist__" }
+                                    .thenBy { playlistId ->
+                                        playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
+                                    })
                             playlistGroups.forEach { (playlistId, playlistItems) ->
                                 val playlistTitle = if (playlistId == "__no_playlist__") {
                                     "Item tanpa playlist"
