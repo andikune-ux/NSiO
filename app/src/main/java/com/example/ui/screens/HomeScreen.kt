@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -54,6 +56,8 @@ import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -114,12 +118,19 @@ fun HomeScreen(
     val cloudStreamRepositories by viewModel.pluginManager.repositories.collectAsState()
     val isLoadingMoreCloudStreamHome by viewModel.isLoadingMoreCloudStreamHome.collectAsState()
     val cloudStreamSourceHealth by viewModel.cloudStreamSourceHealth.collectAsState()
+    val cloudStreamPluginOrder by viewModel.cloudStreamPluginOrder.collectAsState()
     val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.flatMap { repo ->
             repo.plugins.map { entry ->
                 viewModel.pluginManager.cloudStreamPluginId(entry) to entry.name
             }
         }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
+    }
+    val orderedCloudStreamPluginFilters = remember(cloudStreamPluginFilters, cloudStreamPluginOrder) {
+        cloudStreamPluginFilters.sortedWith(compareBy<Pair<String, String>> { pair ->
+            val index = cloudStreamPluginOrder.indexOf(pair.first)
+            if (index < 0) Int.MAX_VALUE else index
+        }.thenBy { it.second.lowercase() })
     }
     val cloudStreamRepositoryFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.mapNotNull { repo ->
@@ -134,13 +145,15 @@ fun HomeScreen(
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
+    var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
     var expandedSourceType by rememberSaveable { mutableStateOf<String?>(null) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || expandedSourceType != null) {
+    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null) {
         when {
+            showCloudStreamOrderDialog -> showCloudStreamOrderDialog = false
             showPlaylistPicker -> showPlaylistPicker = false
             isSearchExpanded -> isSearchExpanded = false
             else -> expandedSourceType = null
@@ -882,7 +895,7 @@ fun HomeScreen(
                                 val playlistFilters = sourcePlaylists.map { playlist ->
                                     "PLAYLIST:${playlist.id}" to "Playlist: ${playlist.name}"
                                 }
-                                val cloudStreamPluginChips = cloudStreamPluginFilters.map { (pluginId, name) ->
+                                val cloudStreamPluginChips = orderedCloudStreamPluginFilters.map { (pluginId, name) ->
                                     val health = cloudStreamSourceHealth[pluginId]
                                     val cachedCount = mediaList.count { it.sourceType == "CLOUDSTREAM" && it.pluginId == pluginId }
                                     val healthLabel = when {
@@ -899,6 +912,19 @@ fun HomeScreen(
                                 }
                                 val filters = sourceFilters + cloudStreamPluginChips + cloudStreamRepositoryChips + playlistFilters + categoryFilters
 
+                                if (cloudStreamPluginFilters.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { showCloudStreamOrderDialog = true },
+                                        modifier = Modifier.size(34.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Reorder,
+                                            contentDescription = "Atur urutan plugin CloudStream",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
                                 filters.forEach { (key, label) ->
                                     val isSelected = selectedFilter == key
                                     Box(
@@ -1153,6 +1179,61 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showCloudStreamOrderDialog) {
+        val orderedIds = orderedCloudStreamPluginFilters.map { it.first }
+        AlertDialog(
+            onDismissRequest = { showCloudStreamOrderDialog = false },
+            title = { Material3Text("Urutan plugin CloudStream") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    orderedCloudStreamPluginFilters.forEachIndexed { index, (pluginId, name) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Material3Text(
+                                text = name,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            IconButton(
+                                onClick = { viewModel.moveCloudStreamPluginOrder(pluginId, -1, orderedIds) },
+                                enabled = index > 0,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Naikkan $name")
+                            }
+                            IconButton(
+                                onClick = { viewModel.moveCloudStreamPluginOrder(pluginId, 1, orderedIds) },
+                                enabled = index < orderedCloudStreamPluginFilters.lastIndex,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Turunkan $name")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCloudStreamOrderDialog = false }) {
+                    Material3Text("Selesai")
+                }
+            }
+        )
     }
 
     if (showServerPinDialog) {
