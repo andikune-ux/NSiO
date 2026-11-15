@@ -143,6 +143,7 @@ fun HomeScreen(
                 }
         }.sortedBy { it.name.lowercase() }
     }
+    val drivePlaylistIds = remember(drivePlaylists) { drivePlaylists.mapTo(hashSetOf()) { it.id } }
     val orderedCloudStreamPluginFilters = remember(cloudStreamPluginFilters, cloudStreamPluginOrder) {
         cloudStreamPluginFilters.sortedWith(compareBy<Pair<String, String>> { pair ->
             val index = cloudStreamPluginOrder.indexOf(pair.first)
@@ -211,10 +212,7 @@ fun HomeScreen(
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
-        val isDriveMedia = MediaSourceClassifier.isDriveMedia(
-            item,
-            drivePlaylists.mapTo(hashSetOf()) { it.id }
-        )
+        val isDriveMedia = MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
         val matchesFilter = when (selectedFilter) {
             "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"
             "DRIVE_ALL" -> isDriveMedia
