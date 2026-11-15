@@ -1679,7 +1679,8 @@ private fun CloudStreamSearchPanel(
                                 mimeType = mimeType,
                                 externalSubtitles = stream.subtitles,
                                 extractorData = stream.extractorData,
-                                videoInterceptor = stream.videoInterceptor
+                                videoInterceptor = stream.videoInterceptor,
+                                availablePluginStreams = streams.map { it.second }
                             )
                         }
                     }
