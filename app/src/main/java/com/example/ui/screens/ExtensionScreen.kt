@@ -1266,10 +1266,10 @@ private fun CloudStreamSearchPanel(
                     }
                 }
             }
-            section.items.forEach { item ->
+            section.items.forEachIndexed { itemIndex, item ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).then(
-                        if (item == section.items.lastOrNull() && section.hasNext) {
+                        if (itemIndex == section.items.lastIndex && section.hasNext) {
                             Modifier.onGloballyPositioned { coordinates ->
                                 val y = coordinates.positionInRoot().y
                                 if (y >= 0f && y <= viewportHeightPx + 240f) {
