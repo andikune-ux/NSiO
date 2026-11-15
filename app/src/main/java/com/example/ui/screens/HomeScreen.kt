@@ -111,6 +111,24 @@ fun HomeScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
+    val cloudStreamRepositories by viewModel.pluginManager.repositories.collectAsState()
+    val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
+        cloudStreamRepositories.flatMap { repo ->
+            repo.plugins.map { entry ->
+                viewModel.pluginManager.cloudStreamPluginId(entry) to entry.name
+            }
+        }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
+    }
+    val cloudStreamRepositoryFilters = remember(cloudStreamRepositories) {
+        cloudStreamRepositories.mapNotNull { repo ->
+            val rawSource = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }.trim()
+            if (rawSource.isBlank()) null else {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(rawSource.toByteArray(Charsets.UTF_8))
+                digest.joinToString("") { byte -> "%02x".format(byte) } to repo.name
+            }
+        }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
+    }
     val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
 
     // 2-stage interaction: Normal compact mode vs Floating Curtain Overlay
@@ -170,6 +188,10 @@ fun HomeScreen(
                     .any { it.trim().equals(selectedCategory, ignoreCase = true) }
             } else if (selectedFilter.startsWith("PLAYLIST:")) {
                 item.playlistId == selectedFilter.removePrefix("PLAYLIST:")
+            } else if (selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:")) {
+                item.sourceType == "CLOUDSTREAM" && item.pluginId == selectedFilter.removePrefix("CLOUDSTREAM_PLUGIN:")
+            } else if (selectedFilter.startsWith("CLOUDSTREAM_REPO:")) {
+                item.sourceType == "CLOUDSTREAM" && item.repositoryId == selectedFilter.removePrefix("CLOUDSTREAM_REPO:")
             } else true
         }
         matchesServerAccess && matchesSearch && matchesFilter
@@ -795,6 +817,7 @@ fun HomeScreen(
                                     "LINK" to "Link Ekstensi",
                                     "STREAM" to "Streaming M3U/M3U8",
                                     "REPO" to "Repo CloudStream",
+                                    "CLOUDSTREAM" to "Katalog CloudStream",
                                     "FILE" to "File Lokal",
                                     "SERVER" to "Server Upload",
                                     "FAV" to "Favorit"
@@ -809,7 +832,13 @@ fun HomeScreen(
                                 val playlistFilters = sourcePlaylists.map { playlist ->
                                     "PLAYLIST:${playlist.id}" to "Playlist: ${playlist.name}"
                                 }
-                                val filters = sourceFilters + playlistFilters + categoryFilters
+                                val cloudStreamPluginChips = cloudStreamPluginFilters.map { (pluginId, name) ->
+                                    "CLOUDSTREAM_PLUGIN:$pluginId" to "Plugin: $name"
+                                }
+                                val cloudStreamRepositoryChips = cloudStreamRepositoryFilters.map { (repositoryId, name) ->
+                                    "CLOUDSTREAM_REPO:$repositoryId" to "Repo: $name"
+                                }
+                                val filters = sourceFilters + cloudStreamPluginChips + cloudStreamRepositoryChips + playlistFilters + categoryFilters
 
                                 filters.forEach { (key, label) ->
                                     val isSelected = selectedFilter == key
