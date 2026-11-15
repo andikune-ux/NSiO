@@ -48,7 +48,8 @@ data class RepoManifest(
     val manifestVersion: Int = 1,
     val pluginLists: List<String> = emptyList(),
     val sourceUrl: String = "",
-    val plugins: List<CloudStreamPluginEntry> = emptyList()
+    val plugins: List<CloudStreamPluginEntry> = emptyList(),
+    val isBuiltIn: Boolean = false
 )
 
 abstract class BasePlugin {
@@ -76,6 +77,11 @@ class PluginManager(private val context: Context) {
         const val PLUGINS_KEY = "installed_online_plugins"
         const val PLUGINS_KEY_LOCAL = "installed_local_plugins"
         const val REPOSITORIES_KEY = "extension_repositories"
+        private val BUILT_IN_REPOSITORY_URLS = listOf(
+            "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+            "https://raw.githubusercontent.com/ic-wan/cloudstream_repo/main/repo.json",
+            "https://raw.githubusercontent.com/TheAlyss/cloudstream-AlyssRepo/builds/repo.json"
+        )
     }
     private val _installedPlugins = MutableStateFlow<List<Plugin>>(emptyList())
     val installedPlugins: StateFlow<List<Plugin>> = _installedPlugins.asStateFlow()
@@ -247,12 +253,81 @@ class PluginManager(private val context: Context) {
     suspend fun refreshRepositoryCatalog(repo: RepoManifest): RepoManifest = withContext(Dispatchers.IO) {
         val source = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }
         require(source.isNotBlank()) { "URL repository tidak ditemukan." }
-        val updated = loadCloudStreamCatalog(source)
+        val updated = loadCloudStreamCatalog(source).copy(isBuiltIn = repo.isBuiltIn)
         _repositories.value = _repositories.value.map { current ->
             if (current.sourceUrl == source || current == repo) updated else current
         }
         saveRepositories()
         updated
+    }
+
+    /**
+     * Refresh every saved repository independently. A failed upstream never replaces
+     * its last-known-good manifest, and manually-added repositories remain untouched.
+     */
+    suspend fun refreshAllRepositoryCatalogs(): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        var refreshed = 0
+        var failures = 0
+        _repositories.value.toList().forEach { repo ->
+            val source = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }
+            if (source.isBlank()) {
+                failures++
+                return@forEach
+            }
+            try {
+                val updated = loadCloudStreamCatalog(source).copy(isBuiltIn = repo.isBuiltIn)
+                _repositories.value = _repositories.value.map { current ->
+                    if (current.sourceUrl == source) updated else current
+                }
+                refreshed++
+            } catch (_: Exception) {
+                // Keep the previous catalog so an upstream outage cannot erase plugins.
+                failures++
+            }
+        }
+        saveRepositories()
+        refreshed to failures
+    }
+
+    /**
+     * Download newer .cs3 artifacts only for plugin identities that already have an
+     * installed artifact. New/unselected plugins are never installed automatically.
+     * The normal archive, HTTPS, size and optional SHA-256 checks still apply.
+     */
+    suspend fun autoUpdateInstalledCloudStreamPlugins(): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        var updated = 0
+        var failures = 0
+        val latestEntries = _repositories.value
+            .flatMap { it.plugins }
+            .filter { it.status != 0 && it.version > 0 }
+            .groupBy { it.internalName.trim().lowercase() }
+            .values
+            .mapNotNull { entries -> entries.maxByOrNull { it.version } }
+
+        latestEntries.forEach { entry ->
+            val installedVersion = installedCloudStreamVersion(entry) ?: return@forEach
+            if (entry.version <= installedVersion) return@forEach
+            try {
+                installCloudStreamPlugin(entry)
+                updated++
+            } catch (_: Exception) {
+                // Preserve the currently installed artifact and retry on the next sync.
+                failures++
+            }
+        }
+        updated to failures
+    }
+
+    private fun installedCloudStreamVersion(entry: CloudStreamPluginEntry): Int? {
+        val safeName = entry.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+        val root = File(context.filesDir, "cloudstream_plugins").canonicalFile
+        if (!root.isDirectory) return null
+        val prefix = "$safeName-"
+        return root.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.name.startsWith(prefix) && it.name.endsWith(".cs3") && it.length() > 0L }
+            ?.mapNotNull { it.name.removePrefix(prefix).removeSuffix(".cs3").toIntOrNull() }
+            ?.maxOrNull()
     }
 
 
@@ -520,36 +595,56 @@ class PluginManager(private val context: Context) {
     }
 
     private fun loadRepositories() {
-        val raw = prefs.getString(REPOSITORIES_KEY, null) ?: return
-        runCatching {
-            val arr = JSONArray(raw)
-            _repositories.value = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                val urls = obj.optJSONArray("pluginLists") ?: JSONArray()
-                RepoManifest(
-                    name = obj.optString("name", "Repositori"),
-                    description = obj.optString("description"),
-                    manifestVersion = obj.optInt("manifestVersion", 1),
-                    pluginLists = (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() },
-                    sourceUrl = obj.optString("sourceUrl"),
-                    plugins = obj.optJSONArray("plugins")?.let { entries ->
-                        (0 until entries.length()).mapNotNull { index ->
-                            entries.optJSONObject(index)?.let { item ->
-                                val authors = item.optJSONArray("authors")
-                                val types = item.optJSONArray("tvTypes")
-                                CloudStreamPluginEntry(
-                                    item.optString("name"), item.optString("internalName"), item.optInt("version", 1),
-                                    item.optInt("apiVersion", 1), item.optInt("status", 1), item.optString("url"),
-                                    item.optString("description"), (0 until (authors?.length() ?: 0)).map { authors!!.optString(it) },
-                                    (0 until (types?.length() ?: 0)).map { types!!.optString(it) }, item.optString("language"),
-                                    item.optString("iconUrl"), item.optString("fileHash"), item.optLong("fileSize", 0L)
-                                )
+        val raw = prefs.getString(REPOSITORIES_KEY, null)
+        val saved = if (raw.isNullOrBlank()) {
+            emptyList()
+        } else {
+            runCatching {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).mapNotNull { i ->
+                    val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val urls = obj.optJSONArray("pluginLists") ?: JSONArray()
+                    RepoManifest(
+                        name = obj.optString("name", "Repositori"),
+                        description = obj.optString("description"),
+                        manifestVersion = obj.optInt("manifestVersion", 1),
+                        pluginLists = (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() },
+                        sourceUrl = obj.optString("sourceUrl"),
+                        plugins = obj.optJSONArray("plugins")?.let { entries ->
+                            (0 until entries.length()).mapNotNull { index ->
+                                entries.optJSONObject(index)?.let { item ->
+                                    val authors = item.optJSONArray("authors")
+                                    val types = item.optJSONArray("tvTypes")
+                                    CloudStreamPluginEntry(
+                                        item.optString("name"), item.optString("internalName"), item.optInt("version", 1),
+                                        item.optInt("apiVersion", 1), item.optInt("status", 1), item.optString("url"),
+                                        item.optString("description"), (0 until (authors?.length() ?: 0)).map { authors!!.optString(it) },
+                                        (0 until (types?.length() ?: 0)).map { types!!.optString(it) }, item.optString("language"),
+                                        item.optString("iconUrl"), item.optString("fileHash"), item.optLong("fileSize", 0L)
+                                    )
+                                }
                             }
-                        }
-                    }.orEmpty()
-                )
-            }
+                        }.orEmpty(),
+                        isBuiltIn = obj.optBoolean("isBuiltIn", false)
+                    )
+                }
+            }.getOrDefault(emptyList())
         }
+        val builtIns = BUILT_IN_REPOSITORY_URLS.mapIndexed { index, url ->
+            RepoManifest(
+                name = when (index) {
+                    0 -> "CloudStream Official"
+                    1 -> "iCH Indonesia"
+                    else -> "TheAlyss"
+                },
+                description = "Repositori bawaan NSiO • sinkronisasi otomatis",
+                sourceUrl = url,
+                isBuiltIn = true
+            )
+        }
+        val savedUrls = saved.map { it.sourceUrl.ifBlank { it.pluginLists.firstOrNull().orEmpty() } }.toSet()
+        _repositories.value = saved + builtIns.filter { it.sourceUrl !in savedUrls }
+        saveRepositories()
     }
 
     private fun saveRepositories() {
@@ -559,6 +654,7 @@ class PluginManager(private val context: Context) {
                 put("name", repo.name); put("description", repo.description); put("manifestVersion", repo.manifestVersion)
                 put("pluginLists", JSONArray(repo.pluginLists))
                 put("sourceUrl", repo.sourceUrl)
+                put("isBuiltIn", repo.isBuiltIn)
                 put("plugins", JSONArray().apply {
                     repo.plugins.forEach { plugin ->
                         put(JSONObject().apply {
