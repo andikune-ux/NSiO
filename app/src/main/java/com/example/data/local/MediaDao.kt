@@ -24,6 +24,9 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE profileId = :profileId AND repositoryId = :repositoryId ORDER BY createdAt DESC")
     fun getMediaByRepository(profileId: String, repositoryId: String): Flow<List<MediaItem>>
 
+    @Query("SELECT * FROM media_items WHERE profileId = :profileId AND pluginId = :pluginId")
+    suspend fun getCloudStreamCatalog(profileId: String, pluginId: String): List<MediaItem>
+
     @Query("SELECT * FROM media_items WHERE profileId = :profileId")
     suspend fun getMediaListForProfile(profileId: String): List<MediaItem>
 
