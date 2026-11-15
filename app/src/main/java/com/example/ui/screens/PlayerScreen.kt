@@ -950,11 +950,11 @@ fun PlayerScreen(
                                 .height(48.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Thin 2dp Liquid Glass housing; the touch target remains separate.
+                            // Ultra-slim 1.5dp Liquid Glass rail; the 48dp touch target stays separate.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(2.dp)
+                                    .height(1.5.dp)
                                     .playerLiquidGlass(
                                         shape = RoundedCornerShape(50),
                                         alpha = 0.10f,
@@ -976,7 +976,7 @@ fun PlayerScreen(
                                 },
                                 colors = SliderDefaults.colors(
                                     // White played rail, translucent unplayed rail.
-                                    // The thumb is drawn separately as a tiny blue dot.
+                                    // The thumb is drawn separately as a tiny red dot.
                                     thumbColor = Color.Transparent,
                                     activeTrackColor = Color.White,
                                     inactiveTrackColor = Color.White.copy(alpha = 0.24f),
@@ -987,8 +987,8 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
-                                    // Visually halve the default track thickness, not its touch area.
-                                    .graphicsLayer { scaleY = 0.5f }
+                                    // Keep the visible progress rail very thin while preserving the full touch area.
+                                    .graphicsLayer { scaleY = 0.35f }
                                     .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
                             )
 
@@ -999,7 +999,7 @@ fun PlayerScreen(
                                     .height(48.dp)
                             ) {
                                 drawCircle(
-                                    color = Color(0xFF48BFFF),
+                                    color = Color(0xFFFF3030),
                                     radius = 3.dp.toPx(),
                                     center = Offset(
                                         x = size.width * currentRatio,
