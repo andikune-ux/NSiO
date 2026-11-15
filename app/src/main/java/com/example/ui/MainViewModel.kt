@@ -919,10 +919,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .distinctBy { pluginManager.cloudStreamPluginId(it) }
                 entries.forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
+                    val pluginId = pluginManager.cloudStreamPluginId(entry)
                     runCatching {
                         pluginManager.loadCloudStreamHomePage(entry, 1)
                     }.onSuccess { sections ->
-                        val pluginId = pluginManager.cloudStreamPluginId(entry)
                         cloudStreamHomePages[pluginId] = 1
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
                         updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
