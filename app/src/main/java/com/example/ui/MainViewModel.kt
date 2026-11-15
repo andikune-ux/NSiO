@@ -700,7 +700,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ?: throw IllegalStateException("Profil aktif tidak ditemukan.")
         val pluginId = pluginManager.cloudStreamPluginId(entry)
         val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
-        val records = sections.flatMap { section ->
+        val fetchedRecords = sections.flatMap { section ->
             section.items.map { item ->
                 val stableKey = "${pluginId}|${item.providerName}|${item.url}"
                 MediaItem(
@@ -719,8 +719,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }.distinctBy { it.id }
-        if (records.isEmpty()) {
+        if (fetchedRecords.isEmpty()) {
             throw IllegalStateException("Katalog kosong; data terakhir tidak dihapus.")
+        }
+        val previousRecords = mediaDao.getCloudStreamCatalog(profileId, pluginId).associateBy { it.id }
+        val records = fetchedRecords.map { item ->
+            val previous = previousRecords[item.id]
+            if (previous == null) item else item.copy(
+                durationMs = previous.durationMs,
+                progressMs = previous.progressMs,
+                isFavorite = previous.isFavorite,
+                createdAt = previous.createdAt
+            )
         }
         mediaDao.replaceCloudStreamCatalog(profileId, pluginId, records)
         showStatus("Katalog ${entry.name} disimpan: ${records.size} item.")
