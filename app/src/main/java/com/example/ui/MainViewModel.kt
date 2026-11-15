@@ -1666,6 +1666,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun playCloudStreamTrailer(
+        title: String,
+        posterUrl: String?,
+        stream: com.example.data.plugin.CloudStreamStream
+    ) {
+        val profileId = _activeProfile.value?.id ?: run {
+            showStatus("Profil aktif tidak ditemukan.")
+            return
+        }
+        if (stream.url.isBlank()) {
+            showStatus("Link trailer tidak tersedia.")
+            return
+        }
+        val headers = stream.headers.toMutableMap().apply {
+            if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
+                put("Referer", stream.referer)
+            }
+        }
+        val extension = runCatching {
+            java.net.URI(stream.url).path.substringAfterLast('.', "").uppercase()
+        }.getOrDefault("")
+        val streamType = stream.streamType.substringAfterLast('.').uppercase()
+        val mimeType = when {
+            extension == "M3U8" || streamType.contains("HLS") -> "application/x-mpegURL"
+            extension == "MPD" || streamType.contains("DASH") -> "application/dash+xml"
+            extension == "WEBM" || streamType.contains("WEBM") -> "video/webm"
+            extension == "MKV" || streamType.contains("MKV") -> "video/x-matroska"
+            else -> "video/mp4"
+        }
+        val item = MediaItem(
+            id = "external-stream:trailer:${UUID.randomUUID()}",
+            profileId = profileId,
+            title = "Trailer • ${title.ifBlank { "CloudStream" }}",
+            url = stream.url,
+            thumbnailUrl = posterUrl.orEmpty(),
+            type = "VIDEO",
+            sourceType = "CLOUDSTREAM_TRAILER",
+            category = "CloudStream • Trailer",
+            sourceUrl = stream.referer,
+            createdAt = System.currentTimeMillis()
+        )
+        _currentlyPlaying.value = item
+        player.playWithMimeType(
+            url = stream.url,
+            title = item.title,
+            requestHeaders = headers,
+            mimeType = mimeType,
+            externalSubtitles = stream.subtitles,
+            videoInterceptor = stream.videoInterceptor,
+            pluginStreams = listOf(stream)
+        )
+    }
+
     fun playMedia(item: MediaItem) {
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
