@@ -94,6 +94,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.awaitEachGesture
+import androidx.compose.ui.input.pointer.awaitFirstDown
+import androidx.compose.ui.input.pointer.waitForUpOrCancellation
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -351,6 +354,64 @@ fun PlayerScreen(
                         )
                     }
             )
+        }
+
+        // Hold zones: right side temporarily plays at 4×; left side rewinds at 2×.
+        // They sit inside the media area, leaving the outer brightness/volume gestures intact.
+        if (usesNativePlayer) {
+            Row(
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.44f).fillMaxHeight()
+            ) {
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id, playerState.playbackSpeed) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                waitForUpOrCancellation()
+                                false
+                            } ?: true
+                            if (longPressed) {
+                                activeGesture = "rewind"
+                                showControls = true
+                                while (true) {
+                                    viewModel.player.seekBackward(500L)
+                                    kotlinx.coroutines.delay(250L)
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                                activeGesture = null
+                            }
+                        }
+                    }
+                )
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id, playerState.playbackSpeed) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                waitForUpOrCancellation()
+                                false
+                            } ?: true
+                            if (longPressed) {
+                                val previousSpeed = playerState.playbackSpeed
+                                viewModel.player.setPlaybackSpeed(4f)
+                                activeGesture = "fast-forward"
+                                showControls = true
+                                try {
+                                    while (true) {
+                                        kotlinx.coroutines.delay(60L)
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                } finally {
+                                    viewModel.player.setPlaybackSpeed(previousSpeed)
+                                    activeGesture = null
+                                }
+                            }
+                        }
+                    }
+                )
+            }
         }
 
         if (activeGesture != null) {
@@ -777,18 +838,20 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 174.dp)
-                            .offset(x = ((screenWidth - 36.dp) * ((if (playerState.durationMs > 0L) seekPreviewMs.toFloat() / playerState.durationMs.toFloat() else 0.5f) - 0.5f) * 0.88f).coerceIn(-((screenWidth - 36.dp) / 2f - 66.dp), (screenWidth - 36.dp) / 2f - 66.dp))
-                            .width(132.dp)
-                            .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
-                            .padding(7.dp),
+                            // Keep the compact preview inside the screen. At the far right,
+                            // its right edge aligns with the timeline edge (so it sits left of the playhead).
+                            .offset(x = ((screenWidth - 36.dp) * ((if (playerState.durationMs > 0L) seekPreviewMs.toFloat() / playerState.durationMs.toFloat() else 0.5f) - 0.5f) * 0.88f).coerceIn(-((screenWidth - 36.dp) / 2f - 54.dp), (screenWidth - 36.dp) / 2f - 54.dp))
+                            .width(108.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(12.dp), alpha = 0.26f, borderAlpha = 0.18f, elevation = 8.dp)
+                            .padding(5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(76.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .height(62.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(Color.Black.copy(alpha = 0.65f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -800,12 +863,12 @@ fun PlayerScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(30.dp))
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(24.dp))
                             }
                             Text(
                                 text = formatMs(seekPreviewMs),
                                 color = Color.White,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.align(Alignment.BottomEnd)
                                     .padding(4.dp)
