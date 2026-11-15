@@ -81,9 +81,15 @@ class VideoDownloadManager private constructor(private val context: Context) {
                 .also { downloadDao.insertDownload(it) }
         }
 
+        val savedItem = item.copy(requestHeadersJson = JSONObject(requestHeaders).toString())
+        if (savedItem != item) downloadDao.updateDownload(savedItem)
+        scheduleDownload(savedItem, requestHeaders)
+    }
+
+    private fun scheduleDownload(item: DownloadItem, requestHeaders: Map<String, String>) {
         val input = Data.Builder()
-            .putString(KEY_ID, item.id).putString(KEY_MEDIA_ID, mediaId)
-            .putString(KEY_TITLE, title).putString(KEY_URL, url)
+            .putString(KEY_ID, item.id).putString(KEY_MEDIA_ID, item.mediaId)
+            .putString(KEY_TITLE, item.title).putString(KEY_URL, item.url)
             .putString(KEY_PATH, item.localPath)
             .putString(KEY_HEADERS, JSONObject(requestHeaders).toString()).build()
         val constraints = Constraints.Builder()
@@ -97,9 +103,39 @@ class VideoDownloadManager private constructor(private val context: Context) {
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             "NSIO_DOWNLOAD_${item.id}",
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request
         )
+    }
+
+    suspend fun resumeDownload(id: String) = withContext(Dispatchers.IO) {
+        val item = downloadDao.getDownloadById(id) ?: throw IllegalArgumentException("Unduhan tidak ditemukan.")
+        require(item.status == "PAUSED" || item.status == "PENDING") { "Hanya unduhan yang dijeda atau menunggu yang dapat dilanjutkan." }
+        val headers = runCatching {
+            val json = JSONObject(item.requestHeadersJson)
+            json.keys().asSequence().associateWith { json.optString(it) }
+        }.getOrDefault(emptyMap())
+        scheduleDownload(item, headers)
+    }
+
+    suspend fun retryDownload(id: String) = withContext(Dispatchers.IO) {
+        val item = downloadDao.getDownloadById(id) ?: throw IllegalArgumentException("Unduhan tidak ditemukan.")
+        require(item.status == "FAILED") { "Hanya unduhan gagal yang dapat dicoba ulang." }
+        val retry = item.copy(
+            status = "PENDING",
+            progressPercent = 0,
+            downloadedBytes = 0L,
+            totalBytes = 0L,
+            etag = "",
+            lastModified = ""
+        )
+        File("${retry.localPath}.part").delete()
+        downloadDao.updateDownload(retry)
+        val headers = runCatching {
+            val json = JSONObject(retry.requestHeadersJson)
+            json.keys().asSequence().associateWith { json.optString(it) }
+        }.getOrDefault(emptyMap())
+        scheduleDownload(retry, headers)
     }
 
     suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
