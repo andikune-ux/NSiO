@@ -1501,7 +1501,13 @@ private fun CloudStreamSearchPanel(
                             runCatching {
                                 viewModel.pluginManager.loadCloudStreamContent(entry, result.providerName, result.url)
                             }.onSuccess { content ->
-                                selectedContent = entry to content
+                                // Search cards often carry poster/year even when a provider's
+                                // detail response omits one of those fields.
+                                selectedContent = entry to content.copy(
+                                    posterUrl = content.posterUrl?.takeIf { it.isNotBlank() } ?: result.posterUrl,
+                                    year = content.year ?: result.year,
+                                    title = content.title.ifBlank { result.title }
+                                )
                                 linkMessage = ""
                             }.onFailure { error ->
                                 searchMessage = error.message ?: "Gagal memuat detail konten."
@@ -1591,7 +1597,7 @@ private fun CloudStreamSearchPanel(
             }
             content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
-                Text("Pemeran", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Pemeran / Artis", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     cast.take(10).forEach { person ->
                         Column(modifier = Modifier.width(76.dp)) {
