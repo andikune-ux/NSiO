@@ -242,7 +242,8 @@ fun PlayerScreen(
                                 else -> 0
                             }
                             if (direction != 0) {
-                                adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
+                                if (usesNativePlayer) viewModel.skipPlayback(direction)
+                                else adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
                                 showControls = true
                             }
                             horizontalDistance = 0f
@@ -596,9 +597,8 @@ fun PlayerScreen(
 
                 // Compact primary transport controls stay in the bottom dock.
                 if (usesNativePlayer) {
-                    val queueIndex = mediaList.indexOfFirst { it.id == media.id }
-                    val previousItem = mediaList.getOrNull(queueIndex - 1)?.takeIf { it.type != "PHOTO" }
-                    val nextItem = mediaList.drop((queueIndex + 1).coerceAtLeast(0)).firstOrNull { it.type != "PHOTO" }
+                    val hasPrevious = viewModel.canSkipPlayback(-1)
+                    val hasNext = viewModel.canSkipPlayback(1)
                     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 
                     Row(
@@ -610,8 +610,8 @@ fun PlayerScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
+                        IconButton(onClick = { viewModel.skipPlayback(-1) }, enabled = hasPrevious, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (hasPrevious) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
                         }
                         IconButton(onClick = { viewModel.player.seekBackward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(Icons.Default.Replay10, contentDescription = "Mundur 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
@@ -632,8 +632,8 @@ fun PlayerScreen(
                         IconButton(onClick = { viewModel.player.seekForward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(Icons.Default.Forward10, contentDescription = "Maju 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
                         }
-                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
+                        IconButton(onClick = { viewModel.skipPlayback(1) }, enabled = hasNext, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (hasNext) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
                         }
                     }
 
@@ -652,7 +652,7 @@ fun PlayerScreen(
                         }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Text("${playerState.playbackSpeed}×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = controlAccentColor)
                         }
-                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                        IconButton(onClick = { viewModel.togglePlaybackShuffle() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor, modifier = Modifier.size(19.dp))
                         }
                         IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
