@@ -1518,7 +1518,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { mediaDao.updateProgress(item.id, safePosition) }
             authManager.currentUser?.let { user ->
                 runCatching {
-                    cloudRepository.saveMediaItem(user.uid, item.copy(progressMs = safePosition))
+                    cloudRepository.saveMediaItem(user.uid, item.copy(
+                        progressMs = safePosition,
+                        lastWatchedAt = if (safePosition > 0L) System.currentTimeMillis() else item.lastWatchedAt
+                    ))
                 }
             }
         }
