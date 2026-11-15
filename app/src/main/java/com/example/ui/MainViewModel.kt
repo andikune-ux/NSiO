@@ -984,6 +984,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val refreshedRecords = fetchedRecords.map { item ->
             val previous = previousRecords[item.id]
             if (previous == null) item else item.copy(
+                category = (previous.category.split(" • ") + item.category.split(" • "))
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" • "),
                 durationMs = previous.durationMs,
                 progressMs = previous.progressMs,
                 isFavorite = previous.isFavorite,
