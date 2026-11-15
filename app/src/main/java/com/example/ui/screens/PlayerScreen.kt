@@ -130,11 +130,11 @@ fun PlayerScreen(
     var brightnessLevel by remember(activity) { mutableStateOf(if (originalBrightness < 0f) 0.5f else originalBrightness.coerceIn(0.05f, 1f)) }
     val isPhoto = media.type == "PHOTO"
     val usesNativePlayer = !isPhoto
-    // Player controls sit on frosted-glass panels; follow the active theme so
-    // labels remain readable when light mode renders those panels in white.
-    val controlTextColor = MaterialTheme.colorScheme.onSurface
-    val controlMutedColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val controlAccentColor = MaterialTheme.colorScheme.primary
+    // Player overlays sit above arbitrary video/photo colors, so keep their
+    // typography consistently high-contrast regardless of the app theme.
+    val controlTextColor = Color.White
+    val controlMutedColor = Color.White.copy(alpha = 0.62f)
+    val controlAccentColor = Color(0xFF8BE9FF)
 
     // Reset transient controls when the queue switches to another media item.
     LaunchedEffect(media.id) {
@@ -401,8 +401,7 @@ fun PlayerScreen(
                             },
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if ((MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
+                                .playerLiquidGlass(shape = CircleShape, alpha = 0.22f, borderAlpha = 0.52f, elevation = 6.dp)
                                 .liquidGlassTvFocusable(shape = CircleShape)
                         ) {
                             Icon(
@@ -529,23 +528,13 @@ fun PlayerScreen(
                         onClick = { viewModel.player.togglePlayPause() },
                         modifier = Modifier
                             .size(76.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(CyanPrimary, Color(0xFF38BDF8), Color(0xFFA855F7))
-                                )
-                            )
-                            .border(
-                                1.dp,
-                                Brush.linearGradient(listOf(Color.White, Color.Transparent)),
-                                CircleShape
-                            )
+                            .playerLiquidGlass(shape = CircleShape, alpha = 0.34f, borderAlpha = 0.72f, elevation = 18.dp)
                             .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.15f)
                     ) {
                         Icon(
                             imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
-                            tint = Color.Black,
+                            tint = Color.White,
                             modifier = Modifier.size(44.dp)
                         )
                     }
