@@ -88,6 +88,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shape
@@ -907,8 +909,8 @@ fun PlayerScreen(
                     }
                 }
 
-                // Slim timeline: the visible glass rail is only 4dp high,
-                // while the Slider keeps a 48dp interaction target for touch/remote.
+                // Minimal timeline: a 2dp glass rail with a small blue dot.
+                // Keep the full 48dp interaction target without enlarging the visible control.
                 if (usesNativePlayer) Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -943,11 +945,11 @@ fun PlayerScreen(
                                 .height(48.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Glass housing is exactly 2dp thicker than the 2dp progress rail.
+                            // Thin 2dp Liquid Glass housing; the touch target remains separate.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(4.dp)
+                                    .height(2.dp)
                                     .playerLiquidGlass(
                                         shape = RoundedCornerShape(50),
                                         alpha = 0.10f,
@@ -968,20 +970,38 @@ fun PlayerScreen(
                                     isSeeking = false
                                 },
                                 colors = SliderDefaults.colors(
-                                    // 2dp white played rail, translucent unplayed rail,
-                                    // and a small circular red seek indicator.
-                                    thumbColor = Color(0xFFFF3030),
+                                    // White played rail, translucent unplayed rail.
+                                    // The thumb is drawn separately as a tiny blue dot.
+                                    thumbColor = Color.Transparent,
                                     activeTrackColor = Color.White,
                                     inactiveTrackColor = Color.White.copy(alpha = 0.24f),
-                                    disabledThumbColor = Color(0xFFFF3030).copy(alpha = 0.55f),
+                                    disabledThumbColor = Color.Transparent,
                                     disabledActiveTrackColor = Color.White.copy(alpha = 0.55f),
                                     disabledInactiveTrackColor = Color.White.copy(alpha = 0.12f)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
+                                    // Visually halve the default track thickness, not its touch area.
+                                    .graphicsLayer { scaleY = 0.5f }
                                     .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
                             )
+
+                            // Explicit circular seek head: never a vertical Material thumb.
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                drawCircle(
+                                    color = Color(0xFF48BFFF),
+                                    radius = 3.dp.toPx(),
+                                    center = Offset(
+                                        x = size.width * currentRatio,
+                                        y = size.height / 2f
+                                    )
+                                )
+                            }
                         }
                     }
                 }
