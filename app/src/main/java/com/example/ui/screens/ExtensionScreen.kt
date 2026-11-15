@@ -1116,6 +1116,7 @@ private fun CloudStreamSearchPanel(
     var resolvedPlaybackData by remember { mutableStateOf("") }
     var resolvedPlaybackTitle by remember { mutableStateOf("") }
     var resolvedPlaybackPoster by remember { mutableStateOf<String?>(null) }
+    var resolvedPlaybackDurationMs by remember { mutableStateOf(0L) }
     var resolvedPlaybackContentUrl by remember { mutableStateOf("") }
     var resolvedPlaybackProvider by remember { mutableStateOf("") }
     var resolvedPlaybackEntry by remember { mutableStateOf<com.example.data.plugin.CloudStreamPluginEntry?>(null) }
@@ -1181,7 +1182,8 @@ private fun CloudStreamSearchPanel(
         data: String,
         target: String,
         contentUrl: String = selectedContent?.second?.url.orEmpty(),
-        posterUrl: String? = selectedContent?.second?.posterUrl
+        posterUrl: String? = selectedContent?.second?.posterUrl,
+        durationMs: Long = if (target == "Film") (selectedContent?.second?.durationMinutes?.toLong() ?: 0L) * 60_000L else 0L
     ) {
         resolvingLinks = true
         linkTarget = target
@@ -1191,6 +1193,7 @@ private fun CloudStreamSearchPanel(
         resolvedPlaybackTitle = if (target == "Film") selectedContent?.second?.title ?: target
             else listOf(selectedContent?.second?.title, target).filterNotNull().filter { it.isNotBlank() }.joinToString(" • ")
         resolvedPlaybackPoster = posterUrl
+        resolvedPlaybackDurationMs = durationMs.coerceAtLeast(0L)
         resolvedPlaybackContentUrl = contentUrl
         linkMessage = ""
         streams = emptyList()
@@ -1566,7 +1569,7 @@ private fun CloudStreamSearchPanel(
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                             listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
-                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }, content.url, episode.posterUrl ?: content.posterUrl) }) { Text("Link", fontSize = 10.sp) }
+                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }, content.url, episode.posterUrl ?: content.posterUrl, (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L) }) { Text("Link", fontSize = 10.sp) }
                     }
                 }
             }
@@ -1642,10 +1645,10 @@ private fun CloudStreamSearchPanel(
                                 playbackData = resolvedPlaybackData,
                                 title = resolvedPlaybackTitle.ifBlank { stream.name.ifBlank { "CloudStream" } },
                                 posterUrl = resolvedPlaybackPoster,
+                                durationMs = resolvedPlaybackDurationMs,
                                 streamUrl = stream.url,
                                 requestHeaders = headers,
-                                mimeType = mimeType,
-                                sourceUrl = stream.referer
+                                mimeType = mimeType
                             )
                         }
                     }
