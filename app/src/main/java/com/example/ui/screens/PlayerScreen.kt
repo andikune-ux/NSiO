@@ -657,6 +657,7 @@ fun PlayerScreen(
                                 "Sumber" to (playerState.pluginStreams.firstOrNull { it.url == playerState.selectedPluginStreamUrl }?.name?.ifBlank { "Sumber aktif" } ?: "Default"),
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
+                                "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis")
                             ).forEach { (label, current) ->
                                 Text(
@@ -752,6 +753,25 @@ fun PlayerScreen(
                                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                                 viewModel.player.selectTrack(track)
                                                 selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Audio Delay" -> {
+                                    Text(
+                                        "Atur sinkronisasi suara terhadap gambar. Nilai positif membuat suara lebih lambat; nilai negatif memajukan suara.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    (-500..500 step 50).forEach { delayMs ->
+                                        Text(
+                                            text = (if (playerState.audioDelayMs == delayMs) "✓ " else "") +
+                                                if (delayMs > 0) "+${delayMs} ms" else "${delayMs} ms",
+                                            color = if (playerState.audioDelayMs == delayMs) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.setAudioDelay(delayMs)
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
