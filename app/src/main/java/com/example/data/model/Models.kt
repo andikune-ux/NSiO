@@ -76,5 +76,6 @@ data class DownloadItem(
     val totalBytes: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val etag: String = "",
-    val lastModified: String = ""
+    val lastModified: String = "",
+    val requestHeadersJson: String = "{}"
 )
