@@ -169,7 +169,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
         // Wait until the worker has stopped and closed its file stream before reading
         // the partial file or committing the PAUSED state.
         val latest = downloadDao.getDownloadById(id) ?: return@withLock
-        if (latest.status != "COMPLETED") {
+        if (latest.status == "DOWNLOADING" || latest.status == "PENDING") {
             val bytes = latest.localPath.takeIf { it.isNotBlank() }?.let { File("$it.part").length() } ?: 0L
             val total = latest.totalBytes
             val percent = if (total > 0L) ((bytes * 100L) / total).toInt().coerceIn(0, 99)
@@ -256,6 +256,7 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
             }
             val call = client.newCall(requestBuilder.build())
             activeCall = call
+            if (isStopped) call.cancel()
             val response = call.execute()
             if (response.code == 416 && existingBytes > 0L) {
                 val isAlreadyComplete = isVerifiedCompletedRange(
