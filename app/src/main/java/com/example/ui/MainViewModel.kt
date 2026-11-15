@@ -135,6 +135,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cloudStreamHomeLoadMoreJob: Job? = null
     private val cloudStreamHomePages = mutableMapOf<String, Int>()
     private val cloudStreamHomeHasNext = mutableMapOf<String, Boolean>()
+    // Pagination state is tracked per plugin, provider, and declared main-page request.
+    private val cloudStreamHomeSectionPages = mutableMapOf<String, Int>()
+    private val cloudStreamHomeSectionHasNext = mutableMapOf<String, Boolean>()
+
+    private fun cloudStreamSectionStateKey(
+        pluginId: String,
+        section: com.example.data.plugin.CloudStreamHomeSection
+    ): String = "$pluginId|${section.providerName}|${section.requestName}"
+
+    private fun cloudStreamSectionPageRequests(pluginId: String): Map<String, Int> {
+        val prefix = "$pluginId|"
+        return cloudStreamHomeSectionPages.keys
+            .filter { it.startsWith(prefix) }
+            .associate { stateKey ->
+                val requestKey = stateKey.removePrefix(prefix)
+                val currentPage = cloudStreamHomeSectionPages[stateKey] ?: 1
+                requestKey to if (cloudStreamHomeSectionHasNext[stateKey] == true) currentPage + 1 else 0
+            }
+    }
+
+    private fun updateCloudStreamSectionPagination(
+        pluginId: String,
+        sections: List<com.example.data.plugin.CloudStreamHomeSection>,
+        requestedPages: Map<String, Int>? = null,
+        reset: Boolean = false
+    ) {
+        val prefix = "$pluginId|"
+        if (reset) {
+            cloudStreamHomeSectionPages.keys.filter { it.startsWith(prefix) }.forEach(cloudStreamHomeSectionPages::remove)
+            cloudStreamHomeSectionHasNext.keys.filter { it.startsWith(prefix) }.forEach(cloudStreamHomeSectionHasNext::remove)
+        }
+        sections.forEach { section ->
+            val key = cloudStreamSectionStateKey(pluginId, section)
+            val requestKey = "${section.providerName}|${section.requestName}"
+            val page = requestedPages?.get(requestKey) ?: 1
+            if (page > 0) cloudStreamHomeSectionPages[key] = page
+            cloudStreamHomeSectionHasNext[key] = section.hasNext
+        }
+        val hasNext = cloudStreamHomeSectionHasNext
+            .filterKeys { it.startsWith(prefix) }
+            .values.any { it }
+        cloudStreamHomeHasNext[pluginId] = hasNext
+        cloudStreamHomePages[pluginId] = cloudStreamHomeSectionPages
+            .filterKeys { it.startsWith(prefix) }
+            .values.maxOrNull() ?: 1
+    }
     private val cloudStreamAutoRetryJobs = mutableMapOf<String, Job>()
     private val _isLoadingMoreCloudStreamHome = MutableStateFlow(false)
     val isLoadingMoreCloudStreamHome: StateFlow<Boolean> = _isLoadingMoreCloudStreamHome.asStateFlow()
@@ -978,13 +1024,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val pluginId = pluginManager.cloudStreamPluginId(entry)
                     if (cloudStreamHomeHasNext[pluginId] == false) return@forEach
                     val nextPage = (cloudStreamHomePages[pluginId] ?: 1) + 1
+                    val sectionPages = cloudStreamSectionPageRequests(pluginId)
                     val requestStartedAt = System.currentTimeMillis()
                     runCatching {
-                        pluginManager.loadCloudStreamHomePage(entry, nextPage)
+                        pluginManager.loadCloudStreamHomePage(entry, nextPage, sectionPages.takeIf { it.isNotEmpty() })
                     }.onSuccess { sections ->
-                        cloudStreamHomePages[pluginId] = nextPage
-                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
+                        updateCloudStreamSectionPagination(
+                            pluginId,
+                            sections,
+                            requestedPages = sectionPages.takeIf { it.isNotEmpty() }
+                        )
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = cloudStreamHomeHasNext[pluginId] == true, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { added += it }
@@ -1038,9 +1088,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching { pluginManager.loadCloudStreamHomePage(entry, 1) }
                     .onSuccess { sections ->
                         if (_activeProfile.value?.id != profileId) return@onSuccess
-                        cloudStreamHomePages[pluginId] = 1
-                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
+                        updateCloudStreamSectionPagination(pluginId, sections, reset = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = cloudStreamHomeHasNext[pluginId] == true, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { showStatus("Sumber ${entry.name} pulih: $it item diperbarui.") }
@@ -1093,9 +1142,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runCatching {
                         pluginManager.loadCloudStreamHomePage(entry, 1)
                     }.onSuccess { sections ->
-                        cloudStreamHomePages[pluginId] = 1
-                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
+                        updateCloudStreamSectionPagination(pluginId, sections, reset = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = cloudStreamHomeHasNext[pluginId] == true, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { refreshed += it }
