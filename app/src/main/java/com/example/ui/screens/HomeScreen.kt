@@ -113,6 +113,7 @@ fun HomeScreen(
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
     val cloudStreamRepositories by viewModel.pluginManager.repositories.collectAsState()
     val isLoadingMoreCloudStreamHome by viewModel.isLoadingMoreCloudStreamHome.collectAsState()
+    val cloudStreamSourceHealth by viewModel.cloudStreamSourceHealth.collectAsState()
     val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.flatMap { repo ->
             repo.plugins.map { entry ->
@@ -882,7 +883,16 @@ fun HomeScreen(
                                     "PLAYLIST:${playlist.id}" to "Playlist: ${playlist.name}"
                                 }
                                 val cloudStreamPluginChips = cloudStreamPluginFilters.map { (pluginId, name) ->
-                                    "CLOUDSTREAM_PLUGIN:$pluginId" to "Plugin: $name"
+                                    val health = cloudStreamSourceHealth[pluginId]
+                                    val cachedCount = mediaList.count { it.sourceType == "CLOUDSTREAM" && it.pluginId == pluginId }
+                                    val healthLabel = when {
+                                        health?.lastError != null -> " • Perlu cek"
+                                        health?.hasNext == false -> " • Selesai"
+                                        (health?.lastSuccessAt ?: 0L) > 0L -> " • Aktif"
+                                        cachedCount > 0 -> " • Cache $cachedCount"
+                                        else -> ""
+                                    }
+                                    "CLOUDSTREAM_PLUGIN:$pluginId" to "Plugin: $name$healthLabel"
                                 }
                                 val cloudStreamRepositoryChips = cloudStreamRepositoryFilters.map { (repositoryId, name) ->
                                     "CLOUDSTREAM_REPO:$repositoryId" to "Repo: $name"
