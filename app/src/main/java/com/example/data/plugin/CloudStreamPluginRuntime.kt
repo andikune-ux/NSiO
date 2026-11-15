@@ -124,7 +124,9 @@ class CloudStreamPluginRuntime(private val context: Context) {
             loaded.providers.filter { it.hasMainPage }.flatMap { api ->
                 api.mainPage.mapNotNull requestLoop@ { request ->
                     val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
-                        api.getMainPage(page, MainPageRequest(request.name, request.data, request.horizontalImages))
+                        runCatching {
+                            api.getMainPage(page, MainPageRequest(request.name, request.data, request.horizontalImages))
+                        }.getOrNull()
                     } ?: return@requestLoop null
                     val items = response.items.flatMap { section ->
                         section.list.mapNotNull itemLoop@ { item ->
