@@ -1517,7 +1517,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         streamUrl: String,
         requestHeaders: Map<String, String> = emptyMap(),
         mimeType: String? = null,
-        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
+        extractorData: String? = null
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             showStatus("Profil aktif tidak ditemukan.")
@@ -1568,6 +1569,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     mimeType = mimeType,
                     externalSubtitles = externalSubtitles
                 )
+                if (!extractorData.isNullOrBlank()) {
+                    viewModelScope.launch {
+                        pluginManager.runCloudStreamExtractorVerifier(entry, providerName, extractorData)
+                    }
+                }
                 startPlaybackProgressPersistence(item)
                 authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.saveMediaItem(user.uid, item) }
