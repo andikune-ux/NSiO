@@ -92,6 +92,12 @@ class CatalogRefreshWorker(
         // six-hour connected-network job. Plugin failures never erase their cached rows.
         try {
             val pluginManager = PluginManager(applicationContext)
+            // Keep repository metadata fresh before importing provider catalogs.
+            // Individual failures preserve the last-known-good repository snapshot.
+            val (repositoriesRefreshed, repositoryFailures) = pluginManager.refreshAllRepositoryCatalogs()
+            val (pluginsUpdated, pluginUpdateFailures) = pluginManager.autoUpdateInstalledCloudStreamPlugins()
+            refreshed += pluginsUpdated
+            failures += repositoryFailures + pluginUpdateFailures
             val entries = pluginManager.repositories.value
                 .flatMap { it.plugins }
                 .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
