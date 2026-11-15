@@ -53,8 +53,16 @@ data class CloudStreamEpisodeItem(
     val data: String,
     val season: Int?,
     val episode: Int?,
-    val posterUrl: String?
+    val posterUrl: String?,
+    val description: String? = null,
+    val rating: Int? = null,
+    val date: Long? = null,
+    val runtimeSeconds: Int? = null
 )
+
+data class CloudStreamCastMember(val name: String, val role: String?, val imageUrl: String?)
+data class CloudStreamRecommendation(val title: String, val url: String, val posterUrl: String?, val contentType: String?, val year: Int?)
+data class CloudStreamTrailer(val url: String, val referer: String?, val raw: Boolean)
 
 data class CloudStreamContent(
     val pluginName: String,
@@ -68,7 +76,16 @@ data class CloudStreamContent(
     val durationMinutes: Int?,
     val contentType: String,
     val dataUrl: String?,
-    val episodes: List<CloudStreamEpisodeItem>
+    val episodes: List<CloudStreamEpisodeItem>,
+    val rating: Int? = null,
+    val tags: List<String> = emptyList(),
+    val contentRating: String? = null,
+    val showStatus: String? = null,
+    val comingSoon: Boolean = false,
+    val cast: List<CloudStreamCastMember> = emptyList(),
+    val trailers: List<CloudStreamTrailer> = emptyList(),
+    val recommendations: List<CloudStreamRecommendation> = emptyList(),
+    val seasonNames: Map<Int, String> = emptyMap()
 )
 
 data class CloudStreamStream(
@@ -406,7 +423,11 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 data = episodeData,
                 season = readProperty(item, "season") as? Int,
                 episode = readProperty(item, "episode") as? Int,
-                posterUrl = readProperty(item, "posterUrl") as? String
+                posterUrl = readProperty(item, "posterUrl") as? String,
+                description = readProperty(item, "description") as? String,
+                rating = readProperty(item, "rating") as? Int,
+                date = readProperty(item, "date") as? Long,
+                runtimeSeconds = readProperty(item, "runTime") as? Int
             )
         }
 
@@ -422,7 +443,41 @@ class CloudStreamPluginRuntime(private val context: Context) {
             durationMinutes = duration,
             contentType = type.toString(),
             dataUrl = readProperty(this, "dataUrl") as? String,
-            episodes = episodes
+            episodes = episodes,
+            rating = readProperty(this, "rating") as? Int,
+            tags = (readProperty(this, "tags") as? Iterable<*>)?.mapNotNull { it?.toString() }.orEmpty(),
+            contentRating = readProperty(this, "contentRating") as? String,
+            showStatus = readProperty(this, "showStatus")?.toString(),
+            comingSoon = readProperty(this, "comingSoon") as? Boolean ?: false,
+            cast = (readProperty(this, "actors") as? Iterable<*>)?.mapNotNull { actorData ->
+                actorData ?: return@mapNotNull null
+                val actor = readProperty(actorData, "actor") ?: return@mapNotNull null
+                val actorName = readProperty(actor, "name") as? String ?: return@mapNotNull null
+                CloudStreamCastMember(
+                    actorName,
+                    (readProperty(actorData, "roleString") as? String) ?: readProperty(actorData, "role")?.toString(),
+                    readProperty(actor, "image") as? String
+                )
+            }.orEmpty(),
+            trailers = (readProperty(this, "trailers") as? Iterable<*>)?.mapNotNull { trailer ->
+                trailer ?: return@mapNotNull null
+                val trailerUrl = readProperty(trailer, "extractorUrl") as? String ?: return@mapNotNull null
+                CloudStreamTrailer(trailerUrl, readProperty(trailer, "referer") as? String, readProperty(trailer, "raw") as? Boolean ?: false)
+            }.orEmpty(),
+            recommendations = (readProperty(this, "recommendations") as? Iterable<*>)?.mapNotNull { item ->
+                item ?: return@mapNotNull null
+                val itemTitle = readProperty(item, "name") as? String ?: return@mapNotNull null
+                val itemUrl = readProperty(item, "url") as? String ?: return@mapNotNull null
+                CloudStreamRecommendation(itemTitle, itemUrl, readProperty(item, "posterUrl") as? String, readProperty(item, "type")?.toString(), readProperty(item, "year") as? Int)
+            }.orEmpty(),
+            seasonNames = (readProperty(this, "seasonNames") as? Iterable<*>)?.mapNotNull { season ->
+                season ?: return@mapNotNull null
+                val number = readProperty(season, "season") as? Int ?: return@mapNotNull null
+                val display = readProperty(season, "name") as? String
+                    ?: (readProperty(season, "displaySeason") as? Int)?.let { "Season $it" }
+                    ?: return@mapNotNull null
+                number to display
+            }?.toMap().orEmpty()
         )
     }
 
