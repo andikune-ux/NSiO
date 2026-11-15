@@ -1117,9 +1117,7 @@ private fun CloudStreamCatalogManagerPanel(
     Column(
         modifier = Modifier.fillMaxWidth().liquidGlass(
             shape = RoundedCornerShape(22.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 5.dp
-        ).padding(16.dp).then(
-            if (renderContent) Modifier else Modifier.height(0.dp).clipToBounds()
-        ),
+        ).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Text("Katalog CloudStream", fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1509,6 +1507,7 @@ fun CloudStreamSearchPanel(
         }
     }
 
+    if (renderContent) {
     if (showCatalogControls) {
     Column(
         modifier = Modifier.fillMaxWidth().liquidGlass(
@@ -1790,6 +1789,7 @@ fun CloudStreamSearchPanel(
         if (loadingDetail) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
+    }
         if ((loadingDetail && selectedContent == null) || detailLoadError != null) {
             Dialog(onDismissRequest = {
                 loadingDetail = false
