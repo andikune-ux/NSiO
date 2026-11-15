@@ -327,23 +327,48 @@ class CloudStreamPluginRuntime(private val context: Context) {
             )
         } ?: false
 
-        if (!completed && rawLinks.isEmpty()) return@withContext emptyList()
+        if (rawLinks.isEmpty()) {
+            val reason = if (completed) {
+                "Provider $providerName selesai memproses permintaan, tetapi tidak mengirim link streaming."
+            } else {
+                "Provider $providerName tidak menemukan sumber streaming atau proses loadLinks tidak selesai."
+            }
+            throw IllegalStateException(reason)
+        }
 
         val resolved = mutableListOf<ExtractorLink>()
         rawLinks.forEach { raw ->
             val before = synchronized(resolved) { resolved.size }
             val handled = withTimeoutOrNull(LINKS_TIMEOUT_MS) {
-                runCatching {
+                try {
                     loadExtractor(
                         url = raw.url,
                         referer = raw.referer,
                         subtitleCallback = subtitleCallback,
                         callback = { link -> synchronized(resolved) { resolved.add(link) } }
                     )
-                }.getOrDefault(false)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    false
+                }
             } ?: false
             val emitted = synchronized(resolved) { resolved.size > before }
             if (!handled || !emitted) synchronized(resolved) { resolved.add(raw) }
+
+            // Some providers already return a direct media URL. Keep that original
+            // candidate alongside extractor results so a failed extractor rewrite
+            // cannot remove the only playable source.
+            val extension = runCatching {
+                java.net.URI(raw.url).path.substringAfterLast('.', "").lowercase()
+            }.getOrDefault("")
+            if (extension in setOf("mp4", "m3u8", "mpd", "webm", "mkv", "m4v", "mov", "ts")) {
+                synchronized(resolved) {
+                    if (resolved.none { it.url == raw.url && it.referer == raw.referer }) {
+                        resolved.add(raw)
+                    }
+                }
+            }
         }
 
         resolved.distinctBy { it.url to it.referer }.map { link ->
