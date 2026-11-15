@@ -105,7 +105,8 @@ data class CloudStreamStream(
     val headers: Map<String, String>,
     val quality: Int,
     val streamType: String,
-    val subtitles: List<CloudStreamSubtitle> = emptyList()
+    val subtitles: List<CloudStreamSubtitle> = emptyList(),
+    val extractorData: String? = null
 )
 
 class CloudStreamPluginRuntime(private val context: Context) {
@@ -285,9 +286,16 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 headers = link.headers,
                 quality = link.quality,
                 streamType = link.type.toString(),
-                subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } }
+                subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
+                extractorData = link.extractorData
             )
         }
+    }
+
+    suspend fun runExtractorVerifier(artifact: File, providerName: String, extractorData: String?) = withContext(Dispatchers.IO) {
+        if (extractorData.isNullOrBlank()) return@withContext
+        val api = loadPlugin(artifact).providers.firstOrNull { it.name == providerName } ?: return@withContext
+        runCatching { api.extractorVerifierJob(extractorData) }
     }
 
     suspend fun unload(artifact: File) = withContext(Dispatchers.IO) {
