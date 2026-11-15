@@ -94,9 +94,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.awaitEachGesture
-import androidx.compose.ui.input.pointer.awaitFirstDown
-import androidx.compose.ui.input.pointer.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.detectTapGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -142,6 +140,8 @@ fun PlayerScreen(
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
     var activeGesture by remember { mutableStateOf<String?>(null) }
+    var isRewindingHeld by remember { mutableStateOf(false) }
+    var isFastForwardHeld by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
@@ -222,6 +222,25 @@ fun PlayerScreen(
         if (activeGesture != null && activeGesture !in setOf("rewind", "fast-forward")) {
             delay(900)
             activeGesture = null
+        }
+    }
+
+    LaunchedEffect(isRewindingHeld) {
+        while (isRewindingHeld) {
+            viewModel.player.seekBackward(500L)
+            delay(250L)
+        }
+    }
+
+    LaunchedEffect(isFastForwardHeld) {
+        if (isFastForwardHeld) {
+            val previousSpeed = playerState.playbackSpeed
+            viewModel.player.setPlaybackSpeed(4f)
+            try {
+                while (isFastForwardHeld) delay(60L)
+            } finally {
+                viewModel.player.setPlaybackSpeed(previousSpeed)
+            }
         }
     }
 
@@ -357,58 +376,53 @@ fun PlayerScreen(
         }
 
         // Hold zones: right side temporarily plays at 4×; left side rewinds at 2×.
-        // They sit inside the media area, leaving the outer brightness/volume gestures intact.
+        // Outer screen zones remain dedicated to brightness and volume gestures.
         if (usesNativePlayer) {
             Row(
                 modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.44f).fillMaxHeight()
             ) {
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id, playerState.playbackSpeed) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                waitForUpOrCancellation()
-                                false
-                            } ?: true
-                            if (longPressed) {
-                                activeGesture = "rewind"
-                                showControls = true
-                                while (true) {
-                                    viewModel.player.seekBackward(500L)
-                                    kotlinx.coroutines.delay(250L)
-                                    val event = awaitPointerEvent()
-                                    if (event.changes.none { it.pressed }) break
+                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
+                        detectTapGestures(
+                            onPress = {
+                                val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    tryAwaitRelease()
                                 }
-                                activeGesture = null
+                                if (releasedBeforeLongPress == null) {
+                                    isRewindingHeld = true
+                                    activeGesture = "rewind"
+                                    showControls = true
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isRewindingHeld = false
+                                        activeGesture = null
+                                    }
+                                }
                             }
-                        }
+                        )
                     }
                 )
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id, playerState.playbackSpeed) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            val longPressed = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                waitForUpOrCancellation()
-                                false
-                            } ?: true
-                            if (longPressed) {
-                                val previousSpeed = playerState.playbackSpeed
-                                viewModel.player.setPlaybackSpeed(4f)
-                                activeGesture = "fast-forward"
-                                showControls = true
-                                try {
-                                    while (true) {
-                                        kotlinx.coroutines.delay(60L)
-                                        val event = awaitPointerEvent()
-                                        if (event.changes.none { it.pressed }) break
+                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
+                        detectTapGestures(
+                            onPress = {
+                                val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    tryAwaitRelease()
+                                }
+                                if (releasedBeforeLongPress == null) {
+                                    isFastForwardHeld = true
+                                    activeGesture = "fast-forward"
+                                    showControls = true
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isFastForwardHeld = false
+                                        activeGesture = null
                                     }
-                                } finally {
-                                    viewModel.player.setPlaybackSpeed(previousSpeed)
-                                    activeGesture = null
                                 }
                             }
-                        }
+                        )
                     }
                 )
             }
