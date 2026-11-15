@@ -1219,7 +1219,8 @@ fun CloudStreamSearchPanel(
         target: String,
         contentUrl: String = selectedContent?.second?.url.orEmpty(),
         posterUrl: String? = selectedContent?.second?.posterUrl,
-        durationMs: Long = if (target == "Film") (selectedContent?.second?.durationMinutes?.toLong() ?: 0L) * 60_000L else 0L
+        durationMs: Long = if (target == "Film") (selectedContent?.second?.durationMinutes?.toLong() ?: 0L) * 60_000L else 0L,
+        autoPlay: Boolean = false
     ) {
         resolvingLinks = true
         linkTarget = target
@@ -1237,11 +1238,54 @@ fun CloudStreamSearchPanel(
             runCatching {
                 viewModel.pluginManager.loadCloudStreamLinks(entry, providerName, data)
             }.onSuccess { found ->
-                streams = found.map { entry to it }
-                linkMessage = if (found.isEmpty()) {
+                val playable = found.filter { it.url.isNotBlank() }
+                streams = playable.map { entry to it }
+                linkMessage = if (playable.isEmpty()) {
                     "Provider belum menemukan link yang dapat diputar."
                 } else {
-                    "Ditemukan ${found.size} link."
+                    "Ditemukan ${playable.size} link."
+                }
+                if (autoPlay) {
+                    val selectedStream = playable.maxByOrNull { it.quality }
+                    if (selectedStream == null) {
+                        linkMessage = "Tidak ada sumber film yang bisa diputar."
+                    } else {
+                        val headers = selectedStream.headers.toMutableMap().apply {
+                            if (selectedStream.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
+                                put("Referer", selectedStream.referer)
+                            }
+                        }
+                        val streamType = selectedStream.streamType.substringAfterLast('.').uppercase()
+                        val extension = runCatching {
+                            java.net.URI(selectedStream.url).path.substringAfterLast('.', "").uppercase()
+                        }.getOrDefault("")
+                        val mimeType = when {
+                            streamType.contains("M3U8") || streamType.contains("HLS") || extension == "M3U8" -> "application/x-mpegURL"
+                            streamType.contains("DASH") || streamType == "MPD" || extension == "MPD" -> "application/dash+xml"
+                            streamType.contains("WEBM") || extension == "WEBM" -> "video/webm"
+                            streamType.contains("MKV") || streamType.contains("MATROSKA") || extension == "MKV" -> "video/x-matroska"
+                            streamType.contains("MP4") || streamType.contains("VIDEO") || extension == "MP4" -> "video/mp4"
+                            else -> null
+                        }
+                        viewModel.playCloudStreamEpisode(
+                            entry = entry,
+                            contentUrl = contentUrl,
+                            providerName = providerName,
+                            playbackData = data,
+                            title = resolvedPlaybackTitle,
+                            posterUrl = posterUrl,
+                            durationMs = durationMs,
+                            streamUrl = selectedStream.url,
+                            requestHeaders = headers,
+                            mimeType = mimeType,
+                            externalSubtitles = selectedStream.subtitles,
+                            extractorData = selectedStream.extractorData,
+                            videoInterceptor = selectedStream.videoInterceptor,
+                            availablePluginStreams = playable,
+                            category = "CloudStream • Film"
+                        )
+                        linkMessage = "Memutar film melalui ${selectedStream.name.ifBlank { selectedStream.source }}."
+                    }
                 }
             }.onFailure { error ->
                 linkMessage = error.message ?: "Gagal mengambil link streaming."
@@ -1725,10 +1769,15 @@ fun CloudStreamSearchPanel(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
                     Button(
+                        onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl, autoPlay = true) },
+                        enabled = !resolvingLinks,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 5.dp)
+                    ) { Text("▶ Putar Film", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    OutlinedButton(
                         onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) },
                         enabled = !resolvingLinks,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("Cari link & putar film", fontSize = 10.sp) }
+                    ) { Text("Pilih sumber", fontSize = 10.sp) }
                 }
                 OutlinedButton(
                     onClick = {
