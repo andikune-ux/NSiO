@@ -1553,7 +1553,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
                 val stableKey = "$profileId|$pluginId|$providerName|$contentUrl|$playbackData"
                 val mediaId = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString()
-                val previous = mediaDao.getMediaListForProfile(profileId).firstOrNull { it.id == mediaId }
+                // History storage must never block playback when the local/cloud store is unavailable.
+                val previous = runCatching {
+                    mediaDao.getMediaListForProfile(profileId).firstOrNull { it.id == mediaId }
+                }.getOrNull()
                 val metadata = org.json.JSONObject()
                     .put("kind", "cloudstream_episode")
                     .put("providerName", providerName)
@@ -1578,7 +1581,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     createdAt = previous?.createdAt ?: System.currentTimeMillis(),
                     extraInfo = metadata
                 )
-                mediaDao.insertMedia(item)
                 _currentlyPlaying.value = item
                 player.playWithMimeType(
                     url = streamUrl,
@@ -1599,10 +1601,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else null
                 startPlaybackProgressPersistence(item)
+                val historySaved = runCatching { mediaDao.insertMedia(item) }.isSuccess
                 authManager.currentUser?.let { user ->
                     runCatching { cloudRepository.saveMediaItem(user.uid, item) }
                 }
-                showStatus("Memutar ${item.title}. Riwayat episode tersimpan.")
+                showStatus(
+                    if (historySaved) "Permintaan putar ${item.title} dikirim. Riwayat episode tersimpan."
+                    else "Permintaan putar ${item.title} dikirim. Riwayat lokal gagal disimpan."
+                )
             }.onFailure { error ->
                 showStatus("Gagal menyimpan riwayat episode: ${error.localizedMessage ?: "kesalahan database"}")
             }
