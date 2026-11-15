@@ -1629,9 +1629,19 @@ private fun CloudStreamSearchPanel(
                         if (stream.referer.isNotBlank() && headers.keys.none { it.equals("Referer", ignoreCase = true) }) {
                             headers["Referer"] = stream.referer
                         }
-                        val mimeType = when (stream.streamType.uppercase()) {
-                            "M3U8" -> "application/x-mpegURL"
-                            "DASH" -> "application/dash+xml"
+                        val streamType = stream.streamType.substringAfterLast('.').uppercase()
+                        val streamExtension = runCatching {
+                            java.net.URI(stream.url).path.substringAfterLast('.', "").uppercase()
+                        }.getOrDefault("")
+                        val mimeType = when {
+                            streamType in setOf("M3U8", "HLS") || streamExtension == "M3U8" ->
+                                "application/x-mpegURL"
+                            streamType in setOf("DASH", "MPD") || streamExtension == "MPD" ->
+                                "application/dash+xml"
+                            streamType == "MP4" || streamExtension == "MP4" -> "video/mp4"
+                            streamType == "WEBM" || streamExtension == "WEBM" -> "video/webm"
+                            streamType in setOf("MKV", "MATROSKA") || streamExtension == "MKV" ->
+                                "video/x-matroska"
                             else -> null
                         }
                         val playbackEntry = resolvedPlaybackEntry
