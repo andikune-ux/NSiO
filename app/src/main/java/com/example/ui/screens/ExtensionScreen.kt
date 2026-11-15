@@ -1549,11 +1549,45 @@ private fun CloudStreamSearchPanel(
                 )
             }
             content.externalIds.takeIf { it.isNotEmpty() }?.let { ids ->
-                Text(
-                    ids.entries.joinToString(" • ") { "${it.key}: ${it.value}" },
-                    fontSize = 8.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text("ID eksternal", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                ids.entries.forEach { (idKey, idValue) ->
+                    val syncName = when (idKey.lowercase().replace("id", "").replace("_", "").replace("-", "")) {
+                        "imdb" -> "imdb"
+                        "anilist", "ani" -> "anilist"
+                        "mal", "myanimelist" -> "mal"
+                        "trakt" -> "trakt"
+                        "simkl" -> "simkl"
+                        else -> null
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("$idKey: $idValue", fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        if (syncName != null) {
+                            TextButton(
+                                enabled = !loadingDetail,
+                                onClick = {
+                                    loadingDetail = true
+                                    scope.launch {
+                                        runCatching {
+                                            viewModel.pluginManager.resolveCloudStreamExternalId(entry, syncName, idValue)
+                                        }.mapCatching { matches ->
+                                            val match = matches.firstOrNull()
+                                                ?: throw IllegalStateException("Tidak ada provider plugin yang mendukung ID $idKey.")
+                                            viewModel.pluginManager.loadCloudStreamContent(entry, match.providerName, match.contentUrl)
+                                        }.onSuccess { resolvedContent ->
+                                            selectedContent = entry to resolvedContent
+                                            streams = emptyList()
+                                            linkMessage = ""
+                                            searchMessage = "Konten berhasil dibuka melalui ID $idKey."
+                                        }.onFailure { error ->
+                                            searchMessage = error.message ?: "Gagal membuka konten melalui ID eksternal."
+                                        }
+                                        loadingDetail = false
+                                    }
+                                }
+                            ) { Text("Buka", fontSize = 9.sp) }
+                        }
+                    }
+                }
             }
             content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
