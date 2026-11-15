@@ -37,7 +37,8 @@ data class CloudStreamSourceHealth(
     val hasNext: Boolean? = null,
     val consecutiveFailures: Int = 0,
     val lastAttemptAt: Long = 0L,
-    val nextAutoRetryAt: Long = 0L
+    val nextAutoRetryAt: Long = 0L,
+    val lastResponseTimeMs: Long = 0L
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -187,7 +188,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         hasNext = if (values.has("hasNext") && !values.isNull("hasNext")) values.optBoolean("hasNext") else null,
                         consecutiveFailures = values.optInt("consecutiveFailures", 0).coerceAtLeast(0),
                         lastAttemptAt = values.optLong("lastAttemptAt", 0L),
-                        nextAutoRetryAt = values.optLong("nextAutoRetryAt", 0L)
+                        nextAutoRetryAt = values.optLong("nextAutoRetryAt", 0L),
+                        lastResponseTimeMs = values.optLong("lastResponseTimeMs", 0L).coerceAtLeast(0L)
                     )
                 }.getOrNull()
             }.toMap()
@@ -198,7 +200,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pluginId: String,
         hasNext: Boolean? = null,
         error: String? = null,
-        succeeded: Boolean = false
+        succeeded: Boolean = false,
+        responseTimeMs: Long? = null
     ) {
         if (_activeProfile.value?.id != profileId) return
         val previous = _cloudStreamSourceHealth.value[pluginId] ?: CloudStreamSourceHealth()
@@ -212,7 +215,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             hasNext = hasNext ?: previous.hasNext,
             consecutiveFailures = failureCount,
             lastAttemptAt = now,
-            nextAutoRetryAt = if (succeeded) 0L else if (retryDelay > 0L) now + retryDelay else 0L
+            nextAutoRetryAt = if (succeeded) 0L else if (retryDelay > 0L) now + retryDelay else 0L,
+            lastResponseTimeMs = responseTimeMs?.coerceAtLeast(0L) ?: previous.lastResponseTimeMs
         )
         _cloudStreamSourceHealth.value = _cloudStreamSourceHealth.value + (pluginId to updated)
         val values = org.json.JSONObject()
@@ -222,6 +226,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .put("consecutiveFailures", updated.consecutiveFailures)
             .put("lastAttemptAt", updated.lastAttemptAt)
             .put("nextAutoRetryAt", updated.nextAutoRetryAt)
+            .put("lastResponseTimeMs", updated.lastResponseTimeMs)
         cloudStreamHealthPreferences.edit()
             .putString("$profileId|$pluginId", values.toString())
             .apply()
@@ -927,19 +932,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val pluginId = pluginManager.cloudStreamPluginId(entry)
                     if (cloudStreamHomeHasNext[pluginId] == false) return@forEach
                     val nextPage = (cloudStreamHomePages[pluginId] ?: 1) + 1
+                    val requestStartedAt = System.currentTimeMillis()
                     runCatching {
                         pluginManager.loadCloudStreamHomePage(entry, nextPage)
                     }.onSuccess { sections ->
                         cloudStreamHomePages[pluginId] = nextPage
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { added += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya", responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
@@ -982,12 +988,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _refreshingCloudStreamPluginId.value = pluginId
             try {
+                val requestStartedAt = System.currentTimeMillis()
                 runCatching { pluginManager.loadCloudStreamHomePage(entry, 1) }
                     .onSuccess { sections ->
                         if (_activeProfile.value?.id != profileId) return@onSuccess
                         cloudStreamHomePages[pluginId] = 1
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { showStatus("Sumber ${entry.name} pulih: $it item diperbarui.") }
@@ -997,7 +1004,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     .onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog", responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         showStatus("Sumber ${entry.name} masih bermasalah. Cache lama tetap dipertahankan.")
                     }
             } finally {
@@ -1041,14 +1048,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }.onSuccess { sections ->
                         cloudStreamHomePages[pluginId] = 1
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { refreshed += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog", responseTimeMs = System.currentTimeMillis() - requestStartedAt)
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
