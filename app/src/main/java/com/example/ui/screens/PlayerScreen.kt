@@ -292,12 +292,20 @@ fun PlayerScreen(
         }
         val listener = object : SessionManagerListener<CastSession> {
             override fun onSessionStarting(session: CastSession) {}
-            override fun onSessionStarted(session: CastSession, sessionId: String) { sendCurrentMedia(session) }
+            override fun onSessionStarted(session: CastSession, sessionId: String) {
+                // A Cast session now owns audio/video output. Stop local playback
+                // after loading the current item to avoid duplicate sound on the phone/TV.
+                sendCurrentMedia(session)
+                viewModel.player.pause()
+            }
             override fun onSessionStartFailed(session: CastSession, error: Int) {}
             override fun onSessionEnding(session: CastSession) {}
             override fun onSessionEnded(session: CastSession, error: Int) {}
             override fun onSessionResuming(session: CastSession, sessionId: String) {}
-            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) { sendCurrentMedia(session) }
+            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                sendCurrentMedia(session)
+                viewModel.player.pause()
+            }
             override fun onSessionResumeFailed(session: CastSession, error: Int) {}
             override fun onSessionSuspended(session: CastSession, reason: Int) {}
         }
