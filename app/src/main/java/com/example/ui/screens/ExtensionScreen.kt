@@ -1044,6 +1044,11 @@ private fun CloudStreamSearchPanel(
     repos: List<com.example.data.plugin.RepoManifest>
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var loadingHomeCatalog by remember { mutableStateOf(false) }
+    var homeCatalogMessage by remember { mutableStateOf("") }
+    var homeCatalog by remember {
+        mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>>(emptyList())
+    }
     var searching by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf("") }
     var results by remember {
@@ -1108,6 +1113,89 @@ private fun CloudStreamSearchPanel(
             fontSize = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Button(
+            onClick = {
+                loadingHomeCatalog = true
+                homeCatalog = emptyList()
+                homeCatalogMessage = ""
+                scope.launch {
+                    val sections = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>()
+                    val failures = mutableListOf<String>()
+                    var supportedProviders = 0
+                    installedEntries.forEach { entry ->
+                        runCatching {
+                            viewModel.pluginManager.loadCloudStreamHomePage(entry, 1)
+                        }.onSuccess { loaded ->
+                            if (loaded.isNotEmpty()) supportedProviders++
+                            loaded.forEach { section -> sections.add(entry to section) }
+                        }.onFailure { error ->
+                            failures.add("${entry.name}: ${error.message ?: "gagal memuat"}")
+                        }
+                    }
+                    homeCatalog = sections
+                    homeCatalogMessage = when {
+                        sections.isNotEmpty() && failures.isNotEmpty() ->
+                            "${sections.sumOf { it.second.items.size }} item dari ${sections.size} kategori; ${failures.size} plugin bermasalah."
+                        sections.isNotEmpty() ->
+                            "${sections.sumOf { it.second.items.size }} item dari ${sections.size} kategori."
+                        installedEntries.isEmpty() -> "Belum ada plugin .cs3 terpasang."
+                        failures.isNotEmpty() -> failures.take(3).joinToString(" • ")
+                        else -> "Plugin terpasang tidak menyediakan katalog utama (Main Page). Gunakan pencarian."
+                    }
+                    loadingHomeCatalog = false
+                }
+            },
+            enabled = !loadingHomeCatalog && installedEntries.isNotEmpty(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (loadingHomeCatalog) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            else Text("Muat katalog utama dari ${installedEntries.size} plugin", fontSize = 11.sp)
+        }
+        if (homeCatalogMessage.isNotBlank()) {
+            Text(homeCatalogMessage, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        homeCatalog.forEach { (entry, section) ->
+            Text(
+                "${section.sectionName} • ${entry.name} • ${section.items.size}",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            section.items.forEach { item ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${item.providerName}${item.year?.let { " • $it" } ?: ""}",
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(
+                        enabled = !loadingDetail,
+                        onClick = {
+                            loadingDetail = true
+                            scope.launch {
+                                runCatching {
+                                    viewModel.pluginManager.loadCloudStreamContent(entry, item.providerName, item.url)
+                                }.onSuccess { content ->
+                                    selectedContent = entry to content
+                                    streams = emptyList()
+                                    linkMessage = ""
+                                }.onFailure { error ->
+                                    homeCatalogMessage = error.message ?: "Gagal membuka detail katalog."
+                                }
+                                loadingDetail = false
+                            }
+                        }
+                    ) { Text("Detail", fontSize = 9.sp) }
+                }
+            }
+        }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(180) },
