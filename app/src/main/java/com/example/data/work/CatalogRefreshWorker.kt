@@ -6,9 +6,12 @@ import androidx.work.WorkerParameters
 import com.example.data.extractor.LinkExtractor
 import com.example.data.extractor.ParseResult
 import com.example.data.local.AppDatabase
+import com.example.data.model.MediaItem
+import com.example.data.plugin.PluginManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * Periodically refreshes saved HTTP catalogs. A failed source never clears its cached items.
@@ -84,6 +87,73 @@ class CatalogRefreshWorker(
                     failures++
                 }
             }
+
+        // Refresh CloudStream main catalogs for every local profile as part of the same
+        // six-hour connected-network job. Plugin failures never erase their cached rows.
+        try {
+            val pluginManager = PluginManager(applicationContext)
+            val entries = pluginManager.repositories.value
+                .flatMap { it.plugins }
+                .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
+                .distinctBy { pluginManager.cloudStreamPluginId(it) }
+            val profiles = database.profileDao().getAllProfilesList()
+            profiles.forEach { profile ->
+                entries.forEach entryLoop@ { entry ->
+                    if (isStopped) return@withContext Result.retry()
+                    try {
+                        val sections = pluginManager.loadCloudStreamHomePage(entry, 1)
+                        val pluginId = pluginManager.cloudStreamPluginId(entry)
+                        val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
+                        val fetched = sections.flatMap { section ->
+                            section.items.map { item ->
+                                val stableKey = "$pluginId|${item.providerName}|${item.url}"
+                                MediaItem(
+                                    id = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString(),
+                                    profileId = profile.id,
+                                    title = item.title,
+                                    url = item.url,
+                                    thumbnailUrl = item.posterUrl.orEmpty(),
+                                    type = "CLOUDSTREAM",
+                                    sourceType = "CLOUDSTREAM",
+                                    category = section.sectionName.ifBlank { "CloudStream" },
+                                    sourceUrl = entry.url,
+                                    pluginId = pluginId,
+                                    repositoryId = repositoryId,
+                                    extraInfo = item.providerName
+                                )
+                            }
+                        }.distinctBy { it.id }
+                        if (fetched.isEmpty()) {
+                            failures++
+                            return@entryLoop
+                        }
+                        val previous = database.mediaDao()
+                            .getCloudStreamCatalog(profile.id, pluginId).associateBy { it.id }
+                        val refreshedRows = fetched.map { item ->
+                            previous[item.id]?.let { old -> item.copy(
+                                durationMs = old.durationMs,
+                                progressMs = old.progressMs,
+                                isFavorite = old.isFavorite,
+                                createdAt = old.createdAt
+                            ) } ?: item
+                        }
+                        val fetchedIds = refreshedRows.mapTo(hashSetOf()) { it.id }
+                        val mergedRows = (refreshedRows + previous.values.filterNot { it.id in fetchedIds })
+                            .distinctBy { it.id }
+                        database.mediaDao().replaceCloudStreamCatalog(profile.id, pluginId, mergedRows)
+                        refreshed += mergedRows.size
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        failures++
+                    }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            failures++
+        }
 
         if (failures > 0 && refreshed == 0) Result.retry() else Result.success()
     }
