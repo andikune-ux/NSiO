@@ -1,9 +1,10 @@
 package com.example.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "media_items")
+@Entity(tableName = "media_items", indices = [Index(value = ["profileId", "pluginId"]), Index(value = ["profileId", "repositoryId"])])
 data class MediaItem(
     @PrimaryKey val id: String,
     val profileId: String,
