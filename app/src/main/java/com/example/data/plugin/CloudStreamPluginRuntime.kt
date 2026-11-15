@@ -75,7 +75,7 @@ data class CloudStreamEpisodeItem(
     val runtimeSeconds: Int? = null
 )
 
-data class CloudStreamCastMember(val name: String, val role: String?, val imageUrl: String?)
+data class CloudStreamCastMember(val name: String, val role: String?, val imageUrl: String?, val voiceActorName: String? = null, val voiceActorImageUrl: String? = null)
 data class CloudStreamRecommendation(val title: String, val url: String, val posterUrl: String?, val contentType: String?, val year: Int?)
 data class CloudStreamTrailer(val url: String, val referer: String?, val raw: Boolean)
 
@@ -540,7 +540,13 @@ class CloudStreamPluginRuntime(private val context: Context) {
             contentType = type.toString(),
             dataUrl = readProperty(this, "dataUrl") as? String,
             episodes = episodes,
-            rating = readProperty(this, "rating") as? Int,
+            rating = (readProperty(this, "rating") as? Int) ?: readProperty(this, "score")?.let { score ->
+                runCatching {
+                    val toFloat = score.javaClass.methods.firstOrNull { it.name == "toFloat" && it.parameterCount == 1 }
+                        ?: return@runCatching null
+                    ((toFloat.invoke(score, 10) as? Number)?.toFloat()?.times(1000f))?.toInt()
+                }.getOrNull()
+            },
             tags = (readProperty(this, "tags") as? Iterable<*>)?.mapNotNull { it?.toString() }.orEmpty(),
             contentRating = readProperty(this, "contentRating") as? String,
             showStatus = readProperty(this, "showStatus")?.toString(),
@@ -549,10 +555,13 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 actorData ?: return@mapNotNull null
                 val actor = readProperty(actorData, "actor") ?: return@mapNotNull null
                 val actorName = readProperty(actor, "name") as? String ?: return@mapNotNull null
+                val voiceActor = readProperty(actorData, "voiceActor")
                 CloudStreamCastMember(
-                    actorName,
-                    (readProperty(actorData, "roleString") as? String) ?: readProperty(actorData, "role")?.toString(),
-                    readProperty(actor, "image") as? String
+                    name = actorName,
+                    role = (readProperty(actorData, "roleString") as? String) ?: readProperty(actorData, "role")?.toString(),
+                    imageUrl = readProperty(actor, "image") as? String,
+                    voiceActorName = voiceActor?.let { readProperty(it, "name") as? String },
+                    voiceActorImageUrl = voiceActor?.let { readProperty(it, "image") as? String }
                 )
             }.orEmpty(),
             trailers = (readProperty(this, "trailers") as? Iterable<*>)?.mapNotNull { trailer ->
