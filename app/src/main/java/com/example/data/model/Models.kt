@@ -20,6 +20,7 @@ data class MediaItem(
     val repositoryId: String = "",
     val durationMs: Long = 0L,
     val progressMs: Long = 0L,
+    val lastWatchedAt: Long = 0L,
     val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val extraInfo: String = ""
