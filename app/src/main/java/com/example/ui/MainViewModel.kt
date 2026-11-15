@@ -137,7 +137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val values = org.json.JSONObject(raw as String)
                     pluginId to CloudStreamSourceHealth(
                         lastSuccessAt = values.optLong("lastSuccessAt", 0L),
-                        lastError = values.optString("lastError").takeIf { it.isNotBlank() },
+                        lastError = values.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
                         hasNext = if (values.has("hasNext") && !values.isNull("hasNext")) values.optBoolean("hasNext") else null
                     )
                 }.getOrNull()
@@ -898,7 +898,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
