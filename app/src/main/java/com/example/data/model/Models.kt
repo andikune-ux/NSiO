@@ -1,10 +1,11 @@
 package com.example.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "media_items", indices = [Index(value = ["profileId", "pluginId"]), Index(value = ["profileId", "repositoryId"])])
+@Entity(tableName = "media_items", indices = [Index(value = ["profileId", "pluginId"]), Index(value = ["profileId", "repositoryId"]), Index(value = ["profileId", "lastWatchedAt"])])
 data class MediaItem(
     @PrimaryKey val id: String,
     val profileId: String,
@@ -20,7 +21,7 @@ data class MediaItem(
     val repositoryId: String = "",
     val durationMs: Long = 0L,
     val progressMs: Long = 0L,
-    val lastWatchedAt: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val lastWatchedAt: Long = 0L,
     val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val extraInfo: String = ""
@@ -77,5 +78,5 @@ data class DownloadItem(
     val createdAt: Long = System.currentTimeMillis(),
     val etag: String = "",
     val lastModified: String = "",
-    val requestHeadersJson: String = "{}"
+    @ColumnInfo(defaultValue = "'{}'") val requestHeadersJson: String = "{}"
 )
