@@ -902,9 +902,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ?: throw IllegalStateException("Profil aktif tidak ditemukan.")
         val pluginId = pluginManager.cloudStreamPluginId(entry)
         val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
-        val fetchedRecords = sections.flatMap { section ->
-            section.items.map { item ->
-                val stableKey = "${pluginId}|${item.providerName}|${item.url}"
+        // Keep one media record per provider URL, but retain every home-page section
+        // that contains it. This prevents duplicate progress/favorite records while allowing
+        // the same title to appear in multiple category rows on Home.
+        val fetchedRecords = sections
+            .flatMap { section ->
+                section.items.map { item -> section to item }
+            }
+            .groupBy { (section, item) -> "${pluginId}|${item.providerName}|${item.url}" }
+            .map { (stableKey, memberships) ->
+                val (section, item) = memberships.first()
+                val sectionNames = memberships
+                    .map { (membershipSection, _) -> membershipSection.sectionName.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
                 MediaItem(
                     id = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString(),
                     profileId = profileId,
@@ -913,14 +924,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailUrl = item.posterUrl.orEmpty(),
                     type = "CLOUDSTREAM",
                     sourceType = "CLOUDSTREAM",
-                    category = section.sectionName.ifBlank { "CloudStream" },
+                    category = sectionNames.joinToString(" • ").ifBlank { "CloudStream" },
                     sourceUrl = entry.url,
                     pluginId = pluginId,
                     repositoryId = repositoryId,
                     extraInfo = item.providerName
                 )
             }
-        }.distinctBy { it.id }
         if (fetchedRecords.isEmpty()) {
             throw IllegalStateException("Katalog kosong; data terakhir tidak dihapus.")
         }
