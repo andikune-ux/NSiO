@@ -133,11 +133,16 @@ fun HomeScreen(
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
+    var expandedSourceType by rememberSaveable { mutableStateOf<String?>(null) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showPlaylistPicker) {
-        if (showPlaylistPicker) showPlaylistPicker = false else isSearchExpanded = false
+    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || expandedSourceType != null) {
+        when {
+            showPlaylistPicker -> showPlaylistPicker = false
+            isSearchExpanded -> isSearchExpanded = false
+            else -> expandedSourceType = null
+        }
     }
 
     LaunchedEffect(activeProfile?.id) {
@@ -171,6 +176,7 @@ fun HomeScreen(
         val matchesSearch = searchQuery.isEmpty() ||
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
+        val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
         val matchesFilter = when (selectedFilter) {
             "LINK" -> item.sourceType == "LINK"
             "STREAM" -> item.sourceType == "STREAM"
@@ -191,7 +197,7 @@ fun HomeScreen(
                 item.sourceType == "CLOUDSTREAM" && item.repositoryId == selectedFilter.removePrefix("CLOUDSTREAM_REPO:")
             } else true
         }
-        matchesServerAccess && matchesSearch && matchesFilter
+        matchesServerAccess && matchesSearch && matchesFilter && matchesExpandedSource
     }
 
     val filteredList = when (selectedSort) {
@@ -553,12 +559,13 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clickable { expandedSourceType = if (expandedSourceType == sourceType) null else sourceType }
                                         .padding(top = 10.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = when (sourceType) {
+                                        text = (if (expandedSourceType == sourceType) "‹  " else "›  ") + when (sourceType) {
                                             "LINK" -> "Playlist / Link"
                                             "STREAM" -> "Stream"
                                             "REPO" -> "Repository"
@@ -572,7 +579,7 @@ fun HomeScreen(
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
                                     Text(
-                                        text = "${sourceItems.size} item",
+                                        text = if (expandedSourceType == sourceType) "Tutup katalog" else "Lihat semua • ${sourceItems.size} item",
                                         fontSize = 10.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
