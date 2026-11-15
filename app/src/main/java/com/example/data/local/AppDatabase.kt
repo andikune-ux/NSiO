@@ -14,7 +14,7 @@ import com.example.data.model.SourcePlaylist
 
 @Database(
     entities = [MediaItem::class, Profile::class, ProfileSettings::class, DownloadItem::class, SourcePlaylist::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -58,6 +58,11 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_profileId_lastWatchedAt ON media_items(profileId, lastWatchedAt)")
             }
         }
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE downloads ADD COLUMN requestHeadersJson TEXT NOT NULL DEFAULT '{}'")
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -67,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "net_stream_io.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
                 INSTANCE = instance
                 instance
             }
