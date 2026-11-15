@@ -571,7 +571,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         catalogPreferences.getString(sortPreferenceKey(profileId), "RECENT") ?: "RECENT"
 
     fun selectSort(sort: String) {
-        val supported = setOf("RECENT", "TITLE", "CONTINUE", "FAVORITES")
+        val supported = setOf("RECENT", "TITLE", "CONTINUE", "HISTORY", "FAVORITES")
         if (sort !in supported) return
         _selectedSort.value = sort
         _activeProfile.value?.id?.let { profileId ->
@@ -991,6 +991,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .joinToString(" • "),
                 durationMs = previous.durationMs,
                 progressMs = previous.progressMs,
+                lastWatchedAt = previous.lastWatchedAt,
                 isFavorite = previous.isFavorite,
                 createdAt = previous.createdAt
             )
