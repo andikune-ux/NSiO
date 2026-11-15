@@ -35,6 +35,7 @@ data class PlayerTrackOption(
 data class PlayerState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    val playbackEnded: Boolean = false,
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isSeekable: Boolean = false,
@@ -90,6 +91,8 @@ class CS3IPlayer(
     private var lastHeaders: Map<String, String> = emptyMap()
     private var lastMimeType: String? = null
     private var lastNonZeroVolume: Float = 1f
+    private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
+    private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: DefaultHttpDataSource.Factory
 
     companion object {
@@ -147,7 +150,8 @@ class CS3IPlayer(
                             Player.STATE_ENDED -> {
                                 _playerState.value = _playerState.value.copy(
                                     isPlaying = false,
-                                    currentPositionMs = duration
+                                    currentPositionMs = duration,
+                                    playbackEnded = true
                                 )
                             }
                             Player.STATE_IDLE -> {
@@ -316,12 +320,13 @@ class CS3IPlayer(
                 )
                 _playerState.value = PlayerState(
                     title = title,
+                    playbackEnded = false,
                     currentPositionMs = startPositionMs.coerceAtLeast(0L),
                     isBuffering = true,
                     isFallbackAvailable = true,
                     playbackSpeed = player.playbackParameters.speed,
-                    repeatMode = player.repeatMode,
-                    shuffleEnabled = player.shuffleModeEnabled,
+                    repeatMode = logicalRepeatMode,
+                    shuffleEnabled = logicalShuffleEnabled,
                     volume = player.volume
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
@@ -434,19 +439,20 @@ class CS3IPlayer(
         _playerState.value = _playerState.value.copy(playbackSpeed = speed)
     }
     override fun toggleRepeatMode() {
-        val player = exoPlayer ?: return
-        val nextMode = when (player.repeatMode) {
+        logicalRepeatMode = when (logicalRepeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
             Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
             else -> Player.REPEAT_MODE_OFF
         }
-        player.repeatMode = nextMode
-        _playerState.value = _playerState.value.copy(repeatMode = nextMode)
+        // The app queue owns repeat behavior; ExoPlayer has only the active resolved stream.
+        exoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
+        _playerState.value = _playerState.value.copy(repeatMode = logicalRepeatMode)
     }
     override fun toggleShuffle() {
-        val player = exoPlayer ?: return
-        player.shuffleModeEnabled = !player.shuffleModeEnabled
-        _playerState.value = _playerState.value.copy(shuffleEnabled = player.shuffleModeEnabled)
+        logicalShuffleEnabled = !logicalShuffleEnabled
+        // The app queue owns shuffle order; the single-item ExoPlayer playlist stays unshuffled.
+        exoPlayer?.shuffleModeEnabled = false
+        _playerState.value = _playerState.value.copy(shuffleEnabled = logicalShuffleEnabled)
     }
     override fun setVolume(volume: Float) {
         val safeVolume = volume.coerceIn(0f, 1f)
