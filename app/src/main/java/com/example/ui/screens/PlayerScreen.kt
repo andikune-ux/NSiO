@@ -95,6 +95,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -103,6 +104,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.common.images.WebImage
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
@@ -145,6 +155,7 @@ fun PlayerScreen(
     var isRewindingHeld by remember { mutableStateOf(false) }
     var isFastForwardHeld by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val castContext = remember(context) { runCatching { CastContext.getSharedInstance(context.applicationContext) }.getOrNull() }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
     val originalBrightness = remember(activity) { activity?.window?.attributes?.screenBrightness ?: -1f }
@@ -244,6 +255,55 @@ fun PlayerScreen(
                 viewModel.player.setPlaybackSpeed(previousSpeed)
             }
         }
+    }
+
+    DisposableEffect(castContext, media.id, playerState.selectedPluginStreamUrl) {
+        val sessionManager = castContext?.sessionManager
+        val activeUrl = playerState.selectedPluginStreamUrl.orEmpty()
+        fun sendCurrentMedia(session: CastSession?) {
+            if (session == null || activeUrl.isBlank()) return
+            val extension = runCatching { Uri.parse(activeUrl).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
+            val streamType = playerState.pluginStreams.firstOrNull { it.url == activeUrl }?.streamType.orEmpty().uppercase()
+            val contentType = when {
+                extension == "m3u8" || streamType.contains("HLS") -> "application/x-mpegURL"
+                extension == "mpd" || streamType.contains("DASH") -> "application/dash+xml"
+                extension == "webm" || streamType.contains("WEBM") -> "video/webm"
+                extension == "mkv" || streamType.contains("MKV") -> "video/x-matroska"
+                else -> "video/mp4"
+            }
+            val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
+                putString(MediaMetadata.KEY_TITLE, playerState.title.ifBlank { media.title })
+                if (media.thumbnailUrl.isNotBlank() && media.thumbnailUrl.startsWith("http", true)) {
+                    addImage(WebImage(Uri.parse(media.thumbnailUrl)))
+                }
+            }
+            val info = MediaInfo.Builder(activeUrl)
+                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                .setContentType(contentType)
+                .setMetadata(metadata)
+                .apply { if (playerState.durationMs > 0L) setStreamDuration(playerState.durationMs) }
+                .build()
+            val request = MediaLoadRequestData.Builder()
+                .setMediaInfo(info)
+                .setAutoplay(true)
+                .setCurrentTime(playerState.currentPositionMs.coerceAtLeast(0L))
+                .build()
+            session.remoteMediaClient?.load(request)
+        }
+        val listener = object : SessionManagerListener<CastSession> {
+            override fun onSessionStarting(session: CastSession) {}
+            override fun onSessionStarted(session: CastSession, sessionId: String) { sendCurrentMedia(session) }
+            override fun onSessionStartFailed(session: CastSession, error: Int) {}
+            override fun onSessionEnding(session: CastSession) {}
+            override fun onSessionEnded(session: CastSession, error: Int) {}
+            override fun onSessionResuming(session: CastSession, sessionId: String) {}
+            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) { sendCurrentMedia(session) }
+            override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+            override fun onSessionSuspended(session: CastSession, reason: Int) {}
+        }
+        sessionManager?.addSessionManagerListener(listener, CastSession::class.java)
+        sessionManager?.currentCastSession?.takeIf { it.isConnected }?.let(::sendCurrentMedia)
+        onDispose { sessionManager?.removeSessionManagerListener(listener, CastSession::class.java) }
     }
 
 
@@ -611,6 +671,16 @@ fun PlayerScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
+                            AndroidView(
+                                factory = { viewContext ->
+                                    MediaRouteButton(viewContext).apply {
+                                        minimumWidth = 40
+                                        minimumHeight = 40
+                                        runCatching { CastButtonFactory.setUpMediaRouteButton(viewContext.applicationContext, this) }
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp)
+                            )
                             IconButton(
                                 onClick = { showTrackMenu = !showTrackMenu; showQueue = false },
                                 modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)
