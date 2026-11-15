@@ -92,7 +92,8 @@ data class CloudStreamContent(
     val cast: List<CloudStreamCastMember> = emptyList(),
     val trailers: List<CloudStreamTrailer> = emptyList(),
     val recommendations: List<CloudStreamRecommendation> = emptyList(),
-    val seasonNames: Map<Int, String> = emptyMap()
+    val seasonNames: Map<Int, String> = emptyMap(),
+    val externalIds: Map<String, String> = emptyMap()
 )
 
 data class CloudStreamSubtitle(
@@ -529,7 +530,10 @@ class CloudStreamPluginRuntime(private val context: Context) {
                     ?: (readProperty(season, "displaySeason") as? Int)?.let { "Season $it" }
                     ?: return@mapNotNull null
                 number to display
-            }?.toMap().orEmpty()
+            }?.toMap().orEmpty(),
+            externalIds = listOf("imdbId", "tmdbId", "aniListId", "malId", "traktId", "simklId")
+                .mapNotNull { key -> readProperty(this, key)?.toString()?.takeIf { it.isNotBlank() }?.let { key to it } }
+                .toMap()
         )
     }
 
