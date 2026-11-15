@@ -146,6 +146,7 @@ fun PlayerScreen(
     onClose: () -> Unit
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
+    val playbackPreparationMessage by viewModel.playbackPreparationMessage.collectAsState()
     // Cast callbacks can outlive a playback-position update; always read the latest state.
     val latestCastPlayerState by rememberUpdatedState(playerState)
     val latestCastMedia by rememberUpdatedState(media)
@@ -615,6 +616,58 @@ fun PlayerScreen(
                         color = controlAccentColor,
                         modifier = Modifier.size(44.dp),
                         strokeWidth = 3.5.dp
+                    )
+                }
+            }
+        }
+
+        // Immediate player shell while a provider resolves the actual stream URL.
+        if (playbackPreparationMessage != null && playerState.error == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.88f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.padding(28.dp)
+                ) {
+                    if (media.thumbnailUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = media.thumbnailUrl,
+                            contentDescription = "Poster ${media.title}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .width(112.dp)
+                                .height(158.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Movie,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(52.dp)
+                        )
+                    }
+                    CircularProgressIndicator(
+                        color = controlAccentColor,
+                        modifier = Modifier.size(30.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                    Text(
+                        text = "Menyiapkan video",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = playbackPreparationMessage.orEmpty(),
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
