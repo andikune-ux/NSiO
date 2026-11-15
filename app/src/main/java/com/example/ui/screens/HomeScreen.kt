@@ -96,6 +96,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.firebase.AuthState
+import com.example.data.model.MediaSourceClassifier
+import com.example.data.model.WatchHistoryPolicy
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
 import com.example.ui.components.PinDialog
