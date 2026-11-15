@@ -106,7 +106,8 @@ data class CloudStreamStream(
     val quality: Int,
     val streamType: String,
     val subtitles: List<CloudStreamSubtitle> = emptyList(),
-    val extractorData: String? = null
+    val extractorData: String? = null,
+    val videoInterceptor: okhttp3.Interceptor? = null
 )
 
 class CloudStreamPluginRuntime(private val context: Context) {
@@ -287,7 +288,8 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 quality = link.quality,
                 streamType = link.type.toString(),
                 subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
-                extractorData = link.extractorData
+                extractorData = link.extractorData,
+                videoInterceptor = runCatching { api.getVideoInterceptor(link) }.getOrNull()
             )
         }
     }
