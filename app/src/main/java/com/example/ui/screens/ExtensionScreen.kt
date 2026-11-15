@@ -1365,7 +1365,11 @@ private fun CloudStreamSearchPanel(
                                 runCatching {
                                     viewModel.pluginManager.loadCloudStreamContent(entry, item.providerName, item.url)
                                 }.onSuccess { content ->
-                                    selectedContent = entry to content
+                                    selectedContent = entry to content.copy(
+                                        posterUrl = content.posterUrl?.takeIf { it.isNotBlank() } ?: item.posterUrl,
+                                        year = content.year ?: item.year,
+                                        title = content.title.ifBlank { item.title }
+                                    )
                                     streams = emptyList()
                                     linkMessage = ""
                                 }.onFailure { error ->
