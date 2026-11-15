@@ -262,6 +262,9 @@ class PluginManager(private val context: Context) {
      */
     suspend fun installCloudStreamPlugin(entry: CloudStreamPluginEntry): File = withContext(Dispatchers.IO) {
         require(entry.status != 0) { "Plugin ini dinonaktifkan oleh repository." }
+        require(entry.version > 0 && entry.apiVersion > 0) {
+            "Metadata versi plugin atau API tidak valid."
+        }
         val uri = URI(entry.url)
         require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()) {
             "Artifact plugin wajib menggunakan URL HTTPS."
@@ -409,6 +412,17 @@ class PluginManager(private val context: Context) {
         val root = File(context.filesDir, "cloudstream_plugins").canonicalFile
         val artifact = File(root, "${safeName}-${entry.version}.cs3").canonicalFile
         return artifact.takeIf { it.parentFile == root && it.isFile && it.length() > 0L }
+    }
+
+    suspend fun uninstallCloudStreamPlugin(entry: CloudStreamPluginEntry) = withContext(Dispatchers.IO) {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File plugin tidak ditemukan.")
+        // Remove provider registrations before deleting the DEX artifact and its optimized code.
+        cloudStreamRuntime.unload(artifact)
+        val removed = artifact.delete() || !artifact.exists()
+        val optimizedCode = File(context.codeCacheDir, "cloudstream_plugins/${artifact.nameWithoutExtension}")
+        optimizedCode.deleteRecursively()
+        require(removed) { "File plugin tidak dapat dihapus dari penyimpanan aplikasi." }
     }
 
     suspend fun loadCloudStreamPlugin(entry: CloudStreamPluginEntry): List<CloudStreamProviderInfo> {
