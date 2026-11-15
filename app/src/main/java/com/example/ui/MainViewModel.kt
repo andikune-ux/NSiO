@@ -123,6 +123,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedSort: StateFlow<String> = _selectedSort.asStateFlow()
 
     // Currently playing media
+    private val _playbackPreparationMessage = MutableStateFlow<String?>(null)
+    val playbackPreparationMessage: StateFlow<String?> = _playbackPreparationMessage.asStateFlow()
+
+    /**
+     * Opens the player shell immediately while a CloudStream provider resolves a real stream URL.
+     * The temporary item is replaced by the stable history item once a playable URL is available.
+     */
+    fun beginCloudStreamPlaybackPreparation(
+        contentUrl: String,
+        title: String,
+        posterUrl: String?,
+        category: String = "CloudStream • Film"
+    ) {
+        player.stop()
+        _playbackPreparationMessage.value = "Menghubungkan ke sumber video..."
+        _currentlyPlaying.value = MediaItem(
+            id = "cloudstream-preparing:${UUID.randomUUID()}",
+            profileId = _activeProfile.value?.id ?: "cloudstream-preparing",
+            title = title.ifBlank { "CloudStream" },
+            url = contentUrl,
+            thumbnailUrl = posterUrl.orEmpty(),
+            type = "VIDEO",
+            sourceType = "CLOUDSTREAM",
+            category = category
+        )
+    }
+
+    fun cancelCloudStreamPlaybackPreparation(message: String) {
+        if (_currentlyPlaying.value?.id?.startsWith("cloudstream-preparing:") == true) {
+            _currentlyPlaying.value = null
+        }
+        _playbackPreparationMessage.value = null
+        showStatus(message)
+    }
     private val _currentlyPlaying = MutableStateFlow<MediaItem?>(null)
     val currentlyPlaying: StateFlow<MediaItem?> = _currentlyPlaying.asStateFlow()
 
@@ -1583,6 +1617,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     extraInfo = metadata
                 )
                 _currentlyPlaying.value = item
+                _playbackPreparationMessage.value = null
                 player.playWithMimeType(
                     url = streamUrl,
                     title = item.title,
