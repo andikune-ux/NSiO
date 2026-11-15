@@ -1638,14 +1638,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     java.net.URI(stream.url).path.substringAfterLast('.', "").uppercase()
                 }.getOrDefault("")
                 val mimeType = when {
-                    streamType in setOf("M3U8", "HLS") || streamExtension == "M3U8" ->
+                    streamType in setOf("M3U8", "HLS") || streamType.contains("M3U8") || streamType.contains("HLS") || streamExtension == "M3U8" ->
                         "application/x-mpegURL"
-                    streamType in setOf("DASH", "MPD") || streamExtension == "MPD" ->
+                    streamType in setOf("DASH", "MPD") || streamType.contains("DASH") || streamExtension == "MPD" ->
                         "application/dash+xml"
-                    streamType == "MP4" || streamExtension == "MP4" -> "video/mp4"
-                    streamType == "WEBM" || streamExtension == "WEBM" -> "video/webm"
-                    streamType in setOf("MKV", "MATROSKA") || streamExtension == "MKV" ->
+                    streamType.contains("WEBM") || streamExtension == "WEBM" -> "video/webm"
+                    streamType.contains("MKV") || streamType.contains("MATROSKA") || streamExtension == "MKV" ->
                         "video/x-matroska"
+                    streamType.contains("MP4") || streamType.contains("VIDEO") || streamExtension == "MP4" -> "video/mp4"
                     else -> null
                 }
                 player.playWithMimeType(
@@ -1654,7 +1654,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     startPositionMs = item.progressMs.coerceAtLeast(0L),
                     requestHeaders = headers,
                     mimeType = mimeType,
-                    externalSubtitles = stream.subtitles
+                    externalSubtitles = stream.subtitles,
+                    videoInterceptor = stream.videoInterceptor,
+                    pluginStreams = streams
                 )
                 startPlaybackProgressPersistence(item)
                 "Memutar ${item.title} melalui ${entry.name}."
