@@ -243,8 +243,7 @@ fun HomeScreen(
 
     val filteredList = when (selectedSort) {
         "TITLE" -> filteredItems.sortedBy { it.title.trim().lowercase() }
-        "CONTINUE" -> filteredItems.filter { it.progressMs > 0L && (it.durationMs <= 0L || it.progressMs < it.durationMs) }
-            .sortedByDescending { it.progressMs }
+"CONTINUE" -> WatchHistoryPolicy.continueWatching(filteredItems)
         "HISTORY" -> WatchHistoryPolicy.recentlyWatched(filteredItems)
         "FAVORITES" -> filteredItems.filter { it.isFavorite }.sortedByDescending { it.createdAt }
         else -> filteredItems.sortedByDescending { it.createdAt }
