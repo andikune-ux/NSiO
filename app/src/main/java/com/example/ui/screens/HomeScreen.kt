@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -119,6 +120,7 @@ fun HomeScreen(
     val isLoadingMoreCloudStreamHome by viewModel.isLoadingMoreCloudStreamHome.collectAsState()
     val cloudStreamSourceHealth by viewModel.cloudStreamSourceHealth.collectAsState()
     val cloudStreamPluginOrder by viewModel.cloudStreamPluginOrder.collectAsState()
+    val refreshingCloudStreamPluginId by viewModel.refreshingCloudStreamPluginId.collectAsState()
     val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.flatMap { repo ->
             repo.plugins.map { entry ->
@@ -1210,6 +1212,17 @@ fun HomeScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            IconButton(
+                                onClick = { viewModel.refreshCloudStreamPluginOnHome(pluginId) },
+                                enabled = refreshingCloudStreamPluginId == null,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                if (refreshingCloudStreamPluginId == pluginId) {
+                                    CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Coba pulihkan $name")
+                                }
+                            }
                             IconButton(
                                 onClick = { viewModel.moveCloudStreamPluginOrder(pluginId, -1, orderedIds) },
                                 enabled = index > 0,
