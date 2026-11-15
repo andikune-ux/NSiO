@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -79,8 +80,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
@@ -88,18 +91,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.MediaItem
 import com.example.player.adjacentMedia
 import com.example.player.normalizePlaybackUrl
 import com.example.ui.MainViewModel
-import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 import kotlinx.coroutines.Dispatchers
@@ -118,6 +122,9 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
+    var showTrackMenu by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
@@ -128,16 +135,17 @@ fun PlayerScreen(
     var brightnessLevel by remember(activity) { mutableStateOf(if (originalBrightness < 0f) 0.5f else originalBrightness.coerceIn(0.05f, 1f)) }
     val isPhoto = media.type == "PHOTO"
     val usesNativePlayer = !isPhoto
-    // Player controls sit on frosted-glass panels; follow the active theme so
-    // labels remain readable when light mode renders those panels in white.
-    val controlTextColor = MaterialTheme.colorScheme.onSurface
-    val controlMutedColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val controlAccentColor = MaterialTheme.colorScheme.primary
+    // Player overlays sit above arbitrary video/photo colors, so keep their
+    // typography consistently high-contrast regardless of the app theme.
+    val controlTextColor = Color.White
+    val controlMutedColor = Color.White.copy(alpha = 0.62f)
+    val controlAccentColor = Color(0xFF8BE9FF)
 
     // Reset transient controls when the queue switches to another media item.
     LaunchedEffect(media.id) {
         showControls = true
         showQueue = false
+        showTrackMenu = false
         isSeeking = false
         seekPreviewMs = media.progressMs.coerceAtLeast(0L)
         previewFrame = null
@@ -256,9 +264,16 @@ fun PlayerScreen(
                         (LayoutInflater.from(ctx)
                             .inflate(R.layout.player_view_texture, null, false) as PlayerView).apply {
                             player = viewModel.player.exoPlayer
+                            resizeMode = selectedResizeMode
+                            playerViewRef = this
                             useController = false
                             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         }
+                    },
+                    update = { view ->
+                        view.player = viewModel.player.exoPlayer
+                        view.resizeMode = selectedResizeMode
+                        playerViewRef = view
                     },
                     modifier = Modifier.fillMaxSize().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null
@@ -320,7 +335,7 @@ fun PlayerScreen(
                     .align(if (isBrightness) Alignment.CenterStart else Alignment.CenterEnd)
                     .padding(horizontal = 22.dp)
                     .width(76.dp)
-                    .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.36f, borderAlpha = 0.22f, elevation = 12.dp)
+                    .playerLiquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.36f, borderAlpha = 0.22f, elevation = 12.dp)
                     .padding(horizontal = 12.dp, vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -350,7 +365,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .size(80.dp)
-                        .liquidGlass(shape = RoundedCornerShape(24.dp), alpha = 0.2f, borderAlpha = 0.5f, elevation = 16.dp),
+                        .playerLiquidGlass(shape = RoundedCornerShape(24.dp), alpha = 0.2f, borderAlpha = 0.5f, elevation = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
@@ -379,7 +394,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth(0.96f)
-                        .liquidGlass(
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(22.dp),
                             alpha = 0.2f,
                             borderAlpha = 0.42f,
@@ -399,8 +414,7 @@ fun PlayerScreen(
                             },
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if ((MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant)
+                                .playerLiquidGlass(shape = CircleShape, alpha = 0.22f, borderAlpha = 0.52f, elevation = 6.dp)
                                 .liquidGlassTvFocusable(shape = CircleShape)
                         ) {
                             Icon(
@@ -442,7 +456,13 @@ fun PlayerScreen(
                         }
                         if (!isPhoto) {
                             IconButton(
-                                onClick = { showQueue = !showQueue },
+                                onClick = { showTrackMenu = !showTrackMenu; showQueue = false },
+                                modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = "Pengaturan pemutaran", tint = if (showTrackMenu) controlAccentColor else controlTextColor, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(
+                                onClick = { showQueue = !showQueue; showTrackMenu = false },
                                 modifier = Modifier
                                     .size(44.dp)
                                     .liquidGlassTvFocusable(shape = CircleShape)
@@ -458,6 +478,81 @@ fun PlayerScreen(
                     }
                 }
 
+                if (showTrackMenu && usesNativePlayer) {
+                    Column(
+                        modifier = Modifier.align(Alignment.TopEnd)
+                            .padding(top = 76.dp)
+                            .width(300.dp)
+                            .heightIn(max = 380.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(20.dp), alpha = 0.32f, borderAlpha = 0.52f, elevation = 18.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("RASIO LAYAR", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        listOf(
+                            "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                            "Fill" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                            "Zoom" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        ).forEach { (label, mode) ->
+                            Text(
+                                text = (if (selectedResizeMode == mode) "✓ " else "") + label,
+                                color = if (selectedResizeMode == mode) controlAccentColor else controlTextColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                    selectedResizeMode = mode
+                                    playerViewRef?.resizeMode = mode
+                                }.padding(horizontal = 8.dp, vertical = 7.dp)
+                            )
+                        }
+                        Text("KUALITAS VIDEO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        if (playerState.videoTracks.isEmpty()) {
+                            Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.videoTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                        Text("AUDIO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        if (playerState.audioTracks.isEmpty()) {
+                            Text("Tidak ada pilihan track audio tambahan", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.audioTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                        Text("SUBTITLE", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        Text(
+                            text = if (playerState.subtitlesDisabled) "✓ Nonaktif" else "Nonaktifkan subtitle",
+                            color = if (playerState.subtitlesDisabled) controlAccentColor else controlTextColor,
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.disableSubtitles() }.padding(horizontal = 8.dp, vertical = 7.dp)
+                        )
+                        if (playerState.subtitleTracks.isEmpty()) {
+                            Text("Tidak ada subtitle tertanam pada sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.subtitleTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (showQueue) {
                     Column(
                         modifier = Modifier
@@ -465,7 +560,7 @@ fun PlayerScreen(
                             .padding(top = 76.dp)
                             .width(300.dp)
                             .heightIn(max = 360.dp)
-                            .liquidGlass(
+                            .playerLiquidGlass(
                                 shape = RoundedCornerShape(20.dp),
                                 alpha = 0.3f,
                                 borderAlpha = 0.55f,
@@ -499,105 +594,72 @@ fun PlayerScreen(
                     }
                 }
 
-                // Center Liquid Glass Orb Controls
-                if (usesNativePlayer) Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Rewind 10s
-                    IconButton(
-                        onClick = { viewModel.player.seekBackward(10000L) },
-                        enabled = playerState.isSeekable,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.24f)
-                            .liquidGlassTvFocusable(shape = CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay10,
-                            contentDescription = "Mundur 10 Detik",
-                            tint = controlTextColor,
-                            modifier = Modifier.size(29.dp)
-                        )
-                    }
-
-                    // Play / Pause Crystal Orb
-                    IconButton(
-                        onClick = { viewModel.player.togglePlayPause() },
-                        modifier = Modifier
-                            .size(76.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(CyanPrimary, Color(0xFF38BDF8), Color(0xFFA855F7))
-                                )
-                            )
-                            .border(
-                                1.dp,
-                                Brush.linearGradient(listOf(Color.White, Color.Transparent)),
-                                CircleShape
-                            )
-                            .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.15f)
-                    ) {
-                        Icon(
-                            imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
-                            tint = Color.Black,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-
-                    // Forward 10s
-                    IconButton(
-                        onClick = { viewModel.player.seekForward(10000L) },
-                        enabled = playerState.isSeekable,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
-                            .liquidGlassTvFocusable(shape = CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Forward10,
-                            contentDescription = "Maju 10 Detik",
-                            tint = controlTextColor,
-                            modifier = Modifier.size(29.dp)
-                        )
-                    }
-                }
-
+                // Compact primary transport controls stay in the bottom dock.
                 if (usesNativePlayer) {
                     val queueIndex = mediaList.indexOfFirst { it.id == media.id }
                     val previousItem = mediaList.getOrNull(queueIndex - 1)?.takeIf { it.type != "PHOTO" }
                     val nextItem = mediaList.drop((queueIndex + 1).coerceAtLeast(0)).firstOrNull { it.type != "PHOTO" }
                     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
                     Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp).fillMaxWidth()
-                            .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.20f, borderAlpha = 0.22f, elevation = 8.dp)
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 56.dp)
+                            .fillMaxWidth()
+                            .playerLiquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.20f, borderAlpha = 0.28f, elevation = 8.dp)
+                            .padding(horizontal = 4.dp, vertical = 3.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor)
+                        IconButton(onClick = { previousItem?.let(viewModel::playMedia) }, enabled = previousItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Media sebelumnya", tint = if (previousItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
                         }
+                        IconButton(onClick = { viewModel.player.seekBackward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Replay10, contentDescription = "Mundur 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
+                        }
+                        IconButton(
+                            onClick = { viewModel.player.togglePlayPause() },
+                            modifier = Modifier.size(48.dp)
+                                .playerLiquidGlass(shape = CircleShape, alpha = 0.32f, borderAlpha = 0.62f, elevation = 10.dp)
+                                .liquidGlassTvFocusable(shape = CircleShape, scaleFocused = 1.08f)
+                        ) {
+                            Icon(
+                                imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playerState.isPlaying) "Jeda" else "Putar",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        IconButton(onClick = { viewModel.player.seekForward(10000L) }, enabled = playerState.isSeekable, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Forward10, contentDescription = "Maju 10 Detik", tint = controlTextColor, modifier = Modifier.size(23.dp))
+                        }
+                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor, modifier = Modifier.size(22.dp))
+                        }
+                    }
+
+                    // Secondary playback options remain compact and separate from transport.
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(bottom = 108.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.15f, borderAlpha = 0.20f, elevation = 6.dp)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         IconButton(onClick = {
                             val currentIndex = speeds.indexOfFirst { kotlin.math.abs(it - playerState.playbackSpeed) < 0.01f }
                             viewModel.player.setPlaybackSpeed(speeds[(currentIndex + 1).mod(speeds.size)])
-                        }, modifier = Modifier.size(42.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                        }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
                             Text("${playerState.playbackSpeed}×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = controlAccentColor)
                         }
-                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor)
+                        IconButton(onClick = { viewModel.player.toggleShuffle() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor, modifier = Modifier.size(19.dp))
                         }
-                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor)
+                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor, modifier = Modifier.size(19.dp))
                         }
-                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor)
-                        }
-                        IconButton(onClick = { nextItem?.let(viewModel::playMedia) }, enabled = nextItem != null, modifier = Modifier.size(38.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Media berikutnya", tint = if (nextItem != null) controlTextColor else controlMutedColor)
+                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(36.dp).liquidGlassTvFocusable(shape = CircleShape)) {
+                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor, modifier = Modifier.size(19.dp))
                         }
                     }
                 }
@@ -607,9 +669,9 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 184.dp)
+                            .padding(bottom = 174.dp)
                             .width(132.dp)
-                            .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -646,12 +708,13 @@ fun PlayerScreen(
                     }
                 }
 
-                // Bottom Timeline Scrubber Capsule
+                // Timeline stays near the top edge, directly below the media header.
                 if (usesNativePlayer) Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .liquidGlass(
+                        .align(Alignment.TopCenter)
+                        .padding(top = 76.dp)
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(16.dp),
                             alpha = 0.16f,
                             borderAlpha = 0.18f,
@@ -692,9 +755,14 @@ fun PlayerScreen(
                                 isSeeking = false
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = controlAccentColor,
-                                activeTrackColor = controlAccentColor,
-                                inactiveTrackColor = MaterialTheme.colorScheme.outline
+                                // Liquid Glass timeline: white played track, blue seek head,
+                                // and a subtle frosted-white unplayed track.
+                                thumbColor = Color(0xFF48BFFF),
+                                activeTrackColor = Color.White,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.24f),
+                                disabledThumbColor = Color(0xFF48BFFF).copy(alpha = 0.55f),
+                                disabledActiveTrackColor = Color.White.copy(alpha = 0.55f),
+                                disabledInactiveTrackColor = Color.White.copy(alpha = 0.12f)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -718,7 +786,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
-                        .liquidGlass(
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(26.dp),
                             alpha = 0.22f,
                             borderAlpha = 0.6f,
@@ -854,6 +922,44 @@ fun PlayerScreen(
             }
         }
     }
+}
+
+
+/**
+ * Player-scoped Liquid Glass surface.
+ *
+ * Intentionally local to PlayerScreen: the app-wide legacy liquidGlass()
+ * modifier remains untouched so Home and every other screen keep their theme.
+ * The layered translucent fill and specular gradient border provide a glass
+ * treatment without changing the video/photo rendering surface underneath.
+ */
+private fun Modifier.playerLiquidGlass(
+    shape: Shape = RoundedCornerShape(16.dp),
+    tint: Color = Color.White,
+    alpha: Float = 0.20f,
+    borderAlpha: Float = 0.38f,
+    elevation: Dp = 10.dp
+): Modifier {
+    val fill = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF142033).copy(alpha = (0.30f + alpha * 0.38f).coerceIn(0f, 0.82f)),
+            tint.copy(alpha = (0.08f + alpha * 0.26f).coerceIn(0f, 0.48f)),
+            Color(0xFF24364B).copy(alpha = (0.22f + alpha * 0.34f).coerceIn(0f, 0.78f))
+        )
+    )
+    val specularEdge = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = (borderAlpha * 1.15f).coerceIn(0f, 0.82f)),
+            Color(0xFFBDEBFF).copy(alpha = (borderAlpha * 0.72f).coerceIn(0f, 0.68f)),
+            Color.White.copy(alpha = (borderAlpha * 0.16f).coerceIn(0f, 0.28f)),
+            Color.White.copy(alpha = (borderAlpha * 0.58f).coerceIn(0f, 0.68f))
+        )
+    )
+    return this
+        .shadow(elevation, shape, clip = false)
+        .clip(shape)
+        .background(fill)
+        .border(0.9.dp, specularEdge, shape)
 }
 
 private fun formatMs(ms: Long): String {

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -21,6 +23,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+data class PlayerTrackOption(
+    val id: String,
+    val label: String,
+    val trackType: Int,
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val selected: Boolean
+)
+
 data class PlayerState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
@@ -33,7 +44,11 @@ data class PlayerState(
     val playbackSpeed: Float = 1f,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffleEnabled: Boolean = false,
-    val volume: Float = 1f
+    val volume: Float = 1f,
+    val audioTracks: List<PlayerTrackOption> = emptyList(),
+    val subtitleTracks: List<PlayerTrackOption> = emptyList(),
+    val videoTracks: List<PlayerTrackOption> = emptyList(),
+    val subtitlesDisabled: Boolean = true
 )
 
 interface IPlayer {
@@ -108,6 +123,10 @@ class CS3IPlayer(
             .build()
             .apply {
                 addListener(object : Player.Listener {
+                    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                        refreshTrackOptions()
+                    }
+
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
                             Player.STATE_BUFFERING -> {
@@ -176,6 +195,72 @@ class CS3IPlayer(
                 })
             }
         startProgressTracking()
+    }
+
+    private fun refreshTrackOptions() {
+        val player = exoPlayer ?: return
+        val audio = mutableListOf<PlayerTrackOption>()
+        val subtitles = mutableListOf<PlayerTrackOption>()
+        val video = mutableListOf<PlayerTrackOption>()
+        player.currentTracks.groups.forEachIndexed { groupIndex, group ->
+            val type = group.type
+            if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_TEXT && type != C.TRACK_TYPE_VIDEO) return@forEachIndexed
+            for (trackIndex in 0 until group.length) {
+                if (!group.isTrackSupported(trackIndex)) continue
+                val format = group.getTrackFormat(trackIndex)
+                val language = format.language?.takeIf { it.isNotBlank() && it != "und" }
+                val label = when (type) {
+                    C.TRACK_TYPE_AUDIO -> listOfNotNull(language, format.label, format.channelCount.takeIf { it > 0 }?.let { "${it}ch" }).distinct().joinToString(" · ").ifBlank { "Audio ${audio.size + 1}" }
+                    C.TRACK_TYPE_TEXT -> listOfNotNull(language, format.label, format.sampleMimeType?.substringAfter('/')?.uppercase()).distinct().joinToString(" · ").ifBlank { "Subtitle ${subtitles.size + 1}" }
+                    else -> {
+                        val resolution = if (format.height > 0) "${format.height}p" else "Video ${video.size + 1}"
+                        val bitrate = format.bitrate.takeIf { it > 0 }?.let { " · ${it / 1000} kbps" }.orEmpty()
+                        resolution + bitrate
+                    }
+                }
+                val option = PlayerTrackOption(
+                    id = "${groupIndex}:${trackIndex}",
+                    label = label,
+                    trackType = type,
+                    groupIndex = groupIndex,
+                    trackIndex = trackIndex,
+                    selected = group.isTrackSelected(trackIndex)
+                )
+                when (type) {
+                    C.TRACK_TYPE_AUDIO -> audio += option
+                    C.TRACK_TYPE_TEXT -> subtitles += option
+                    C.TRACK_TYPE_VIDEO -> video += option
+                }
+            }
+        }
+        _playerState.value = _playerState.value.copy(
+            audioTracks = audio,
+            subtitleTracks = subtitles,
+            videoTracks = video,
+            subtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        )
+    }
+
+    fun selectTrack(option: PlayerTrackOption) {
+        val player = exoPlayer ?: return
+        val group = player.currentTracks.groups.getOrNull(option.groupIndex) ?: return
+        if (option.trackIndex !in 0 until group.length) return
+        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(option.trackIndex))
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(option.trackType)
+            .setTrackTypeDisabled(option.trackType, false)
+            .addOverride(override)
+            .build()
+        refreshTrackOptions()
+    }
+
+    fun disableSubtitles() {
+        val player = exoPlayer ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        refreshTrackOptions()
     }
 
     private fun startProgressTracking() {
