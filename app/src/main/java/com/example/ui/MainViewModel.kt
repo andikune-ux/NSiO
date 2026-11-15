@@ -129,6 +129,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val cloudStreamSourceHealth: StateFlow<Map<String, CloudStreamSourceHealth>> = _cloudStreamSourceHealth.asStateFlow()
     private val _cloudStreamPluginOrder = MutableStateFlow<List<String>>(emptyList())
     val cloudStreamPluginOrder: StateFlow<List<String>> = _cloudStreamPluginOrder.asStateFlow()
+    private val _refreshingCloudStreamPluginId = MutableStateFlow<String?>(null)
+    val refreshingCloudStreamPluginId: StateFlow<String?> = _refreshingCloudStreamPluginId.asStateFlow()
 
     private fun cloudStreamOrderKey(profileId: String) = "plugin_order_$profileId"
 
@@ -138,6 +140,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val json = org.json.JSONArray(raw)
             (0 until json.length()).mapNotNull { index -> json.optString(index).takeIf { it.isNotBlank() } }.distinct()
         }.getOrDefault(emptyList())
+    }
+
+    private fun prioritizeCloudStreamEntries(entries: List<com.example.data.plugin.CloudStreamPluginEntry>): List<com.example.data.plugin.CloudStreamPluginEntry> {
+        val order = _cloudStreamPluginOrder.value.withIndex().associate { it.value to it.index }
+        return entries.sortedWith(compareBy<com.example.data.plugin.CloudStreamPluginEntry> { entry ->
+            order[pluginManager.cloudStreamPluginId(entry)] ?: Int.MAX_VALUE
+        }.thenBy { it.name.lowercase() })
     }
 
     fun moveCloudStreamPluginOrder(pluginId: String, direction: Int, visiblePluginIds: List<String>) {
@@ -854,7 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .flatMap { it.plugins }
                     .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
                     .distinctBy { pluginManager.cloudStreamPluginId(it) }
-                entries.forEach { entry ->
+                prioritizeCloudStreamEntries(entries).forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
                     val pluginId = pluginManager.cloudStreamPluginId(entry)
                     if (cloudStreamHomeHasNext[pluginId] == false) return@forEach
@@ -890,6 +899,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Retry one failed provider without restarting healthy providers or clearing its cached items.
+     */
+    fun refreshCloudStreamPluginOnHome(pluginId: String) {
+        val profileId = _activeProfile.value?.id ?: return
+        if (cloudStreamHomeRefreshJob?.isActive == true || cloudStreamHomeLoadMoreJob?.isActive == true ||
+            _refreshingCloudStreamPluginId.value != null) {
+            showStatus("Katalog CloudStream sedang diproses. Coba lagi sebentar.")
+            return
+        }
+        val entry = pluginManager.repositories.value
+            .flatMap { it.plugins }
+            .firstOrNull {
+                it.status != 0 &&
+                    pluginManager.isCloudStreamPluginInstalled(it) &&
+                    pluginManager.cloudStreamPluginId(it) == pluginId
+            }
+        if (entry == null) {
+            showStatus("Plugin tidak ditemukan atau belum terpasang.")
+            return
+        }
+        viewModelScope.launch {
+            _refreshingCloudStreamPluginId.value = pluginId
+            try {
+                runCatching { pluginManager.loadCloudStreamHomePage(entry, 1) }
+                    .onSuccess { sections ->
+                        if (_activeProfile.value?.id != profileId) return@onSuccess
+                        cloudStreamHomePages[pluginId] = 1
+                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        if (sections.isNotEmpty()) {
+                            runCatching { persistCloudStreamCatalog(entry, sections) }
+                                .onSuccess { showStatus("Sumber ${entry.name} pulih: $it item diperbarui.") }
+                                .onFailure { showStatus("Sumber ${entry.name} berhasil dimuat, tetapi cache gagal disimpan: ${it.localizedMessage ?: "kesalahan penyimpanan"}") }
+                        } else {
+                            showStatus("Sumber ${entry.name} merespons, tetapi belum memiliki konten.")
+                        }
+                    }
+                    .onFailure { error ->
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat katalog")
+                        showStatus("Sumber ${entry.name} masih bermasalah. Cache lama tetap dipertahankan.")
+                    }
+            } finally {
+                _refreshingCloudStreamPluginId.value = null
+            }
+        }
+    }
     fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
         viewModelScope.launch {
             runCatching { pluginManager.refreshRepositoryCatalog(repo) }
