@@ -58,6 +58,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val pluginManager = PluginManager(application)
     val downloadManager = VideoDownloadManager.getInstance(application)
+    val downloads = downloadManager.downloads
     val player = CS3IPlayer(application, viewModelScope)
 
     // Firebase Auth & Cloud Firestore Integration
@@ -1574,6 +1575,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 showStatus("Gagal memulai unduhan: ${e.localizedMessage ?: "URL tidak didukung"}")
             }
         }
+    }
+
+    fun pauseDownload(id: String) {
+        viewModelScope.launch { runCatching { downloadManager.pauseDownload(id) }.onFailure { showStatus("Gagal menjeda unduhan: ${it.localizedMessage}") } }
+    }
+
+    fun resumeDownload(id: String) {
+        viewModelScope.launch { runCatching { downloadManager.resumeDownload(id) }.onFailure { showStatus("Gagal melanjutkan unduhan: ${it.localizedMessage}") } }
+    }
+
+    fun retryDownload(id: String) {
+        viewModelScope.launch { runCatching { downloadManager.retryDownload(id) }.onFailure { showStatus("Gagal mengulang unduhan: ${it.localizedMessage}") } }
+    }
+
+    fun cancelDownload(id: String) {
+        viewModelScope.launch { runCatching { downloadManager.cancelDownload(id) }.onFailure { showStatus("Gagal menghapus unduhan: ${it.localizedMessage}") } }
     }
 
     fun uploadMediaFileToServer(
