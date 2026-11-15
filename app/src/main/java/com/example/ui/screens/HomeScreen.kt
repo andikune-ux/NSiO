@@ -1230,6 +1230,15 @@ fun HomeScreen(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    latestEvents.firstOrNull()?.takeIf { !it.succeeded && !it.message.isNullOrBlank() }?.let { event ->
+                                        Material3Text(
+                                            text = event.message.orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 } else if (health?.lastError != null) {
                                     Material3Text(
                                         text = health.lastError.orEmpty(),
