@@ -245,8 +245,7 @@ fun HomeScreen(
         "TITLE" -> filteredItems.sortedBy { it.title.trim().lowercase() }
         "CONTINUE" -> filteredItems.filter { it.progressMs > 0L && (it.durationMs <= 0L || it.progressMs < it.durationMs) }
             .sortedByDescending { it.progressMs }
-        "HISTORY" -> filteredItems.filter { it.lastWatchedAt > 0L }
-            .sortedByDescending { it.lastWatchedAt }
+        "HISTORY" -> WatchHistoryPolicy.recentlyWatched(filteredItems)
         "FAVORITES" -> filteredItems.filter { it.isFavorite }.sortedByDescending { it.createdAt }
         else -> filteredItems.sortedByDescending { it.createdAt }
     }
