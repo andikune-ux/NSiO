@@ -361,6 +361,87 @@ class CloudStreamPluginRuntime(private val context: Context) {
         }
     }
 
+    suspend fun resolveTrailer(
+        artifact: File,
+        providerName: String,
+        trailer: CloudStreamTrailer
+    ): List<CloudStreamStream> = withContext(Dispatchers.IO) {
+        require(trailer.url.startsWith("http://", true) || trailer.url.startsWith("https://", true)) {
+            "URL trailer tidak valid."
+        }
+        val loaded = loadPlugin(artifact)
+        val api = loaded.providers.firstOrNull { it.name == providerName }
+        if (trailer.raw) {
+            return@withContext listOf(
+                CloudStreamStream(
+                    pluginName = artifact.nameWithoutExtension,
+                    providerName = providerName,
+                    name = "Trailer",
+                    source = "CloudStream trailer",
+                    url = trailer.url,
+                    referer = trailer.referer.orEmpty(),
+                    headers = emptyMap(),
+                    quality = 0,
+                    streamType = trailer.url.substringBefore('?').substringAfterLast('.', "MP4").uppercase()
+                )
+            )
+        }
+
+        val resolved = java.util.Collections.synchronizedList(mutableListOf<ExtractorLink>())
+        val subtitles = java.util.Collections.synchronizedList(mutableListOf<CloudStreamSubtitle>())
+        val subtitleCallback: (SubtitleFile) -> Unit = { subtitle ->
+            if (subtitle.url.isNotBlank()) subtitles.add(
+                CloudStreamSubtitle(subtitle.lang.ifBlank { "Unknown" }, subtitle.url, subtitle.headers.orEmpty())
+            )
+        }
+        withTimeoutOrNull(LINKS_TIMEOUT_MS) {
+            runCatching {
+                loadExtractor(
+                    url = trailer.url,
+                    referer = trailer.referer.orEmpty(),
+                    subtitleCallback = subtitleCallback,
+                    callback = { link -> synchronized(resolved) { resolved.add(link) } }
+                )
+            }
+        }
+        val links = synchronized(resolved) { resolved.distinctBy { it.url to it.referer } }
+        if (links.isEmpty()) {
+            val extension = trailer.url.substringBefore('?').substringAfterLast('.', "").lowercase()
+            if (extension !in setOf("mp4", "m3u8", "mpd", "webm")) {
+                throw IllegalStateException("Extractor trailer tidak menghasilkan stream yang dapat diputar.")
+            }
+            return@withContext listOf(
+                CloudStreamStream(
+                    pluginName = artifact.nameWithoutExtension,
+                    providerName = providerName,
+                    name = "Trailer",
+                    source = "Direct trailer",
+                    url = trailer.url,
+                    referer = trailer.referer.orEmpty(),
+                    headers = emptyMap(),
+                    quality = 0,
+                    streamType = extension.uppercase()
+                )
+            )
+        }
+        links.map { link ->
+            CloudStreamStream(
+                pluginName = artifact.nameWithoutExtension,
+                providerName = providerName,
+                name = link.name.ifBlank { "Trailer" },
+                source = link.source,
+                url = link.url,
+                referer = link.referer,
+                headers = link.headers,
+                quality = link.quality,
+                streamType = link.type.toString(),
+                subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
+                extractorData = link.extractorData,
+                videoInterceptor = runCatching { api?.getVideoInterceptor(link) }.getOrNull()
+            )
+        }
+    }
+
     suspend fun runExtractorVerifier(artifact: File, providerName: String, extractorData: String?) = withContext(Dispatchers.IO) {
         if (extractorData.isNullOrBlank()) return@withContext
         val api = loadPlugin(artifact).providers.firstOrNull { it.name == providerName } ?: return@withContext
