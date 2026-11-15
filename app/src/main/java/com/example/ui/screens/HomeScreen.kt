@@ -103,6 +103,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val mediaList by viewModel.mediaList.collectAsState()
+    val activeProfile by viewModel.activeProfile.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
@@ -122,6 +123,12 @@ fun HomeScreen(
     // Intercept back button to close the floating curtain if open
     BackHandler(enabled = isSearchExpanded || showPlaylistPicker) {
         if (showPlaylistPicker) showPlaylistPicker = false else isSearchExpanded = false
+    }
+
+    LaunchedEffect(activeProfile?.id) {
+        if (activeProfile != null) {
+            viewModel.refreshCloudStreamCatalogOnHome()
+        }
     }
 
     LaunchedEffect(isSearchExpanded) {
