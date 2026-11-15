@@ -72,7 +72,8 @@ data class CloudStreamEpisodeItem(
     val description: String? = null,
     val rating: Int? = null,
     val date: Long? = null,
-    val runtimeSeconds: Int? = null
+    val runtimeSeconds: Int? = null,
+    val dubStatus: String? = null
 )
 
 data class CloudStreamCastMember(val name: String, val role: String?, val imageUrl: String?, val voiceActorName: String? = null, val voiceActorImageUrl: String? = null)
@@ -504,14 +505,16 @@ class CloudStreamPluginRuntime(private val context: Context) {
         providerName: String
     ): CloudStreamContent {
         val rawEpisodes = readProperty(this, "episodes")
-        val episodeObjects = when (rawEpisodes) {
-            is Iterable<*> -> rawEpisodes.toList()
-            is Map<*, *> -> rawEpisodes.values.flatMap { value ->
-                (value as? Iterable<*>)?.toList().orEmpty()
+        // AnimeLoadResponse stores separate episode lists keyed by DubStatus.
+        // Preserve that key instead of flattening away the provider's dub/sub variants.
+        val episodeEntries: List<Pair<Any?, String?>> = when (rawEpisodes) {
+            is Iterable<*> -> rawEpisodes.map { it to null }
+            is Map<*, *> -> rawEpisodes.entries.flatMap { entry ->
+                (entry.value as? Iterable<*>)?.map { it to entry.key?.toString() }.orEmpty()
             }
             else -> emptyList()
         }
-        val episodes = episodeObjects.mapNotNull { item ->
+        val episodes = episodeEntries.mapNotNull { (item, dubStatus) ->
             item ?: return@mapNotNull null
             val episodeData = readProperty(item, "data") as? String ?: return@mapNotNull null
             CloudStreamEpisodeItem(
@@ -523,7 +526,8 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 description = readProperty(item, "description") as? String,
                 rating = readProperty(item, "rating") as? Int,
                 date = readProperty(item, "date") as? Long,
-                runtimeSeconds = readProperty(item, "runTime") as? Int
+                runtimeSeconds = readProperty(item, "runTime") as? Int,
+                dubStatus = dubStatus?.takeIf { it != "None" }
             )
         }
 
