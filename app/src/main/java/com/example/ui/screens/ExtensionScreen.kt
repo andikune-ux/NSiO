@@ -821,6 +821,7 @@ private fun PluginRepoTab(
     var showRepositoryDialog by remember { mutableStateOf(false) }
     var showPluginDialog by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val trailerContext = LocalContext.current
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1482,7 +1483,18 @@ private fun CloudStreamSearchPanel(
                     }
                 }
             }
-            content.trailers.forEachIndexed { index, trailer -> Text("Trailer ${index + 1}: ${trailer.url}", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary) }
+            content.trailers.forEachIndexed { index, trailer ->
+                TextButton(
+                    enabled = trailer.url.startsWith("https://", true) || trailer.url.startsWith("http://", true),
+                    onClick = {
+                        runCatching {
+                            trailerContext.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(trailer.url)))
+                        }.onFailure { error ->
+                            linkMessage = "Trailer tidak dapat dibuka: ${error.localizedMessage ?: "URL tidak didukung"}"
+                        }
+                    }
+                ) { Text("Putar trailer ${index + 1}", fontSize = 9.sp) } 
+            }
             content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
                 Button(onClick = { resolveLinks(entry, content.providerName, data, "Film") }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
             }
@@ -1512,6 +1524,24 @@ private fun CloudStreamSearchPanel(
                             Text(item.title, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.contentType, item.year?.toString()).joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        TextButton(
+                            enabled = !loadingDetail && item.url.isNotBlank(),
+                            onClick = {
+                                loadingDetail = true
+                                scope.launch {
+                                    runCatching {
+                                        viewModel.pluginManager.loadCloudStreamContent(entry, content.providerName, item.url)
+                                    }.onSuccess { recommendedContent ->
+                                        selectedContent = entry to recommendedContent
+                                        streams = emptyList()
+                                        linkMessage = ""
+                                    }.onFailure { error ->
+                                        linkMessage = "Gagal membuka rekomendasi: ${error.localizedMessage ?: "provider tidak merespons"}"
+                                    }
+                                    loadingDetail = false
+                                }
+                            }
+                        ) { Text("Detail", fontSize = 9.sp) }
                     }
                 }
             }
