@@ -9,10 +9,10 @@ permissions:
   contents: write
   actions: write
 
-# A newer main commit supersedes an older in-flight build. Publication is serialized.
+# Keep every mainline build. New commits wait for the active run instead of cancelling it.
 concurrency:
   group: nsio-mainline-release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
