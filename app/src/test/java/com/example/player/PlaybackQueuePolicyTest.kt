@@ -26,7 +26,7 @@ class PlaybackQueuePolicyTest {
 
     @Test fun nextAndPreviousRespectRepeatAllBoundaries() {
         assertEquals(1, PlaybackQueuePolicy.adjacentIndex(3, 0, 1, false))
-        assertEquals(0, PlaybackQueuePolicy.adjacentIndex(3, 0, -1, true))
+        assertEquals(2, PlaybackQueuePolicy.adjacentIndex(3, 0, -1, true))
         assertEquals(0, PlaybackQueuePolicy.adjacentIndex(3, 2, 1, true))
         assertNull(PlaybackQueuePolicy.adjacentIndex(3, 2, 1, false))
     }
