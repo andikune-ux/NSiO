@@ -640,7 +640,7 @@ fun PlayerScreen(
                     // Secondary playback options remain compact and separate from transport.
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter)
-                            .padding(bottom = 108.dp)
+                            .padding(bottom = 164.dp)
                             .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.15f, borderAlpha = 0.20f, elevation = 6.dp)
                             .padding(horizontal = 4.dp, vertical = 1.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
