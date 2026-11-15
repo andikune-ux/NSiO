@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.widget.Toast
 import android.widget.FrameLayout
@@ -710,10 +711,12 @@ fun PlayerScreen(
                             }
                             AndroidView(
                                 factory = { viewContext ->
-                                    MediaRouteButton(viewContext).apply {
-                                        minimumWidth = 40
-                                        minimumHeight = 40
-                                        runCatching { CastButtonFactory.setUpMediaRouteButton(viewContext, this) }
+                                    ContextThemeWrapper(viewContext, android.R.style.Theme_Material_Light_NoActionBar).let { castContext ->
+                                        MediaRouteButton(castContext).apply {
+                                            minimumWidth = 40
+                                            minimumHeight = 40
+                                            runCatching { CastButtonFactory.setUpMediaRouteButton(castContext, this) }
+                                        }
                                     }
                                 },
                                 modifier = Modifier.size(40.dp)
