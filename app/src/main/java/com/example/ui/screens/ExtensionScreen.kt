@@ -2153,19 +2153,14 @@ fun CloudStreamSearchPanel(
                         TextButton(
                             enabled = !loadingDetail && item.url.isNotBlank(),
                             onClick = {
-                                loadingDetail = true
-                                scope.launch {
-                                    runCatching {
-                                        viewModel.pluginManager.loadCloudStreamContent(entry, content.providerName, item.url)
-                                    }.onSuccess { recommendedContent ->
-                                        selectedContent = entry to recommendedContent
-                                        streams = emptyList()
-                                        linkMessage = ""
-                                    }.onFailure { error ->
-                                        linkMessage = "Gagal membuka rekomendasi: ${error.localizedMessage ?: "provider tidak merespons"}"
-                                    }
-                                    loadingDetail = false
-                                }
+                                openCloudStreamDetail(
+                                    entry,
+                                    content.providerName,
+                                    item.url,
+                                    item.posterUrl,
+                                    item.year,
+                                    item.title
+                                )
                             }
                         ) { Text("Detail", fontSize = 9.sp) }
                     }
