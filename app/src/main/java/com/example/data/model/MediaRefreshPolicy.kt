@@ -13,7 +13,8 @@ object MediaRefreshPolicy {
             .toMutableMap()
 
         return incoming.map { fresh ->
-            val previous = oldByKey[playlistKey(fresh)]?.removeFirstOrNull()
+            val matches = oldByKey[playlistKey(fresh)]
+            val previous = if (matches.isNullOrEmpty()) null else matches.removeAt(0)
             if (previous == null) fresh else fresh.copy(
                 id = previous.id,
                 durationMs = previous.durationMs,
