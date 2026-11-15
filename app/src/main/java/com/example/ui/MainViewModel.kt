@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.util.UUID
 
 data class CloudStreamHealthEvent(
@@ -131,6 +133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Keep only one database observer per active profile.
     private var mediaObserverJob: Job? = null
+    private var playbackPersistenceJob: Job? = null
     private var playlistObserverJob: Job? = null
     private var sourceRefreshJob: Job? = null
     private var cloudStreamHomeRefreshJob: Job? = null
@@ -1455,6 +1458,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     requestHeaders = headers,
                     mimeType = mimeType
                 )
+                startPlaybackProgressPersistence(item)
                 "Memutar ${item.title} melalui ${entry.name}."
             }.onSuccess { message ->
                 showStatus(message)
@@ -1492,6 +1496,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             player.play(item.url, item.title, item.progressMs, headers)
+            startPlaybackProgressPersistence(item)
         } else {
             player.clearError()
         }
@@ -1509,6 +1514,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player.pause()
         val positionMs = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
         persistPlaybackProgress(current, positionMs, player.playerState.value.durationMs)
+        playbackPersistenceJob?.cancel()
+    }
+
+    private fun startPlaybackProgressPersistence(item: MediaItem) {
+        playbackPersistenceJob?.cancel()
+        if (item.id.startsWith("external-stream:")) return
+        playbackPersistenceJob = viewModelScope.launch {
+            while (isActive && _currentlyPlaying.value?.id == item.id) {
+                delay(5_000)
+                if (_currentlyPlaying.value?.id != item.id) break
+                val state = player.playerState.value
+                if (state.isPlaying && state.currentPositionMs > 0L) {
+                    val duration = state.durationMs.coerceAtLeast(item.durationMs)
+                    runCatching {
+                        mediaDao.updatePlaybackState(
+                            item.id,
+                            state.currentPositionMs.coerceAtLeast(0L),
+                            duration,
+                            System.currentTimeMillis()
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun persistPlaybackProgress(item: MediaItem, positionMs: Long, durationMs: Long) {
@@ -1536,6 +1565,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
             persistPlaybackProgress(current, pos, player.playerState.value.durationMs)
         }
+        playbackPersistenceJob?.cancel()
         player.stop()
         _currentlyPlaying.value = null
     }
