@@ -17,6 +17,7 @@ import com.example.data.firebase.FirebaseStorageRepository
 import com.example.data.local.AppDatabase
 import com.example.data.security.PinVault
 import com.example.data.model.MediaItem
+import com.example.data.model.MediaRefreshPolicy
 import com.example.data.model.MediaSourceClassifier
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
@@ -963,15 +964,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .flatMap { section ->
                 section.items.map { item -> section to item }
             }
-            .groupBy { (section, item) -> "${pluginId}|${item.providerName}|${item.url}" }
-            .map { (stableKey, memberships) ->
+            .groupBy { (section, item) -> "${profileId}|${pluginId}|${item.providerName}|${item.url}" }
+            .map { (_, memberships) ->
                 val (section, item) = memberships.first()
                 val sectionNames = memberships
                     .map { (membershipSection, _) -> membershipSection.sectionName.trim() }
                     .filter { it.isNotBlank() }
                     .distinct()
                 MediaItem(
-                    id = UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString(),
+                    id = MediaRefreshPolicy.cloudStreamId(profileId, pluginId, item.providerName, item.url),
                     profileId = profileId,
                     title = item.title,
                     url = item.url,
@@ -988,26 +989,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (fetchedRecords.isEmpty()) {
             throw IllegalStateException("Katalog kosong; data terakhir tidak dihapus.")
         }
-        val previousRecords = mediaDao.getCloudStreamCatalog(profileId, pluginId).associateBy { it.id }
-        val refreshedRecords = fetchedRecords.map { item ->
-            val previous = previousRecords[item.id]
-            if (previous == null) item else item.copy(
-                category = (previous.category.split(" • ") + item.category.split(" • "))
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                    .joinToString(" • "),
-                durationMs = previous.durationMs,
-                progressMs = previous.progressMs,
-                lastWatchedAt = previous.lastWatchedAt,
-                isFavorite = previous.isFavorite,
-                createdAt = previous.createdAt
-            )
+        val previousRecords = mediaDao.getCloudStreamCatalog(profileId, pluginId)
+        val refreshedRecords = MediaRefreshPolicy.mergeCloudStream(
+            profileId = profileId,
+            pluginId = pluginId,
+            incoming = fetchedRecords,
+            existing = previousRecords
+        )
+        // Home catalog can be paginated. Keep cached pages not fetched in this pass,
+        // but do not retain legacy-ID rows that were just migrated to profile-scoped IDs.
+        val refreshedSourceKeys = refreshedRecords.mapTo(hashSetOf()) {
+            "${it.pluginId}|${it.extraInfo}|${it.url}"
         }
-        // Home catalog can be paginated. Keep cached pages that were not fetched in this pass.
-        val refreshedIds = refreshedRecords.mapTo(hashSetOf()) { it.id }
-        val records = (refreshedRecords + previousRecords.values.filterNot { it.id in refreshedIds })
-            .distinctBy { it.id }
+        val records = (refreshedRecords + previousRecords.filterNot {
+            "${it.pluginId}|${it.extraInfo}|${it.url}" in refreshedSourceKeys
+        }).distinctBy { it.id }
         mediaDao.replaceCloudStreamCatalog(profileId, pluginId, records)
         showStatus("Katalog ${entry.name} disimpan: ${records.size} item.")
         return records.size
