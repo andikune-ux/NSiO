@@ -1771,13 +1771,23 @@ fun CloudStreamSearchPanel(
                     Button(
                         onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl, autoPlay = true) },
                         enabled = !resolvingLinks,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentRed,
+                            contentColor = Color.White,
+                            disabledContainerColor = AccentRed.copy(alpha = 0.45f),
+                            disabledContentColor = Color.White.copy(alpha = 0.75f)
+                        ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 5.dp)
                     ) { Text("▶ Putar Film", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                     OutlinedButton(
                         onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) },
                         enabled = !resolvingLinks,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AccentRed,
+                            disabledContentColor = AccentRed.copy(alpha = 0.45f)
+                        ),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                    ) { Text("Pilih sumber", fontSize = 10.sp) }
+                    ) { Text("Pilih sumber", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
                 }
                 OutlinedButton(
                     onClick = {
