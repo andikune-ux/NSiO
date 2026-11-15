@@ -111,6 +111,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var mediaObserverJob: Job? = null
     private var playlistObserverJob: Job? = null
     private var sourceRefreshJob: Job? = null
+    private var cloudStreamHomeRefreshJob: Job? = null
 
     init {
         loadInitialData()
@@ -750,6 +751,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onFailure { error ->
                     showStatus("Gagal memperbarui katalog: ${error.localizedMessage ?: "periksa URL dan koneksi"}")
                 }
+        }
+    }
+
+    /**
+     * Refreshes the first page of each enabled, installed CloudStream provider when Home opens.
+     * Each plugin is isolated; failed or empty responses leave its last saved catalog untouched.
+     */
+    fun refreshCloudStreamCatalogOnHome() {
+        val profileId = _activeProfile.value?.id ?: return
+        if (cloudStreamHomeRefreshJob?.isActive == true) return
+        cloudStreamHomeRefreshJob = viewModelScope.launch {
+            var refreshed = 0
+            val failures = mutableListOf<String>()
+            try {
+                val entries = pluginManager.repositories.value
+                    .flatMap { it.plugins }
+                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
+                    .distinctBy { pluginManager.cloudStreamPluginId(it) }
+                entries.forEach { entry ->
+                    if (_activeProfile.value?.id != profileId) return@forEach
+                    runCatching {
+                        pluginManager.loadCloudStreamHomePage(entry, 1)
+                    }.onSuccess { sections ->
+                        if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
+                            runCatching { persistCloudStreamCatalog(entry, sections) }
+                                .onSuccess { refreshed += it }
+                                .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
+                        }
+                    }.onFailure { error ->
+                        failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
+                    }
+                }
+                if (refreshed > 0 || failures.isNotEmpty()) {
+                    showStatus(
+                        when {
+                            refreshed > 0 && failures.isEmpty() -> "Katalog CloudStream diperbarui: $refreshed item."
+                            refreshed > 0 -> "$refreshed item diperbarui; ${failures.size} plugin gagal, cache lama dipertahankan."
+                            else -> "Pembaruan CloudStream gagal; katalog tersimpan tetap digunakan."
+                        }
+                    )
+                }
+            } finally {
+                cloudStreamHomeRefreshJob = null
+            }
         }
     }
 
