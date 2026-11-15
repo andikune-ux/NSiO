@@ -354,9 +354,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var playbackQueueBase: List<MediaItem> = emptyList()
+    private var playbackQueueOrder: List<MediaItem> = emptyList()
+    private var playbackQueueIndex: Int = -1
+    private var handledPlaybackEnd = false
+
+    private fun syncPlaybackQueue(current: MediaItem, forceRebuild: Boolean = false) {
+        val base = _mediaList.value
+            .filterNot { it.type.equals("PHOTO", ignoreCase = true) }
+            .take(20).toMutableList()
+        if (base.none { it.id == current.id }) base.add(0, current)
+        val baseChanged = base.map { it.id } != playbackQueueBase.map { it.id }
+        if (forceRebuild || baseChanged || playbackQueueOrder.none { it.id == current.id }) {
+            playbackQueueBase = base
+            playbackQueueOrder = com.example.player.PlaybackQueuePolicy.build(
+                base, current.id, player.playerState.value.shuffleEnabled
+            )
+        }
+        playbackQueueIndex = playbackQueueOrder.indexOfFirst { it.id == current.id }
+    }
+
+    fun togglePlaybackShuffle() {
+        player.toggleShuffle()
+        val current = _currentlyPlaying.value ?: return
+        syncPlaybackQueue(current, forceRebuild = true)
+    }
+
+    fun canSkipPlayback(direction: Int): Boolean {
+        val current = _currentlyPlaying.value ?: return false
+        syncPlaybackQueue(current)
+        return com.example.player.PlaybackQueuePolicy.adjacentIndex(
+            playbackQueueOrder.size,
+            playbackQueueIndex,
+            direction,
+            player.playerState.value.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ALL
+        ) != null
+    }
+
+    fun skipPlayback(direction: Int): Boolean {
+        val current = _currentlyPlaying.value ?: return false
+        syncPlaybackQueue(current)
+        val targetIndex = com.example.player.PlaybackQueuePolicy.adjacentIndex(
+            playbackQueueOrder.size,
+            playbackQueueIndex,
+            direction,
+            player.playerState.value.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ALL
+        ) ?: return false
+        val target = playbackQueueOrder.getOrNull(targetIndex) ?: return false
+        playMedia(target)
+        return true
+    }
+
+    private fun handlePlaybackEnded() {
+        val current = _currentlyPlaying.value ?: return
+        when (player.playerState.value.repeatMode) {
+            androidx.media3.common.Player.REPEAT_MODE_ONE -> playMedia(current)
+            else -> skipPlayback(1)
+        }
+    }
+
     init {
         loadInitialData()
         observeAuthForCloudSync()
+        viewModelScope.launch {
+            player.playerState.collect { state ->
+                if (state.playbackEnded && !handledPlaybackEnd) {
+                    handledPlaybackEnd = true
+                    handlePlaybackEnded()
+                } else if (!state.playbackEnded) {
+                    handledPlaybackEnd = false
+                }
+            }
+        }
     }
 
     private fun observeAuthForCloudSync() {
@@ -1562,6 +1631,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playMedia(item: MediaItem) {
+        syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
             _currentlyPlaying.value = item
             playCloudStreamMedia(item)
