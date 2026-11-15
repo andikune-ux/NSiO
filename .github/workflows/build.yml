@@ -9,9 +9,10 @@ permissions:
   contents: write
   actions: write
 
-# Keep every mainline build. New commits wait for the active run instead of cancelling it.
+# Give each commit its own concurrency group. GitHub otherwise replaces older
+# pending runs in the same group even when cancel-in-progress is false.
 concurrency:
-  group: nsio-mainline-release
+  group: nsio-mainline-release-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
