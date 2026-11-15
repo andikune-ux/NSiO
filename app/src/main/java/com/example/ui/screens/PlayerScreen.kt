@@ -219,7 +219,7 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(activeGesture) {
-        if (activeGesture != null) {
+        if (activeGesture != null && activeGesture !in setOf("rewind", "fast-forward")) {
             delay(900)
             activeGesture = null
         }
@@ -416,6 +416,8 @@ fun PlayerScreen(
 
         if (activeGesture != null) {
             val isBrightness = activeGesture == "brightness"
+            val isRewinding = activeGesture == "rewind"
+            val isFastForwarding = activeGesture == "fast-forward"
             Box(
                 modifier = Modifier
                     .align(if (isBrightness) Alignment.CenterStart else Alignment.CenterEnd)
@@ -427,13 +429,24 @@ fun PlayerScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(
-                        imageVector = if (isBrightness) Icons.Default.Brightness6 else if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        imageVector = when {
+                            isBrightness -> Icons.Default.Brightness6
+                            isRewinding -> Icons.Default.Replay10
+                            isFastForwarding -> Icons.Default.Forward10
+                            playerState.volume <= 0f -> Icons.Default.VolumeOff
+                            else -> Icons.Default.VolumeUp
+                        },
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = if (isBrightness) "${(brightnessLevel * 100).toInt()}%" else "${(playerState.volume * 100).toInt()}%",
+                        text = when {
+                            isBrightness -> "${(brightnessLevel * 100).toInt()}%"
+                            isRewinding -> "2×"
+                            isFastForwarding -> "4×"
+                            else -> "${(playerState.volume * 100).toInt()}%"
+                        },
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
