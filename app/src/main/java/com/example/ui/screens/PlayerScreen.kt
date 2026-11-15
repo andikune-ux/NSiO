@@ -152,6 +152,11 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     val playbackQueue by viewModel.playbackQueue.collectAsState()
     var showControls by remember { mutableStateOf(true) }
+    var controlsInteraction by remember { mutableStateOf(0) }
+    fun revealControls() {
+        showControls = true
+        controlsInteraction++
+    }
     var showQueue by remember { mutableStateOf(false) }
     var showTrackMenu by remember { mutableStateOf(false) }
     var selectedPlayerSetting by remember { mutableStateOf<String?>(null) }
@@ -364,7 +369,7 @@ fun PlayerScreen(
     }
 
     // Auto-hide controls after 4 seconds of playback
-    LaunchedEffect(showControls, playerState.isPlaying) {
+    LaunchedEffect(showControls, playerState.isPlaying, controlsInteraction) {
         if (showControls && playerState.isPlaying && playerState.error == null) {
             delay(4000)
             showControls = false
@@ -447,7 +452,7 @@ fun PlayerScreen(
                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                             val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
                             if (up != null && (up.position - down.position).getDistance() <= viewConfiguration.touchSlop) {
-                                showControls = true
+                                revealControls()
                             }
                         }
                     }
@@ -507,7 +512,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
                         detectTapGestures(
-                            onTap = { showControls = true },
+                            onTap = { revealControls() },
                             onPress = {
                                 val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
