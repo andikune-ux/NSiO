@@ -1257,13 +1257,13 @@ fun CloudStreamSearchPanel(
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Text(
-            text = "Cari konten CloudStream",
+            text = "Katalog & hasil CloudStream",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "Pencarian hanya memakai plugin .cs3 yang sudah terpasang. Menekan Cari akan memuat kode plugin bila belum aktif. Plugin pihak ketiga berjalan dengan izin aplikasi—gunakan repository yang kamu percaya.",
+            text = "Pencarian CloudStream menggunakan kolom pencarian utama di bagian atas Home dan hanya memakai plugin .cs3 yang sudah terpasang. Plugin akan dimuat otomatis saat pencarian dijalankan. Plugin pihak ketiga berjalan dengan izin aplikasi—gunakan repository yang kamu percaya.",
             fontSize = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
