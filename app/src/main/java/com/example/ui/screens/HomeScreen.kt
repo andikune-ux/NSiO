@@ -44,6 +44,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -123,10 +125,27 @@ fun HomeScreen(
     val refreshingCloudStreamPluginId by viewModel.refreshingCloudStreamPluginId.collectAsState()
     val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.flatMap { repo ->
-            repo.plugins.map { entry ->
+            repo.plugins.filter { entry ->
+                entry.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(entry)
+            }.map { entry ->
                 viewModel.pluginManager.cloudStreamPluginId(entry) to entry.name
             }
         }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
+    }
+    val drivePlaylists = remember(sourcePlaylists, mediaList) {
+        sourcePlaylists.filter { playlist ->
+            playlist.url.contains("drive.google.com", ignoreCase = true) ||
+                playlist.url.contains("docs.google.com", ignoreCase = true) ||
+                mediaList.any { item ->
+                    item.playlistId == playlist.id && (
+                        item.category.contains("Google Drive", ignoreCase = true) ||
+                            item.url.contains("drive.google.com", ignoreCase = true) ||
+                            item.url.contains("docs.google.com", ignoreCase = true) ||
+                            item.sourceUrl.contains("drive.google.com", ignoreCase = true) ||
+                            item.sourceUrl.contains("docs.google.com", ignoreCase = true)
+                    )
+                }
+        }.sortedBy { it.name.lowercase() }
     }
     val orderedCloudStreamPluginFilters = remember(cloudStreamPluginFilters, cloudStreamPluginOrder) {
         cloudStreamPluginFilters.sortedWith(compareBy<Pair<String, String>> { pair ->
@@ -147,15 +166,17 @@ fun HomeScreen(
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
+    var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
     var expandedSourceType by rememberSaveable { mutableStateOf<String?>(null) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null) {
+    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
         when {
             showCloudStreamOrderDialog -> showCloudStreamOrderDialog = false
+            expandedPlaylistCategory != null -> expandedPlaylistCategory = null
             showPlaylistPicker -> showPlaylistPicker = false
             isSearchExpanded -> isSearchExpanded = false
             else -> expandedSourceType = null
@@ -194,7 +215,16 @@ fun HomeScreen(
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
+        val isDriveMedia = item.playlistId in drivePlaylists.map { it.id } ||
+            item.category.contains("Google Drive", ignoreCase = true) ||
+            item.url.contains("drive.google.com", ignoreCase = true) ||
+            item.url.contains("docs.google.com", ignoreCase = true) ||
+            item.sourceUrl.contains("drive.google.com", ignoreCase = true) ||
+            item.sourceUrl.contains("docs.google.com", ignoreCase = true)
         val matchesFilter = when (selectedFilter) {
+            "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"
+            "DRIVE_ALL" -> isDriveMedia
+            "CLOUDSTREAM_ALL" -> item.sourceType == "CLOUDSTREAM"
             "LINK" -> item.sourceType == "LINK"
             "STREAM" -> item.sourceType == "STREAM"
             "REPO" -> item.sourceType == "REPO"
@@ -206,6 +236,8 @@ fun HomeScreen(
                 val selectedCategory = selectedFilter.removePrefix("CATEGORY:")
                 item.category.split("•", ",", "|", ";")
                     .any { it.trim().equals(selectedCategory, ignoreCase = true) }
+            } else if (selectedFilter.startsWith("DRIVE_PLAYLIST:")) {
+                isDriveMedia && item.playlistId == selectedFilter.removePrefix("DRIVE_PLAYLIST:")
             } else if (selectedFilter.startsWith("PLAYLIST:")) {
                 item.playlistId == selectedFilter.removePrefix("PLAYLIST:")
             } else if (selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:")) {
@@ -975,6 +1007,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 val sourceFilters = listOf(
+                                    "ALL_SOURCES" to "Semua Sumber",
                                     "ALL" to "Semua",
                                     "LINK" to "Link Ekstensi",
                                     "STREAM" to "Streaming M3U/M3U8",
@@ -1121,81 +1154,203 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    "Pilih Playlist",
+                                    if (expandedPlaylistCategory == null) "Pilih Sumber Playlist" else
+                                        if (expandedPlaylistCategory == "DRIVE") "Pilih Drive" else "Pilih Plugin CloudStream",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    "Filter media berdasarkan sumber tersimpan",
+                                    "Pilih satu kategori atau satu sumber untuk memfilter katalog.",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(13.dp))
-                                        .background(if (selectedFilter == "ALL") accentColor.copy(alpha = 0.16f) else Color.Transparent)
-                                        .clickable {
-                                            viewModel.selectFilter("ALL")
-                                            showPlaylistPicker = false
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 11.dp)
-                                        .testTag("playlist_filter_all")
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(9.dp))
-                                        Text("Semua Playlist", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                        Spacer(Modifier.weight(1f))
-                                        Text("${mediaList.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+
+                                if (expandedPlaylistCategory != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .clickable { expandedPlaylistCategory = null }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("‹  Kembali ke semua sumber", fontSize = 11.sp, color = accentColor, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
-                                if (sourcePlaylists.isEmpty()) {
-                                    Text(
-                                        "Belum ada playlist tersimpan.",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
-                                    )
-                                } else {
-                                    sourcePlaylists.forEach { playlist ->
-                                        val filter = "PLAYLIST:${playlist.id}"
-                                        val isSelected = selectedFilter == filter
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(13.dp))
-                                                .background(if (isSelected) accentColor.copy(alpha = 0.16f) else Color.Transparent)
-                                                .clickable {
-                                                    if (playlist.sourceType == "SERVER" && !isServerUnlocked) {
-                                                        pendingPlaylistFilter = filter
-                                                        showServerPinDialog = true
-                                                    } else {
-                                                        viewModel.selectFilter(filter)
-                                                    }
-                                                    showPlaylistPicker = false
+
+                                if (expandedPlaylistCategory == null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(if (selectedFilter == "ALL_SOURCES") accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                            .clickable {
+                                                viewModel.selectFilter("ALL_SOURCES")
+                                                showPlaylistPicker = false
+                                                expandedPlaylistCategory = null
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 11.dp)
+                                            .testTag("playlist_filter_all_sources")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text("Semua Sumber", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text(
+                                                "${drivePlaylists.sumOf { it.itemCount } + mediaList.count { it.sourceType == "CLOUDSTREAM" }}",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .clickable { expandedPlaylistCategory = "DRIVE" }
+                                            .padding(horizontal = 10.dp, vertical = 11.dp)
+                                            .testTag("playlist_category_drive")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Folder, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text("Drive", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text("${drivePlaylists.size}  ›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .clickable { expandedPlaylistCategory = "CLOUDSTREAM" }
+                                            .padding(horizontal = 10.dp, vertical = 11.dp)
+                                            .testTag("playlist_category_cloudstream")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Extension, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text("CloudStream", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text("${orderedCloudStreamPluginFilters.size}  ›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(if (selectedFilter == "SERVER") accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                            .clickable {
+                                                if (isServerUnlocked) {
+                                                    viewModel.selectFilter("SERVER")
+                                                } else {
+                                                    pendingPlaylistFilter = "SERVER"
+                                                    showServerPinDialog = true
                                                 }
-                                                .padding(horizontal = 10.dp, vertical = 10.dp)
-                                                .testTag("playlist_filter_${playlist.id}")
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                                                Spacer(Modifier.width(9.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        playlist.name,
-                                                        color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        "${playlist.itemCount} media",
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontSize = 10.sp
-                                                    )
+                                                showPlaylistPicker = false
+                                                expandedPlaylistCategory = null
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 11.dp)
+                                            .testTag("playlist_filter_all_servers")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Lock, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text("Semua Server", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text(if (isServerUnlocked) "Terbuka" else "PIN", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                        }
+                                    }
+                                } else if (expandedPlaylistCategory == "DRIVE") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(if (selectedFilter == "DRIVE_ALL") accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                            .clickable {
+                                                viewModel.selectFilter("DRIVE_ALL")
+                                                showPlaylistPicker = false
+                                                expandedPlaylistCategory = null
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 10.dp)
+                                            .testTag("playlist_filter_all_drive")
+                                    ) {
+                                        Text("Semua Drive", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    if (drivePlaylists.isEmpty()) {
+                                        Text("Belum ada playlist Google Drive yang tersedia.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                                    } else {
+                                        drivePlaylists.forEach { playlist ->
+                                            val filter = "DRIVE_PLAYLIST:${playlist.id}"
+                                            val isSelected = selectedFilter == filter
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(13.dp))
+                                                    .background(if (isSelected) accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                                    .clickable {
+                                                        viewModel.selectFilter(filter)
+                                                        showPlaylistPicker = false
+                                                        expandedPlaylistCategory = null
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 10.dp)
+                                                    .testTag("playlist_drive_${playlist.id}")
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(9.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(playlist.name, color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        Text("${playlist.itemCount} media", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(13.dp))
+                                            .background(if (selectedFilter == "CLOUDSTREAM_ALL") accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                            .clickable {
+                                                viewModel.selectFilter("CLOUDSTREAM_ALL")
+                                                showPlaylistPicker = false
+                                                expandedPlaylistCategory = null
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 10.dp)
+                                            .testTag("playlist_filter_all_plugins")
+                                    ) {
+                                        Text("Semua Plugin", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    if (orderedCloudStreamPluginFilters.isEmpty()) {
+                                        Text("Belum ada plugin CloudStream yang terpasang dan aktif.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                                    } else {
+                                        orderedCloudStreamPluginFilters.forEach { (pluginId, pluginName) ->
+                                            val filter = "CLOUDSTREAM_PLUGIN:$pluginId"
+                                            val isSelected = selectedFilter == filter
+                                            val itemCount = mediaList.count { it.sourceType == "CLOUDSTREAM" && it.pluginId == pluginId }
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(13.dp))
+                                                    .background(if (isSelected) accentColor.copy(alpha = 0.16f) else Color.Transparent)
+                                                    .clickable {
+                                                        viewModel.selectFilter(filter)
+                                                        showPlaylistPicker = false
+                                                        expandedPlaylistCategory = null
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 10.dp)
+                                                    .testTag("playlist_cloudstream_plugin_$pluginId")
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Extension, contentDescription = null, tint = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                                    Spacer(Modifier.width(9.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(pluginName, color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        Text("$itemCount media", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    }
                                                 }
                                             }
                                         }
