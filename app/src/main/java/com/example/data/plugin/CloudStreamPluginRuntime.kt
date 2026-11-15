@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.syncproviders.SyncIdName
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
@@ -38,6 +39,13 @@ data class CloudStreamSearchItem(
     val posterUrl: String?,
     val contentType: String?,
     val year: Int?
+)
+
+data class CloudStreamResolvedId(
+    val pluginName: String,
+    val providerName: String,
+    val syncIdName: String,
+    val contentUrl: String
 )
 
 data class CloudStreamSearchPage(
@@ -236,6 +244,35 @@ class CloudStreamPluginRuntime(private val context: Context) {
             hasNext = pages.any { (_, response) -> response.hasNext },
             page = requestedPage
         )
+    }
+
+    suspend fun resolveLoadUrl(
+        artifact: File,
+        syncIdName: String,
+        id: String
+    ): List<CloudStreamResolvedId> = withContext(Dispatchers.IO) {
+        require(id.isNotBlank()) { "ID eksternal kosong." }
+        val syncName = when (syncIdName.trim().lowercase().replace("_", "").replace("-", "")) {
+            "imdb" -> SyncIdName.Imdb
+            "anilist", "ani" -> SyncIdName.Anilist
+            "mal", "myanimelist" -> SyncIdName.MyAnimeList
+            "trakt" -> SyncIdName.Trakt
+            "simkl" -> SyncIdName.Simkl
+            else -> throw IllegalArgumentException("Jenis ID eksternal belum didukung: $syncIdName")
+        }
+        val loaded = loadPlugin(artifact)
+        loaded.providers.mapNotNull { api ->
+            if (syncName !in api.supportedSyncNames) return@mapNotNull null
+            val url = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
+                runCatching { api.getLoadUrl(syncName, id.trim()) }.getOrNull()
+            }?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            CloudStreamResolvedId(
+                pluginName = artifact.nameWithoutExtension,
+                providerName = api.name,
+                syncIdName = syncName.name,
+                contentUrl = url
+            )
+        }
     }
 
     suspend fun loadContent(
