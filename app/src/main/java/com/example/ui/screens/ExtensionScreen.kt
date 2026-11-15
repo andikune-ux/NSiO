@@ -1981,6 +1981,7 @@ fun CloudStreamSearchPanel(
                         ) { Text("Detail", fontSize = 9.sp) }
                     }
                 }
+            }
         if (resolvingLinks) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
