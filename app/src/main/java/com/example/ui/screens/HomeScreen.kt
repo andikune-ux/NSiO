@@ -901,7 +901,7 @@ fun HomeScreen(
                                     val health = cloudStreamSourceHealth[pluginId]
                                     val cachedCount = mediaList.count { it.sourceType == "CLOUDSTREAM" && it.pluginId == pluginId }
                                     val healthLabel = when {
-                                        health?.lastError != null -> " • Perlu cek"
+                                        health?.lastError != null -> " • Gagal ${health.consecutiveFailures}×"
                                         health?.hasNext == false -> " • Selesai"
                                         (health?.lastSuccessAt ?: 0L) > 0L -> " • Aktif"
                                         cachedCount > 0 -> " • Cache $cachedCount"
