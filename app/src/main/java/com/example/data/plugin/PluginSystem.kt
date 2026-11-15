@@ -137,6 +137,14 @@ class PluginManager(private val context: Context) {
             }
         }?.name.orEmpty()
 
+    private fun cloudStreamRepositorySource(entry: CloudStreamPluginEntry): String =
+        _repositories.value.firstOrNull { repo ->
+            repo.plugins.any { installed ->
+                installed.internalName.equals(entry.internalName, ignoreCase = true) &&
+                    installed.url == entry.url
+            }
+        }?.sourceUrl?.ifBlank { _repositories.value.firstOrNull { it.plugins.any { p -> p.url == entry.url } }?.pluginLists?.firstOrNull().orEmpty() }.orEmpty()
+
     fun findCloudStreamPlugin(pluginId: String): CloudStreamPluginEntry? {
         if (pluginId.isBlank()) return null
         return _repositories.value.asSequence()
@@ -161,7 +169,7 @@ class PluginManager(private val context: Context) {
         try {
             val code = connection.responseCode
             require(code in 200..299) { "HTTP $code saat membaca $url" }
-            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }.removePrefix("\uFEFF")
         } finally {
             connection.disconnect()
         }
@@ -297,18 +305,28 @@ class PluginManager(private val context: Context) {
     suspend fun autoUpdateInstalledCloudStreamPlugins(): Pair<Int, Int> = withContext(Dispatchers.IO) {
         var updated = 0
         var failures = 0
-        val latestEntries = _repositories.value
-            .flatMap { it.plugins }
-            .filter { it.status != 0 && it.version > 0 }
-            .groupBy { it.internalName.trim().lowercase() }
-            .values
-            .mapNotNull { entries -> entries.maxByOrNull { it.version } }
+        val candidates = _repositories.value
+            .flatMap { repo -> repo.plugins.map { entry -> repo to entry } }
+            .filter { (_, entry) -> entry.status != 0 && entry.version > 0 }
+            .groupBy { (_, entry) -> entry.internalName.trim().lowercase() }
 
-        latestEntries.forEach { entry ->
-            val installedVersion = installedCloudStreamVersion(entry) ?: return@forEach
-            if (entry.version <= installedVersion) return@forEach
+        candidates.forEach { (internalName, rows) ->
+            val sample = rows.maxByOrNull { it.second.version }?.second ?: return@forEach
+            val installedVersion = installedCloudStreamVersion(sample) ?: return@forEach
+            if (sample.version <= installedVersion) return@forEach
+            val safeName = sample.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80)
+            val rememberedSource = prefs.getString("cloudstream_repo_source_$safeName", null)
+            val distinctSources = rows.map { it.first.sourceUrl }.distinct()
+            val selected = when {
+                !rememberedSource.isNullOrBlank() -> rows
+                    .filter { it.first.sourceUrl == rememberedSource }
+                    .maxByOrNull { it.second.version }
+                distinctSources.size == 1 -> rows.maxByOrNull { it.second.version }
+                else -> null // Legacy installs with ambiguous publishers are not auto-switched.
+            }?.second ?: return@forEach
+            if (selected.version <= installedVersion) return@forEach
             try {
-                installCloudStreamPlugin(entry)
+                installCloudStreamPlugin(selected)
                 updated++
             } catch (_: Exception) {
                 // Preserve the currently installed artifact and retry on the next sync.
@@ -465,6 +483,15 @@ class PluginManager(private val context: Context) {
             if (!temporary.renameTo(destination)) {
                 temporary.copyTo(destination, overwrite = true)
                 temporary.delete()
+            }
+            // Remember which repository supplied this installed artifact so automatic
+            // updates cannot silently switch to a different publisher with the same name.
+            val repositorySource = cloudStreamRepositorySource(entry)
+            if (repositorySource.isNotBlank()) {
+                prefs.edit()
+                    .putString("cloudstream_repo_source_$safeName", repositorySource)
+                    .putInt("cloudstream_installed_version_$safeName", entry.version)
+                    .apply()
             }
             destination
         } catch (error: Throwable) {
