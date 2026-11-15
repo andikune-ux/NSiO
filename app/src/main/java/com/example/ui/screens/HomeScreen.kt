@@ -848,7 +848,8 @@ fun HomeScreen(
                     query = searchQuery,
                     searchRequest = cloudStreamSearchRequest,
                     renderContent = false,
-                    handlePendingDetail = true
+                    handlePendingDetail = true,
+                    enableSearch = false
                 )
 
                 // LAPISAN 2: BACKDROP REDUP KETIKA TIRAI TERBUKA (Tap di luar untuk menutup)
