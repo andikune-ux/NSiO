@@ -14,4 +14,25 @@ class WatchHistoryPolicyTest {
 
         assertEquals(listOf("newer", "older"), result.map { it.id })
     }
+    @Test
+    fun continueWatchingUsesLastWatchedTimeAndExcludesCompletedItems() {
+        val moreProgressButOlder = MediaItem(
+            "older", "p", "Older", "https://example.com/older.mp4",
+            durationMs = 10_000L, progressMs = 8_000L, lastWatchedAt = 100L
+        )
+        val recentlyWatched = MediaItem(
+            "recent", "p", "Recent", "https://example.com/recent.mp4",
+            durationMs = 10_000L, progressMs = 2_000L, lastWatchedAt = 300L
+        )
+        val completed = MediaItem(
+            "done", "p", "Done", "https://example.com/done.mp4",
+            durationMs = 10_000L, progressMs = 10_000L, lastWatchedAt = 500L
+        )
+
+        assertEquals(
+            listOf("recent", "older"),
+            WatchHistoryPolicy.continueWatching(listOf(moreProgressButOlder, completed, recentlyWatched)).map { it.id }
+        )
+    }
+
 }
