@@ -549,17 +549,57 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            items(
-                                items = sourceItems,
-                                key = { it.id },
-                                span = { GridItemSpan(1) }
-                            ) { item ->
-                                MediaGridCard(
-                                    item = item,
-                                    onClick = { viewModel.playMedia(item) },
-                                    onLongClick = { viewModel.toggleFavorite(item) },
-                                    onDownload = { viewModel.downloadMedia(item) }
-                                )
+                            val playlistNames = sourcePlaylists.associate { it.id to it.name }
+                            val playlistGroups = sourceItems
+                                .groupBy { it.playlistId.ifBlank { "__no_playlist__" } }
+                                .toSortedMap(compareBy<String> { playlistId ->
+                                    if (playlistId == "__no_playlist__") "\\uFFFF"
+                                    else playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
+                                }.thenBy { it })
+                            playlistGroups.forEach { (playlistId, playlistItems) ->
+                                val playlistTitle = if (playlistId == "__no_playlist__") {
+                                    "Item tanpa playlist"
+                                } else {
+                                    playlistNames[playlistId] ?: "Playlist tidak dikenal"
+                                }
+                                item(
+                                    key = "playlist_header_${sourceType}_${playlistId}",
+                                    span = { GridItemSpan(maxLineSpan) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = playlistTitle,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${playlistItems.size}",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                items(
+                                    items = playlistItems,
+                                    key = { it.id },
+                                    span = { GridItemSpan(1) }
+                                ) { mediaItem ->
+                                    MediaGridCard(
+                                        item = mediaItem,
+                                        onClick = { viewModel.playMedia(mediaItem) },
+                                        onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                        onDownload = { viewModel.downloadMedia(mediaItem) }
+                                    )
+                                }
                             }
                         }
                     }
