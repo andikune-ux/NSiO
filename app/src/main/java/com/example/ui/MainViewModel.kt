@@ -1445,10 +1445,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playbackData: String,
         title: String,
         posterUrl: String?,
+        durationMs: Long = 0L,
         streamUrl: String,
         requestHeaders: Map<String, String> = emptyMap(),
-        mimeType: String? = null,
-        sourceUrl: String = ""
+        mimeType: String? = null
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             showStatus("Profil aktif tidak ditemukan.")
@@ -1483,7 +1483,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     pluginId = pluginId,
                     repositoryId = repositoryId,
                     progressMs = previous?.progressMs ?: 0L,
-                    durationMs = previous?.durationMs ?: 0L,
+                    durationMs = maxOf(previous?.durationMs ?: 0L, durationMs.coerceAtLeast(0L)),
                     lastWatchedAt = previous?.lastWatchedAt ?: 0L,
                     isFavorite = previous?.isFavorite ?: false,
                     createdAt = previous?.createdAt ?: System.currentTimeMillis(),
