@@ -509,7 +509,10 @@ fun HomeScreen(
                     .weight(1f)
             ) {
                 // LAPISAN 1: GRID VIDEO / EMPTY STATE (Permanen di bawah Header)
-                if (filteredList.isEmpty()) {
+                val showCloudStreamHome = cloudStreamPluginFilters.isNotEmpty() &&
+                    (selectedFilter in setOf("ALL", "ALL_SOURCES", "CLOUDSTREAM_ALL", "CLOUDSTREAM") ||
+                        selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:"))
+                if (filteredList.isEmpty() && !showCloudStreamHome) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -579,6 +582,14 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (showCloudStreamHome) {
+                            item(
+                                key = "cloudstream_home_catalog_browser",
+                                span = { GridItemSpan(maxLineSpan) }
+                            ) {
+                                CloudStreamSearchPanel(viewModel, cloudStreamRepositories)
+                            }
+                        }
                         val sourceGroups = filteredList
                             .groupBy { it.sourceType.uppercase() }
                             .toSortedMap(compareBy<String> {
@@ -714,7 +725,7 @@ fun HomeScreen(
                                         ) { mediaItem ->
                                             MediaGridCard(
                                                 item = mediaItem,
-                                                onClick = { viewModel.requestCloudStreamDetail(mediaItem); onNavigateToExtension() },
+                                                onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                 onLongClick = { viewModel.toggleFavorite(mediaItem) },
                                                 onDownload = { viewModel.downloadMedia(mediaItem) }
                                             )
