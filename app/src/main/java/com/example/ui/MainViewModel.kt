@@ -31,6 +31,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+data class CloudStreamSourceHealth(
+    val lastSuccessAt: Long = 0L,
+    val lastError: String? = null,
+    val hasNext: Boolean? = null
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getInstance(application)
@@ -117,6 +123,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val cloudStreamHomeHasNext = mutableMapOf<String, Boolean>()
     private val _isLoadingMoreCloudStreamHome = MutableStateFlow(false)
     val isLoadingMoreCloudStreamHome: StateFlow<Boolean> = _isLoadingMoreCloudStreamHome.asStateFlow()
+    private val _cloudStreamSourceHealth = MutableStateFlow<Map<String, CloudStreamSourceHealth>>(emptyMap())
+    val cloudStreamSourceHealth: StateFlow<Map<String, CloudStreamSourceHealth>> = _cloudStreamSourceHealth.asStateFlow()
+
+    private fun updateCloudStreamSourceHealth(
+        pluginId: String,
+        hasNext: Boolean? = null,
+        error: String? = null,
+        succeeded: Boolean = false
+    ) {
+        val previous = _cloudStreamSourceHealth.value[pluginId] ?: CloudStreamSourceHealth()
+        _cloudStreamSourceHealth.value = _cloudStreamSourceHealth.value + (
+            pluginId to previous.copy(
+                lastSuccessAt = if (succeeded) System.currentTimeMillis() else previous.lastSuccessAt,
+                lastError = if (succeeded) null else error ?: previous.lastError,
+                hasNext = hasNext ?: previous.hasNext
+            )
+        )
+    }
 
     init {
         loadInitialData()
@@ -753,6 +777,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun loadMoreCloudStreamCatalogOnHome() {
         if (cloudStreamHomeLoadMoreJob?.isActive == true) return
+        if (cloudStreamHomeRefreshJob?.isActive == true) {
+            showStatus("Katalog CloudStream sedang diperbarui. Coba lagi sebentar.")
+            return
+        }
         val profileId = _activeProfile.value?.id ?: return
         cloudStreamHomeLoadMoreJob = viewModelScope.launch {
             _isLoadingMoreCloudStreamHome.value = true
@@ -773,12 +801,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }.onSuccess { sections ->
                         cloudStreamHomePages[pluginId] = nextPage
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
+                        updateCloudStreamSourceHealth(pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { added += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
+                        updateCloudStreamSourceHealth(pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
@@ -817,6 +847,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val profileId = _activeProfile.value?.id ?: return
         if (cloudStreamHomeRefreshJob?.isActive == true) return
         cloudStreamHomeRefreshJob = viewModelScope.launch {
+            _cloudStreamSourceHealth.value = emptyMap()
             var refreshed = 0
             val failures = mutableListOf<String>()
             try {
@@ -832,12 +863,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val pluginId = pluginManager.cloudStreamPluginId(entry)
                         cloudStreamHomePages[pluginId] = 1
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
+                        updateCloudStreamSourceHealth(pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { refreshed += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
+                        updateCloudStreamSourceHealth(pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
