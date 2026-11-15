@@ -711,7 +711,7 @@ fun PlayerScreen(
                             }
                             AndroidView(
                                 factory = { viewContext ->
-                                    ContextThemeWrapper(viewContext, android.R.style.Theme_Material_Light_NoActionBar).let { castContext ->
+                                    ContextThemeWrapper(viewContext, com.example.R.style.Theme_NSiO_CastButton).let { castContext ->
                                         MediaRouteButton(castContext).apply {
                                             minimumWidth = 40
                                             minimumHeight = 40
