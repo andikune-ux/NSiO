@@ -17,15 +17,25 @@ class AudioDelayProcessor(
     private val delayMs: Int
 ) : BaseAudioProcessor() {
     private var bytesPerFrame = 0
+    private var silenceByte: Byte = 0
     private var remainingOffsetBytes = 0L
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        if (delayMs == 0 || inputAudioFormat.encoding != C.ENCODING_PCM_16BIT ||
+        val bytesPerSample = when (inputAudioFormat.encoding) {
+            C.ENCODING_PCM_8BIT -> 1
+            C.ENCODING_PCM_16BIT -> 2
+            C.ENCODING_PCM_24BIT -> 3
+            C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT -> 4
+            else -> 0
+        }
+        if (delayMs == 0 || bytesPerSample == 0 ||
             inputAudioFormat.sampleRate <= 0 || inputAudioFormat.channelCount <= 0
         ) {
             return AudioProcessor.AudioFormat.NOT_SET
         }
-        bytesPerFrame = inputAudioFormat.channelCount * 2
+        bytesPerFrame = inputAudioFormat.channelCount * bytesPerSample
+        // PCM 8-bit is unsigned and represents silence at its midpoint.
+        silenceByte = if (inputAudioFormat.encoding == C.ENCODING_PCM_8BIT) 0x80.toByte() else 0
         return inputAudioFormat
     }
 
@@ -41,7 +51,7 @@ class AudioDelayProcessor(
         if (delayMs > 0 && remainingOffsetBytes > 0L) {
             val silenceBytes = min(remainingOffsetBytes, Int.MAX_VALUE.toLong()).toInt()
             val output = replaceOutputBuffer(silenceBytes + available)
-            val silence = ByteArray(silenceBytes)
+            val silence = ByteArray(silenceBytes) { silenceByte }
             output.put(silence)
             output.put(inputBuffer)
             remainingOffsetBytes -= silenceBytes.toLong()
