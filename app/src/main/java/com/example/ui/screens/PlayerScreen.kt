@@ -120,6 +120,7 @@ fun PlayerScreen(
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
     val mediaList by viewModel.mediaList.collectAsState()
+    val playbackQueue by viewModel.playbackQueue.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
     var showTrackMenu by remember { mutableStateOf(false) }
@@ -570,7 +571,7 @@ fun PlayerScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(10.dp)
                     ) {
-                        val queueItems = mediaList.filter { it.type != "PHOTO" }.take(20)
+                        val queueItems = playbackQueue
                         if (queueItems.isEmpty()) {
                             Text("Belum ada video di antrean", color = controlMutedColor, fontSize = 11.sp, modifier = Modifier.padding(12.dp))
                         }
