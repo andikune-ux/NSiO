@@ -194,8 +194,9 @@ class CloudStreamPluginRuntime(private val context: Context) {
         val loaded = loadPlugin(artifact)
         loaded.providers.flatMap { api ->
             val results = withTimeoutOrNull(SEARCH_TIMEOUT_MS) {
-                val paginated = runCatching { api.search(query, 1)?.list }.getOrNull()
-                paginated ?: runCatching { api.search(query).orEmpty() }.getOrDefault(emptyList())
+                val quick = runCatching { api.quickSearch(query) }.getOrNull()
+                quick ?: runCatching { api.search(query, 1)?.list }.getOrNull()
+                    ?: runCatching { api.search(query).orEmpty() }.getOrDefault(emptyList())
             }.orEmpty()
 
             results.map { result ->
