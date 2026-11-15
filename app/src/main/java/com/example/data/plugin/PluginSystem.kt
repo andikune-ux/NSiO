@@ -80,7 +80,8 @@ class PluginManager(private val context: Context) {
         private val BUILT_IN_REPOSITORY_URLS = listOf(
             "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
             "https://raw.githubusercontent.com/ic-wan/cloudstream_repo/main/repo.json",
-            "https://raw.githubusercontent.com/TheAlyss/cloudstream-AlyssRepo/builds/repo.json"
+            "https://raw.githubusercontent.com/TheAlyss/cloudstream-AlyssRepo/builds/repo.json",
+            "https://raw.githubusercontent.com/admknight/CloudstreamExtensions/master/repo.json"
         )
     }
     private val _installedPlugins = MutableStateFlow<List<Plugin>>(emptyList())
@@ -662,9 +663,14 @@ class PluginManager(private val context: Context) {
                 name = when (index) {
                     0 -> "CloudStream Official"
                     1 -> "iCH Indonesia"
-                    else -> "TheAlyss"
+                    2 -> "TheAlyss"
+                    else -> "CloudStream Mega Catalog"
                 },
-                description = "Repositori bawaan NSiO • sinkronisasi otomatis",
+                description = if (index == 3) {
+                    "Katalog komunitas multi-provider • sumber pihak ketiga • sinkronisasi otomatis"
+                } else {
+                    "Repositori bawaan NSiO • sinkronisasi otomatis"
+                },
                 sourceUrl = url,
                 isBuiltIn = true
             )
