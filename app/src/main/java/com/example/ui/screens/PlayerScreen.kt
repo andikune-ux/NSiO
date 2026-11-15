@@ -10,6 +10,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.view.ViewGroup
 import android.view.LayoutInflater
+import android.widget.Toast
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -268,10 +269,28 @@ fun PlayerScreen(
         val activeUrl = playerState.selectedPluginStreamUrl
             ?.takeIf { it.isNotBlank() }
             ?: media.url
-        fun sendCurrentMedia(session: CastSession?) {
-            if (session == null || activeUrl.isBlank()) return
-            val extension = runCatching { Uri.parse(activeUrl).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
-            val streamType = latestCastPlayerState.pluginStreams.firstOrNull { it.url == activeUrl }?.streamType.orEmpty().uppercase()
+        fun sendCurrentMedia(session: CastSession?): Boolean {
+            if (session == null || activeUrl.isBlank()) return false
+            val selectedStream = latestCastPlayerState.pluginStreams.firstOrNull { it.url == activeUrl }
+            val parsedUri = runCatching { Uri.parse(activeUrl) }.getOrNull()
+            val scheme = parsedUri?.scheme?.lowercase()
+            if (scheme != "http" && scheme != "https") {
+                Toast.makeText(context, "Cast hanya mendukung media dengan URL HTTP/HTTPS yang dapat dijangkau TV.", Toast.LENGTH_LONG).show()
+                return false
+            }
+            // Default Media Receiver cannot reproduce CloudStream request headers,
+            // Referer requirements, or app-side OkHttp interceptors.
+            if (selectedStream != null && (
+                    selectedStream.headers.isNotEmpty() ||
+                    selectedStream.referer.isNotBlank() ||
+                    selectedStream.videoInterceptor != null
+                )
+            ) {
+                Toast.makeText(context, "Sumber ini membutuhkan header/autentikasi plugin. Cast standar belum mendukungnya; pemutaran tetap berjalan di perangkat.", Toast.LENGTH_LONG).show()
+                return false
+            }
+            val extension = runCatching { parsedUri?.lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
+            val streamType = selectedStream?.streamType.orEmpty().uppercase()
             val contentType = when {
                 extension == "m3u8" || streamType.contains("HLS") -> "application/x-mpegURL"
                 extension == "mpd" || streamType.contains("DASH") -> "application/dash+xml"
@@ -296,29 +315,31 @@ fun PlayerScreen(
                 .setAutoplay(true)
                 .setCurrentTime(latestCastPlayerState.currentPositionMs.coerceAtLeast(0L))
                 .build()
-            session.remoteMediaClient?.load(request)
+            val remoteClient = session.remoteMediaClient ?: return false
+            remoteClient.load(request)
+            return true
         }
         val listener = object : SessionManagerListener<CastSession> {
             override fun onSessionStarting(session: CastSession) {}
             override fun onSessionStarted(session: CastSession, sessionId: String) {
                 // A Cast session now owns audio/video output. Stop local playback
                 // after loading the current item to avoid duplicate sound on the phone/TV.
-                sendCurrentMedia(session)
-                viewModel.player.pause()
+                if (sendCurrentMedia(session)) viewModel.player.pause()
             }
             override fun onSessionStartFailed(session: CastSession, error: Int) {}
             override fun onSessionEnding(session: CastSession) {}
             override fun onSessionEnded(session: CastSession, error: Int) {}
             override fun onSessionResuming(session: CastSession, sessionId: String) {}
             override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
-                sendCurrentMedia(session)
-                viewModel.player.pause()
+                if (sendCurrentMedia(session)) viewModel.player.pause()
             }
             override fun onSessionResumeFailed(session: CastSession, error: Int) {}
             override fun onSessionSuspended(session: CastSession, reason: Int) {}
         }
         sessionManager?.addSessionManagerListener(listener, CastSession::class.java)
-        sessionManager?.currentCastSession?.takeIf { it.isConnected }?.let(::sendCurrentMedia)
+        sessionManager?.currentCastSession?.takeIf { it.isConnected }?.let { session ->
+            if (sendCurrentMedia(session)) viewModel.player.pause()
+        }
         onDispose { sessionManager?.removeSessionManagerListener(listener, CastSession::class.java) }
     }
 
