@@ -1,6 +1,7 @@
 package com.example.player
 
 import android.content.Context
+import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackException
@@ -294,9 +295,10 @@ class CS3IPlayer(
         title: String,
         startPositionMs: Long = 0L,
         requestHeaders: Map<String, String> = emptyMap(),
-        mimeType: String? = null
+        mimeType: String? = null,
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     ) {
-        playInternal(url, title, startPositionMs, requestHeaders, mimeType)
+        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles)
     }
 
     private fun playInternal(
@@ -304,7 +306,8 @@ class CS3IPlayer(
         title: String,
         startPositionMs: Long,
         requestHeaders: Map<String, String>,
-        mimeType: String?
+        mimeType: String?,
+        externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     ) {
         lastUrl = url
         lastTitle = title
@@ -315,8 +318,9 @@ class CS3IPlayer(
         exoPlayer?.let { player ->
             try {
                 require(url.isNotBlank()) { "URL media kosong" }
+                val subtitleHeaders = externalSubtitles.firstOrNull()?.headers.orEmpty()
                 httpDataSourceFactory.setDefaultRequestProperties(
-                    mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders
+                    mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders + subtitleHeaders
                 )
                 _playerState.value = PlayerState(
                     title = title,
@@ -332,6 +336,24 @@ class CS3IPlayer(
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
+                externalSubtitles.filter { it.url.isNotBlank() }.forEach { subtitle ->
+                    val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
+                    val subtitleMime = when (extension) {
+                        "vtt" -> "text/vtt"
+                        "srt" -> "application/x-subrip"
+                        "ttml", "xml" -> "application/ttml+xml"
+                        "ass", "ssa" -> "text/x-ssa"
+                        else -> null
+                    }
+                    val configuration = ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
+                        .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
+                        .setLabel(subtitle.language.ifBlank { "Subtitle" })
+                        .setSelectionFlags(0)
+                    subtitleMime?.let(configuration::setMimeType)
+                    mediaItemBuilder.setSubtitleConfigurations(
+                        mediaItemBuilder.build().localConfiguration?.subtitleConfigurations.orEmpty() + configuration.build()
+                    )
+                }
                 player.setMediaItem(mediaItemBuilder.build())
                 if (startPositionMs > 0) {
                     player.seekTo(startPositionMs)
