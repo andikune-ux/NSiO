@@ -646,7 +646,7 @@ fun PlayerScreen(
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.Movie,
+                            imageVector = Icons.Default.PlayCircle,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.7f),
                             modifier = Modifier.size(52.dp)
