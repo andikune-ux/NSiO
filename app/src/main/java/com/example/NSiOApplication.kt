@@ -1,6 +1,8 @@
 package com.example
 
 import android.app.Application
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import com.lagradost.cloudstream3.setCloudstreamHttpClient
 import com.example.data.work.CatalogRefreshScheduler
 import okhttp3.OkHttpClient
@@ -17,6 +19,14 @@ class NSiOApplication : Application() {
                 .build()
         )
         CrashLogStore.install(this)
+
+        // WorkManager's AndroidX Startup initializer normally runs before Application.onCreate.
+        // Explicitly initialize as a fallback for hosts/tests where that provider is not run.
+        try {
+            WorkManager.initialize(this, Configuration.Builder().build())
+        } catch (_: IllegalStateException) {
+            // Already initialized by AndroidX Startup; keep the existing configuration.
+        }
         CatalogRefreshScheduler.schedule(this)
     }
 }
