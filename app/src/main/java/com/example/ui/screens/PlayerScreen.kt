@@ -97,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.MediaItem
@@ -122,6 +123,8 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
     var showTrackMenu by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
@@ -261,9 +264,16 @@ fun PlayerScreen(
                         (LayoutInflater.from(ctx)
                             .inflate(R.layout.player_view_texture, null, false) as PlayerView).apply {
                             player = viewModel.player.exoPlayer
+                            resizeMode = selectedResizeMode
+                            playerViewRef = this
                             useController = false
                             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         }
+                    },
+                    update = { view ->
+                        view.player = viewModel.player.exoPlayer
+                        view.resizeMode = selectedResizeMode
+                        playerViewRef = view
                     },
                     modifier = Modifier.fillMaxSize().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null
@@ -479,6 +489,22 @@ fun PlayerScreen(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        Text("RASIO LAYAR", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        listOf(
+                            "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                            "Fill" to AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                            "Zoom" to AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        ).forEach { (label, mode) ->
+                            Text(
+                                text = (if (selectedResizeMode == mode) "✓ " else "") + label,
+                                color = if (selectedResizeMode == mode) controlAccentColor else controlTextColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                    selectedResizeMode = mode
+                                    playerViewRef?.resizeMode = mode
+                                }.padding(horizontal = 8.dp, vertical = 7.dp)
+                            )
+                        }
                         Text("KUALITAS VIDEO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         if (playerState.videoTracks.isEmpty()) {
                             Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
