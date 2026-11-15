@@ -17,6 +17,7 @@ import com.example.data.firebase.FirebaseStorageRepository
 import com.example.data.local.AppDatabase
 import com.example.data.security.PinVault
 import com.example.data.model.MediaItem
+import com.example.data.model.MediaSourceClassifier
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
@@ -786,23 +787,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Keeping this suspendable lets bulk refresh wait for real completion instead
      * of reporting success while child jobs are still running.
      */
-    private fun isGoogleDriveSource(url: String): Boolean {
-        val host = runCatching { java.net.URI(url.trim()).host?.lowercase().orEmpty() }.getOrDefault("")
-        return host in setOf(
-            "drive.google.com",
-            "docs.google.com",
-            "drive.usercontent.google.com",
-            "drive.googleusercontent.com"
-        )
-    }
-
     private suspend fun parseAndAddLinkInternal(url: String, profileId: String, playlistName: String = ""): String {
         return when (val result = LinkExtractor.parseUrl(url, profileId)) {
             is ParseResult.Single -> {
                 val sourceKind = when {
                     result.item.type == "STREAM" -> "STREAM"
                     url.substringBefore('?').endsWith(".json", ignoreCase = true) -> "REPO"
-                    isGoogleDriveSource(url) -> "DRIVE"
+                    MediaSourceClassifier.isGoogleDriveUrl(url) -> "DRIVE"
                     else -> "LINK"
                 }
                 val playlist = ensureSourcePlaylist(url, playlistName.ifBlank { result.item.title }, sourceKind, profileId, playlistName)
