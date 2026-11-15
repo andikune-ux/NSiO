@@ -414,10 +414,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var handledPlaybackEnd = false
 
     private fun syncPlaybackQueue(current: MediaItem, forceRebuild: Boolean = false) {
-        val base = _mediaList.value
-            .filterNot { it.type.equals("PHOTO", ignoreCase = true) }
-            .take(20).toMutableList()
-        if (base.none { it.id == current.id }) base.add(0, current)
+        val drivePlaylistIds = _sourcePlaylists.value
+            .filter { it.sourceType.equals("DRIVE", ignoreCase = true) }
+            .mapTo(mutableSetOf()) { it.id }
+        val base = com.example.player.PlaybackQueuePolicy
+            .filterForCurrentSource(_mediaList.value, current, drivePlaylistIds)
+            .take(200)
         val baseChanged = base.map { it.id } != playbackQueueBase.map { it.id }
         if (forceRebuild || baseChanged || playbackQueueOrder.none { it.id == current.id }) {
             playbackQueueBase = base
@@ -571,7 +573,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mediaObserverJob = viewModelScope.launch {
             mediaDao.getMediaForProfile(current.id).collect { list ->
                 // Ignore late emissions from a profile that is no longer active.
-                if (_activeProfile.value?.id == current.id) _mediaList.value = list
+                if (_activeProfile.value?.id == current.id) {
+                    _mediaList.value = list
+                    _currentlyPlaying.value?.let { syncPlaybackQueue(it) }
+                }
             }
         }
     }
@@ -582,7 +587,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _sourcePlaylists.value = emptyList()
         playlistObserverJob = viewModelScope.launch {
             sourcePlaylistDao.observeForProfile(current.id).collect { playlists ->
-                if (_activeProfile.value?.id == current.id) _sourcePlaylists.value = playlists
+                if (_activeProfile.value?.id == current.id) {
+                    _sourcePlaylists.value = playlists
+                    _currentlyPlaying.value?.let { syncPlaybackQueue(it) }
+                }
             }
         }
     }
