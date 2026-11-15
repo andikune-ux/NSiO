@@ -1206,13 +1206,40 @@ fun HomeScreen(
                                 .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Material3Text(
-                                text = name,
+                            Column(
                                 modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Material3Text(
+                                    text = name,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                val health = cloudStreamSourceHealth[pluginId]
+                                val latestEvents = health?.history.orEmpty().takeLast(3).asReversed()
+                                if (latestEvents.isNotEmpty()) {
+                                    Material3Text(
+                                        text = latestEvents.joinToString("  ·  ") { event ->
+                                            val state = if (event.succeeded) "OK" else "Gagal"
+                                            val duration = if (event.responseTimeMs > 0L) " ${event.responseTimeMs}ms" else ""
+                                            "$state$duration"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else if (health?.lastError != null) {
+                                    Material3Text(
+                                        text = health.lastError.orEmpty(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                             IconButton(
                                 onClick = { viewModel.refreshCloudStreamPluginOnHome(pluginId) },
                                 enabled = refreshingCloudStreamPluginId == null,
