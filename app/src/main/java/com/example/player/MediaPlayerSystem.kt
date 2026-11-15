@@ -72,6 +72,7 @@ interface IPlayer {
     fun toggleShuffle()
     fun setVolume(volume: Float)
     fun toggleMute()
+    fun selectPluginStream(stream: com.example.data.plugin.CloudStreamStream)
     fun retry()
     fun playFallback(customTitle: String? = null)
     fun clearError()
@@ -333,7 +334,7 @@ class CS3IPlayer(
     }
 
     override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
-        playInternal(url, title, startPositionMs, requestHeaders, null)
+        playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList())
     }
 
     fun playWithMimeType(
