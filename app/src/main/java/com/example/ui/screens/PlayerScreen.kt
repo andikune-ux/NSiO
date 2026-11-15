@@ -3,6 +3,8 @@ package com.example.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -43,6 +45,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
@@ -126,6 +130,7 @@ fun PlayerScreen(
     var showTrackMenu by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isFullscreen by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
@@ -136,6 +141,7 @@ fun PlayerScreen(
     var brightnessLevel by remember(activity) { mutableStateOf(if (originalBrightness < 0f) 0.5f else originalBrightness.coerceIn(0.05f, 1f)) }
     val isPhoto = media.type == "PHOTO"
     val usesNativePlayer = !isPhoto
+    val isTelevision = (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
     // Player overlays sit above arbitrary video/photo colors, so keep their
     // typography consistently high-contrast regardless of the app theme.
     val controlTextColor = Color.White
@@ -165,6 +171,8 @@ fun PlayerScreen(
                 val attributes = window.attributes
                 attributes.screenBrightness = originalBrightness
                 window.attributes = attributes
+                window.decorView.systemUiVisibility = ViewGroup.SYSTEM_UI_FLAG_VISIBLE
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
         }
     }
@@ -457,6 +465,46 @@ fun PlayerScreen(
                             }
                         }
                         if (!isPhoto) {
+                            IconButton(
+                                onClick = {
+                                    val enteringFullscreen = !isFullscreen
+                                    isFullscreen = enteringFullscreen
+                                    activity?.let { host ->
+                                        val decor = host.window.decorView
+                                        if (enteringFullscreen) {
+                                            decor.systemUiVisibility = (
+                                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                                                android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                                                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                                                android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                                                android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                                                android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                            )
+                                            if (!isTelevision) {
+                                                val videoSize = viewModel.player.exoPlayer?.videoSize
+                                                val width = videoSize?.width ?: 0
+                                                val height = videoSize?.height ?: 0
+                                                val rotation = videoSize?.unappliedRotationDegrees ?: 0
+                                                val portraitVideo = if (rotation == 90 || rotation == 270) width > height else height > width
+                                                if (width > 0 && height > 0) {
+                                                    host.requestedOrientation = if (portraitVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                                }
+                                            }
+                                        } else {
+                                            decor.systemUiVisibility = ViewGroup.SYSTEM_UI_FLAG_VISIBLE
+                                            host.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                    contentDescription = if (isFullscreen) "Keluar layar penuh" else "Layar penuh",
+                                    tint = controlTextColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                             IconButton(
                                 onClick = { showTrackMenu = !showTrackMenu; showQueue = false },
                                 modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)
