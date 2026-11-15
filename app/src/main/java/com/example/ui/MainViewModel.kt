@@ -1719,6 +1719,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _currentlyPlaying.value = item
                 _playbackPreparationMessage.value = null
+                syncPlaybackQueue(item)
                 player.playWithMimeType(
                     url = streamUrl,
                     title = item.title,
@@ -1861,6 +1862,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         _currentlyPlaying.value = item
         _playbackPreparationMessage.value = null
+        syncPlaybackQueue(item)
         player.playWithMimeType(
             url = stream.url,
             title = item.title,
