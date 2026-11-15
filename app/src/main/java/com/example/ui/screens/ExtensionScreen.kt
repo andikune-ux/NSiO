@@ -1529,6 +1529,25 @@ private fun CloudStreamSearchPanel(
                 }
             }
             content.tags.takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.primary) }
+            listOfNotNull(
+                content.englishTitle?.takeIf { it.isNotBlank() }?.let { "English: $it" },
+                content.japaneseTitle?.takeIf { it.isNotBlank() }?.let { "Japanese: $it" },
+                content.synonyms.takeIf { it.isNotEmpty() }?.let { "Judul lain: ${it.joinToString(", ")}" }
+            ).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            content.nextAiringEpisode?.let { episode ->
+                val airingText = content.nextAiringUnixTime?.let { timestamp ->
+                    runCatching {
+                        java.time.Instant.ofEpochSecond(timestamp)
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm"))
+                    }.getOrNull()
+                }
+                Text(
+                    "Episode berikutnya${content.nextAiringSeason?.let { " • Season $it" } ?: ""}: $episode${airingText?.let { " • $it" } ?: ""}",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             content.externalIds.takeIf { it.isNotEmpty() }?.let { ids ->
                 Text(
                     ids.entries.joinToString(" • ") { "${it.key}: ${it.value}" },
