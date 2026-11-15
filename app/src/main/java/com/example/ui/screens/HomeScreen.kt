@@ -135,18 +135,9 @@ fun HomeScreen(
     val drivePlaylists = remember(sourcePlaylists, mediaList) {
         sourcePlaylists.filter { playlist ->
             playlist.sourceType.equals("DRIVE", ignoreCase = true) ||
-                playlist.url.contains("drive.google.com", ignoreCase = true) ||
-                playlist.url.contains("docs.google.com", ignoreCase = true) ||
-                playlist.url.contains("drive.usercontent.google.com", ignoreCase = true) ||
-                playlist.url.contains("drive.googleusercontent.com", ignoreCase = true) ||
+                MediaSourceClassifier.isGoogleDriveUrl(playlist.url) ||
                 mediaList.any { item ->
-                    item.playlistId == playlist.id && (
-                        item.category.contains("Google Drive", ignoreCase = true) ||
-                            item.url.contains("drive.google.com", ignoreCase = true) ||
-                            item.url.contains("docs.google.com", ignoreCase = true) ||
-                            item.sourceUrl.contains("drive.google.com", ignoreCase = true) ||
-                            item.sourceUrl.contains("docs.google.com", ignoreCase = true)
-                    )
+                    item.playlistId == playlist.id && MediaSourceClassifier.isDriveMedia(item)
                 }
         }.sortedBy { it.name.lowercase() }
     }
@@ -218,13 +209,10 @@ fun HomeScreen(
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
-        val isDriveMedia = item.sourceType.equals("DRIVE", ignoreCase = true) ||
-            item.playlistId in drivePlaylists.map { it.id } ||
-            item.category.contains("Google Drive", ignoreCase = true) ||
-            item.url.contains("drive.google.com", ignoreCase = true) ||
-            item.url.contains("docs.google.com", ignoreCase = true) ||
-            item.sourceUrl.contains("drive.google.com", ignoreCase = true) ||
-            item.sourceUrl.contains("docs.google.com", ignoreCase = true)
+        val isDriveMedia = MediaSourceClassifier.isDriveMedia(
+            item,
+            drivePlaylists.mapTo(hashSetOf()) { it.id }
+        )
         val matchesFilter = when (selectedFilter) {
             "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"
             "DRIVE_ALL" -> isDriveMedia
