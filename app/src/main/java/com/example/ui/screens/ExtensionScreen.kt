@@ -841,6 +841,9 @@ private fun PluginRepoTab(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
+            CloudStreamCatalogManagerPanel(viewModel, repos)
+        }
+        item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = { showPlaylistDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar playlist (" + sourcePlaylists.size + ")", fontSize = 11.sp) }
                 Button(onClick = { showRepositoryDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar repository (" + repos.size + ")", fontSize = 11.sp) }
@@ -1093,11 +1096,108 @@ private fun PluginRepoTab(
 
 
 @Composable
+private fun CloudStreamCatalogManagerPanel(
+    viewModel: MainViewModel,
+    repos: List<com.example.data.plugin.RepoManifest>
+) {
+    var loading by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var sections by remember {
+        mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>>(emptyList())
+    }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val installed = repos.flatMap { it.plugins }
+        .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
+        .distinctBy { it.internalName to it.version }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().liquidGlass(
+            shape = RoundedCornerShape(22.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 5.dp
+        ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Text("Katalog CloudStream", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Muat katalog utama dari plugin .cs3 yang sudah terpasang. Hasil katalog dapat disimpan agar tampil di Beranda NSiO.",
+            fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Button(
+            onClick = {
+                loading = true
+                sections = emptyList()
+                message = ""
+                scope.launch {
+                    val loadedSections = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamHomeSection>>()
+                    val failures = mutableListOf<String>()
+                    installed.forEach { entry ->
+                        runCatching { viewModel.pluginManager.loadCloudStreamHomePage(entry, 1) }
+                            .onSuccess { loaded -> loaded.forEach { loadedSections.add(entry to it) } }
+                            .onFailure { error -> failures += "${entry.name}: ${error.message ?: "gagal memuat"}" }
+                    }
+                    sections = loadedSections
+                    message = when {
+                        loadedSections.isNotEmpty() && failures.isNotEmpty() ->
+                            "${loadedSections.sumOf { it.second.items.size }} item dimuat; ${failures.size} plugin bermasalah."
+                        loadedSections.isNotEmpty() ->
+                            "${loadedSections.sumOf { it.second.items.size }} item dari ${loadedSections.size} kategori berhasil dimuat."
+                        installed.isEmpty() -> "Belum ada plugin .cs3 terpasang."
+                        failures.isNotEmpty() -> failures.take(3).joinToString(" • ")
+                        else -> "Plugin terpasang tidak menyediakan katalog utama (Main Page). Gunakan pencarian di Beranda."
+                    }
+                    loading = false
+                }
+            },
+            enabled = !loading && installed.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+        ) {
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            else Text("Muat katalog utama dari ${installed.size} plugin", fontSize = 11.sp)
+        }
+        if (message.isNotBlank()) Text(message, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (sections.isNotEmpty()) {
+            Button(
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        var saved = 0
+                        val failures = mutableListOf<String>()
+                        sections.groupBy { it.first }.forEach { (entry, rows) ->
+                            runCatching { viewModel.persistCloudStreamCatalog(entry, rows.map { it.second }) }
+                                .onSuccess { saved += it }
+                                .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
+                        }
+                        message = if (failures.isEmpty()) "Berhasil menyimpan $saved item katalog ke Home."
+                            else "$saved item tersimpan; " + failures.take(3).joinToString(" • ")
+                        saving = false
+                    }
+                },
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                if (saving) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                else Text("Simpan katalog ke Home", fontSize = 11.sp)
+            }
+            sections.forEach { (entry, section) ->
+                Text(
+                    "${section.sectionName} • ${entry.name} • ${section.items.size}",
+                    fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun CloudStreamSearchPanel(
     viewModel: MainViewModel,
     repos: List<com.example.data.plugin.RepoManifest>,
     query: String,
-    searchRequest: Int
+    searchRequest: Int,
+    showCatalogControls: Boolean = false
 ) {
     val trailerContext = LocalContext.current
     var loadingHomeCatalog by remember { mutableStateOf(false) }
@@ -1327,6 +1427,7 @@ fun CloudStreamSearchPanel(
         }
     }
 
+    if (showCatalogControls) {
     Column(
         modifier = Modifier.fillMaxWidth().liquidGlass(
             shape = RoundedCornerShape(22.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 5.dp
@@ -1483,6 +1584,7 @@ fun CloudStreamSearchPanel(
                 }
             }
         }
+    }
         LaunchedEffect(searchRequest) {
             if (searchRequest <= 0 || query.isBlank()) return@LaunchedEffect
             searching = true
