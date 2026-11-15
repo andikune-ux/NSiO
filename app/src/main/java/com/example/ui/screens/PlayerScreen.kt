@@ -683,9 +683,14 @@ fun PlayerScreen(
                                 isSeeking = false
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = controlAccentColor,
-                                activeTrackColor = controlAccentColor,
-                                inactiveTrackColor = MaterialTheme.colorScheme.outline
+                                // Liquid Glass timeline: white played track, blue seek head,
+                                // and a subtle frosted-white unplayed track.
+                                thumbColor = Color(0xFF48BFFF),
+                                activeTrackColor = Color.White,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.24f),
+                                disabledThumbColor = Color(0xFF48BFFF).copy(alpha = 0.55f),
+                                disabledActiveTrackColor = Color.White.copy(alpha = 0.55f),
+                                disabledInactiveTrackColor = Color.White.copy(alpha = 0.12f)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
