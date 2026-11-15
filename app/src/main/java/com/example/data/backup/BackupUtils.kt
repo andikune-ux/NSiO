@@ -100,6 +100,8 @@ object BackupUtils {
                     put("category", m.category)
                     put("playlistId", m.playlistId)
                     put("sourceUrl", m.sourceUrl)
+                    put("pluginId", m.pluginId)
+                    put("repositoryId", m.repositoryId)
                     put("durationMs", m.durationMs)
                     put("progressMs", m.progressMs)
                     put("isFavorite", m.isFavorite)
@@ -220,6 +222,8 @@ object BackupUtils {
                                 category = m.optString("category", "Umum"),
                                 playlistId = m.optString("playlistId", ""),
                                 sourceUrl = m.optString("sourceUrl", ""),
+                                pluginId = m.optString("pluginId", ""),
+                                repositoryId = m.optString("repositoryId", ""),
                                 durationMs = m.optLong("durationMs", 0L),
                                 progressMs = m.optLong("progressMs", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
