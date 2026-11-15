@@ -144,6 +144,7 @@ object BackupAmanManager {
                 put("repositoryId", m.repositoryId)
                 put("durationMs", m.durationMs)
                 put("progressMs", m.progressMs)
+                put("lastWatchedAt", m.lastWatchedAt)
                 put("isFavorite", m.isFavorite)
                 put("createdAt", m.createdAt)
                 put("extraInfo", m.extraInfo)
