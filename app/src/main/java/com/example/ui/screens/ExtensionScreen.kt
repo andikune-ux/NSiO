@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
@@ -48,6 +49,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -55,6 +57,8 @@ import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import okhttp3.Headers
@@ -1212,6 +1217,34 @@ fun CloudStreamSearchPanel(
         loadingDetail = false
     }
 
+    fun openCloudStreamDetail(
+        entry: com.example.data.plugin.CloudStreamPluginEntry,
+        providerName: String,
+        contentUrl: String,
+        fallbackPoster: String? = null,
+        fallbackYear: Int? = null,
+        fallbackTitle: String? = null
+    ) {
+        if (loadingDetail) return
+        loadingDetail = true
+        streams = emptyList()
+        scope.launch {
+            runCatching {
+                viewModel.pluginManager.loadCloudStreamContent(entry, providerName, contentUrl)
+            }.onSuccess { loaded ->
+                selectedContent = entry to loaded.copy(
+                    posterUrl = loaded.posterUrl?.takeIf { it.isNotBlank() } ?: fallbackPoster,
+                    year = loaded.year ?: fallbackYear,
+                    title = loaded.title.ifBlank { fallbackTitle.orEmpty() }
+                )
+                linkMessage = ""
+            }.onFailure { error ->
+                searchMessage = "Gagal membuka detail konten: ${error.localizedMessage ?: "provider tidak merespons"}"
+            }
+            loadingDetail = false
+        }
+    }
+
     fun resolveLinks(
         entry: com.example.data.plugin.CloudStreamPluginEntry,
         providerName: String,
@@ -1429,8 +1462,10 @@ fun CloudStreamSearchPanel(
                     if (!item.posterUrl.isNullOrBlank()) {
                         AsyncImage(
                             model = item.posterUrl,
-                            contentDescription = "Poster ${item.title}",
-                            modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp))
+                            contentDescription = "Buka detail ${item.title}",
+                            modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp)).clickable {
+                                openCloudStreamDetail(entry, item.providerName, item.url, item.posterUrl, item.year, item.title)
+                            }
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -1443,25 +1478,7 @@ fun CloudStreamSearchPanel(
                     }
                     TextButton(
                         enabled = !loadingDetail,
-                        onClick = {
-                            loadingDetail = true
-                            scope.launch {
-                                runCatching {
-                                    viewModel.pluginManager.loadCloudStreamContent(entry, item.providerName, item.url)
-                                }.onSuccess { content ->
-                                    selectedContent = entry to content.copy(
-                                        posterUrl = content.posterUrl?.takeIf { it.isNotBlank() } ?: item.posterUrl,
-                                        year = content.year ?: item.year,
-                                        title = content.title.ifBlank { item.title }
-                                    )
-                                    streams = emptyList()
-                                    linkMessage = ""
-                                }.onFailure { error ->
-                                    homeCatalogMessage = error.message ?: "Gagal membuka detail katalog."
-                                }
-                                loadingDetail = false
-                            }
-                        }
+                        onClick = { openCloudStreamDetail(entry, item.providerName, item.url, item.posterUrl, item.year, item.title) }
                     ) { Text("Detail", fontSize = 9.sp) }
                 }
             }
@@ -1551,8 +1568,10 @@ fun CloudStreamSearchPanel(
                 if (!result.posterUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = result.posterUrl,
-                        contentDescription = "Poster ${result.title}",
-                        modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp))
+                        contentDescription = "Buka detail ${result.title}",
+                        modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp)).clickable {
+                            openCloudStreamDetail(entry, result.providerName, result.url, result.posterUrl, result.year, result.title)
+                        }
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -1580,27 +1599,7 @@ fun CloudStreamSearchPanel(
                 }
                 TextButton(
                     enabled = !loadingDetail,
-                    onClick = {
-                        loadingDetail = true
-                        streams = emptyList()
-                        scope.launch {
-                            runCatching {
-                                viewModel.pluginManager.loadCloudStreamContent(entry, result.providerName, result.url)
-                            }.onSuccess { content ->
-                                // Search cards often carry poster/year even when a provider's
-                                // detail response omits one of those fields.
-                                selectedContent = entry to content.copy(
-                                    posterUrl = content.posterUrl?.takeIf { it.isNotBlank() } ?: result.posterUrl,
-                                    year = content.year ?: result.year,
-                                    title = content.title.ifBlank { result.title }
-                                )
-                                linkMessage = ""
-                            }.onFailure { error ->
-                                searchMessage = error.message ?: "Gagal memuat detail konten."
-                            }
-                            loadingDetail = false
-                        }
-                    }
+                    onClick = { openCloudStreamDetail(entry, result.providerName, result.url, result.posterUrl, result.year, result.title) }
                 ) { Text("Detail", fontSize = 10.sp) }
             }
         }
@@ -1608,7 +1607,40 @@ fun CloudStreamSearchPanel(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         selectedContent?.let { (entry, content) ->
-            val contentImageHeaders = remember(content.url, content.posterHeaders) {
+            Dialog(
+                onDismissRequest = {
+                    selectedContent = null
+                    streams = emptyList()
+                    linkMessage = ""
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    selectedContent = null
+                                    streams = emptyList()
+                                    linkMessage = ""
+                                }
+                            ) { Text("‹ Kembali", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Detail konten", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(entry.name, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        val contentImageHeaders = remember(content.url, content.posterHeaders) {
                 Headers.Builder().apply {
                     content.posterHeaders.forEach { (key, value) -> add(key, value) }
                 }.build()
@@ -1949,8 +1981,6 @@ fun CloudStreamSearchPanel(
                         ) { Text("Detail", fontSize = 9.sp) }
                     }
                 }
-            }
-        }
         if (resolvingLinks) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
@@ -2014,6 +2044,9 @@ fun CloudStreamSearchPanel(
                         }
                     }
                 ) { Text("Putar", fontSize = 10.sp) }
+            }
+                    }
+                }
             }
         }
     }
