@@ -615,7 +615,25 @@ fun PlayerScreen(
                                     )
                                 }
                                 "Kualitas video" -> {
-                                    if (playerState.videoTracks.isEmpty()) Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                                    if (playerState.pluginStreams.isEmpty() && playerState.videoTracks.isEmpty()) {
+                                        Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                                    }
+                                    playerState.pluginStreams
+                                        .distinctBy { it.url }
+                                        .sortedByDescending { it.quality }
+                                        .forEach { stream ->
+                                            val qualityLabel = stream.quality.takeIf { it > 0 }?.let { "${it}p" } ?: stream.name.ifBlank { stream.source }
+                                            val detail = listOf(stream.name, stream.source, stream.streamType).filter { it.isNotBlank() }.distinct().joinToString(" • ")
+                                            Text(
+                                                text = (if (playerState.selectedPluginStreamUrl == stream.url) "✓ " else "") + qualityLabel + if (detail.isNotBlank()) "  ·  $detail" else "",
+                                                color = if (playerState.selectedPluginStreamUrl == stream.url) controlAccentColor else controlTextColor,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                    viewModel.player.selectPluginStream(stream)
+                                                    selectedPlayerSetting = null
+                                                }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                            )
+                                        }
                                     playerState.videoTracks.forEach { track ->
                                         Text(
                                             text = (if (track.selected) "✓ " else "") + track.label,
