@@ -78,7 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import coil.request.Headers
+import okhttp3.Headers
 import com.example.ui.MainViewModel
 import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
