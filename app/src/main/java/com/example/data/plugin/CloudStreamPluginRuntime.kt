@@ -531,9 +531,17 @@ class CloudStreamPluginRuntime(private val context: Context) {
                     ?: return@mapNotNull null
                 number to display
             }?.toMap().orEmpty(),
-            externalIds = listOf("imdbId", "tmdbId", "aniListId", "malId", "traktId", "simklId")
-                .mapNotNull { key -> readProperty(this, key)?.toString()?.takeIf { it.isNotBlank() }?.let { key to it } }
-                .toMap()
+            externalIds = buildMap {
+                (readProperty(this@toCloudStreamContent, "syncData") as? Map<*, *>)
+                    ?.forEach { (key, value) ->
+                        if (key is String && value != null && value.toString().isNotBlank()) put(key, value.toString())
+                    }
+                listOf("imdbId", "tmdbId", "aniListId", "malId", "traktId", "simklId")
+                    .forEach { key ->
+                        readProperty(this@toCloudStreamContent, key)?.toString()
+                            ?.takeIf { it.isNotBlank() }?.let { put(key, it) }
+                    }
+            }
         )
     }
 
