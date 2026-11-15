@@ -589,11 +589,11 @@ fun HomeScreen(
                                     "LINK" -> 0
                                     "DRIVE" -> 1
                                     "STREAM" -> 2
-                                    "REPO" -> 2
-                                    "CLOUDSTREAM" -> 3
-                                    "FILE" -> 4
-                                    "SERVER" -> 5
-                                    else -> 5
+                                    "REPO" -> 3
+                                    "CLOUDSTREAM" -> 4
+                                    "FILE" -> 5
+                                    "SERVER" -> 6
+                                    else -> 6
                                 }
                             }.thenBy { it })
                         sourceGroups.forEach { (sourceType, sourceItems) ->
