@@ -106,6 +106,7 @@ fun HomeScreen(
     val settings by viewModel.settings.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val selectedSort by viewModel.selectedSort.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
@@ -143,7 +144,7 @@ fun HomeScreen(
     )
     val accentColor = MaterialTheme.colorScheme.primary
 
-    val filteredList = mediaList.filter { item ->
+    val filteredItems = mediaList.filter { item ->
         val matchesServerAccess = item.sourceType != "SERVER" || isServerUnlocked
         val matchesSearch = searchQuery.isEmpty() ||
                 item.title.contains(searchQuery, ignoreCase = true) ||
@@ -164,6 +165,14 @@ fun HomeScreen(
             } else true
         }
         matchesServerAccess && matchesSearch && matchesFilter
+    }
+
+    val filteredList = when (selectedSort) {
+        "TITLE" -> filteredItems.sortedBy { it.title.trim().lowercase() }
+        "CONTINUE" -> filteredItems.filter { it.progressMs > 0L && (it.durationMs <= 0L || it.progressMs < it.durationMs) }
+            .sortedByDescending { it.progressMs }
+        "FAVORITES" -> filteredItems.filter { it.isFavorite }.sortedByDescending { it.createdAt }
+        else -> filteredItems.sortedByDescending { it.createdAt }
     }
 
     BoxWithConstraints(
@@ -691,6 +700,35 @@ fun HomeScreen(
                                         tint = accentColor,
                                         modifier = Modifier.size(24.dp)
                                     )
+                                }
+                            }
+
+                            // Pengurutan katalog: hanya opsi yang didukung data lokal saat ini.
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val sortOptions = listOf(
+                                    "RECENT" to "Terbaru",
+                                    "TITLE" to "A–Z",
+                                    "CONTINUE" to "Lanjutkan",
+                                    "FAVORITES" to "Favorit"
+                                )
+                                sortOptions.forEach { (key, label) ->
+                                    val selected = selectedSort == key
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (selected) accentColor.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+                                            .border(1.dp, if (selected) accentColor.copy(alpha = 0.65f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                                            .clickable { viewModel.selectSort(key) }
+                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    ) {
+                                        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                                    }
                                 }
                             }
 

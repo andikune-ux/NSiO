@@ -93,6 +93,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedFilter = MutableStateFlow("ALL") // "ALL", "LINK", "FILE", "SERVER"
     val selectedFilter: StateFlow<String> = _selectedFilter.asStateFlow()
 
+    private val _selectedSort = MutableStateFlow("RECENT")
+    val selectedSort: StateFlow<String> = _selectedSort.asStateFlow()
+
     // Currently playing media
     private val _currentlyPlaying = MutableStateFlow<MediaItem?>(null)
     val currentlyPlaying: StateFlow<MediaItem?> = _currentlyPlaying.asStateFlow()
@@ -174,6 +177,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _activeProfile.value = active
                 _settings.value = loadSettingsForProfile(active.id)
                 _selectedFilter.value = loadSelectedFilter(active.id)
+                _selectedSort.value = loadSelectedSort(active.id)
             }
 
             if (didRecoverLocalPin) {
@@ -219,6 +223,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isServerUnlocked.value = false
             _settings.value = loadSettingsForProfile(profile.id)
             _selectedFilter.value = loadSelectedFilter(profile.id)
+            _selectedSort.value = loadSelectedSort(profile.id)
             observeActiveProfileMedia()
             observeSourcePlaylists()
             showStatus("Beralih ke profil '${profile.name}'")
@@ -311,6 +316,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadSelectedFilter(profileId: String): String =
         catalogPreferences.getString(filterPreferenceKey(profileId), "ALL") ?: "ALL"
+
+    private fun sortPreferenceKey(profileId: String) = "home_sort_$profileId"
+
+    private fun loadSelectedSort(profileId: String): String =
+        catalogPreferences.getString(sortPreferenceKey(profileId), "RECENT") ?: "RECENT"
+
+    fun selectSort(sort: String) {
+        val supported = setOf("RECENT", "TITLE", "CONTINUE", "FAVORITES")
+        if (sort !in supported) return
+        _selectedSort.value = sort
+        _activeProfile.value?.id?.let { profileId ->
+            catalogPreferences.edit().putString(sortPreferenceKey(profileId), sort).apply()
+        }
+    }
 
     fun selectFilter(filter: String) {
         _selectedFilter.value = filter
