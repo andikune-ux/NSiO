@@ -354,6 +354,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val _playbackQueue = MutableStateFlow<List<MediaItem>>(emptyList())
+    val playbackQueue: StateFlow<List<MediaItem>> = _playbackQueue.asStateFlow()
     private var playbackQueueBase: List<MediaItem> = emptyList()
     private var playbackQueueOrder: List<MediaItem> = emptyList()
     private var playbackQueueIndex: Int = -1
@@ -372,6 +374,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         playbackQueueIndex = playbackQueueOrder.indexOfFirst { it.id == current.id }
+        _playbackQueue.value = playbackQueueOrder
     }
 
     fun togglePlaybackShuffle() {
