@@ -112,6 +112,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var playlistObserverJob: Job? = null
     private var sourceRefreshJob: Job? = null
     private var cloudStreamHomeRefreshJob: Job? = null
+    private var cloudStreamHomeLoadMoreJob: Job? = null
+    private val cloudStreamHomePages = mutableMapOf<String, Int>()
+    private val cloudStreamHomeHasNext = mutableMapOf<String, Boolean>()
+    private val _isLoadingMoreCloudStreamHome = MutableStateFlow(false)
+    val isLoadingMoreCloudStreamHome: StateFlow<Boolean> = _isLoadingMoreCloudStreamHome.asStateFlow()
 
     init {
         loadInitialData()
@@ -742,6 +747,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return records.size
     }
 
+    /**
+     * Loads the next available CloudStream page for every installed provider and merges it into Home.
+     * Pagination is tracked per stable plugin identity; one provider failure never blocks others.
+     */
+    fun loadMoreCloudStreamCatalogOnHome() {
+        if (cloudStreamHomeLoadMoreJob?.isActive == true) return
+        val profileId = _activeProfile.value?.id ?: return
+        cloudStreamHomeLoadMoreJob = viewModelScope.launch {
+            _isLoadingMoreCloudStreamHome.value = true
+            var added = 0
+            val failures = mutableListOf<String>()
+            try {
+                val entries = pluginManager.repositories.value
+                    .flatMap { it.plugins }
+                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
+                    .distinctBy { pluginManager.cloudStreamPluginId(it) }
+                entries.forEach { entry ->
+                    if (_activeProfile.value?.id != profileId) return@forEach
+                    val pluginId = pluginManager.cloudStreamPluginId(entry)
+                    if (cloudStreamHomeHasNext[pluginId] == false) return@forEach
+                    val nextPage = (cloudStreamHomePages[pluginId] ?: 1) + 1
+                    runCatching {
+                        pluginManager.loadCloudStreamHomePage(entry, nextPage)
+                    }.onSuccess { sections ->
+                        cloudStreamHomePages[pluginId] = nextPage
+                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
+                        if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
+                            runCatching { persistCloudStreamCatalog(entry, sections) }
+                                .onSuccess { added += it }
+                                .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
+                        }
+                    }.onFailure { error ->
+                        failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
+                    }
+                }
+                showStatus(
+                    when {
+                        added > 0 && failures.isEmpty() -> "Katalog CloudStream Home bertambah: $added item."
+                        added > 0 -> "$added item ditambahkan; ${failures.size} plugin gagal."
+                        failures.isNotEmpty() -> "Gagal memuat halaman berikutnya: ${failures.take(3).joinToString(" • ")}"
+                        else -> "Tidak ada halaman CloudStream berikutnya yang tersedia."
+                    }
+                )
+            } finally {
+                _isLoadingMoreCloudStreamHome.value = false
+                cloudStreamHomeLoadMoreJob = null
+            }
+        }
+    }
+
     fun refreshRepository(repo: com.example.data.plugin.RepoManifest) {
         viewModelScope.launch {
             runCatching { pluginManager.refreshRepositoryCatalog(repo) }
@@ -774,6 +829,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runCatching {
                         pluginManager.loadCloudStreamHomePage(entry, 1)
                     }.onSuccess { sections ->
+                        val pluginId = pluginManager.cloudStreamPluginId(entry)
+                        cloudStreamHomePages[pluginId] = 1
+                        cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { refreshed += it }
