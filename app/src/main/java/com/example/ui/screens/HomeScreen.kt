@@ -588,7 +588,10 @@ fun HomeScreen(
                                 key = "cloudstream_home_catalog_browser",
                                 span = { GridItemSpan(maxLineSpan) }
                             ) {
-                                CloudStreamSearchPanel(viewModel, cloudStreamRepositories, searchQuery, cloudStreamSearchRequest)
+                                CloudStreamSearchPanel(
+                                    viewModel, cloudStreamRepositories, searchQuery, cloudStreamSearchRequest,
+                                    handlePendingDetail = false
+                                )
                             }
                         }
                         val sourceGroups = filteredList
@@ -836,6 +839,17 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                // Persistent request host: remains composed even when the grid scrolls or
+                // the visible CloudStream search panel is not available.
+                CloudStreamSearchPanel(
+                    viewModel = viewModel,
+                    repos = cloudStreamRepositories,
+                    query = searchQuery,
+                    searchRequest = cloudStreamSearchRequest,
+                    renderContent = false,
+                    handlePendingDetail = true
+                )
 
                 // LAPISAN 2: BACKDROP REDUP KETIKA TIRAI TERBUKA (Tap di luar untuk menutup)
                 androidx.compose.animation.AnimatedVisibility(
