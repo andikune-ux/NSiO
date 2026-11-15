@@ -112,6 +112,7 @@ fun HomeScreen(
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
     val cloudStreamRepositories by viewModel.pluginManager.repositories.collectAsState()
+    val isLoadingMoreCloudStreamHome by viewModel.isLoadingMoreCloudStreamHome.collectAsState()
     val cloudStreamPluginFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.flatMap { repo ->
             repo.plugins.map { entry ->
@@ -578,11 +579,31 @@ fun HomeScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
-                                    Text(
-                                        text = if (expandedSourceType == sourceType) "Tutup katalog" else "Lihat semua • ${sourceItems.size} item",
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (expandedSourceType == sourceType) "Tutup katalog" else "Lihat semua • ${sourceItems.size} item",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (sourceType == "CLOUDSTREAM") {
+                                            IconButton(
+                                                onClick = { viewModel.loadMoreCloudStreamCatalogOnHome() },
+                                                enabled = !isLoadingMoreCloudStreamHome,
+                                                modifier = Modifier.size(34.dp)
+                                            ) {
+                                                if (isLoadingMoreCloudStreamHome) {
+                                                    CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.CloudSync,
+                                                        contentDescription = "Muat halaman CloudStream berikutnya",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             val playlistNames = sourcePlaylists.associate { it.id to it.name }
