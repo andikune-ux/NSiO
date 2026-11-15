@@ -1499,19 +1499,58 @@ private fun CloudStreamSearchPanel(
                 Button(onClick = { resolveLinks(entry, content.providerName, data, "Film") }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
             }
             if (content.episodes.isNotEmpty()) {
+                val episodesBySeason = content.episodes.groupBy { it.season ?: 0 }.toSortedMap()
+                val seasonNumbers = episodesBySeason.keys.toList()
+                var selectedSeason by remember(content.url) {
+                    mutableIntStateOf(seasonNumbers.firstOrNull() ?: 0)
+                }
+                val selectedSeasonIndex = seasonNumbers.indexOf(selectedSeason).takeIf { it >= 0 } ?: 0
+                val visibleEpisodes = episodesBySeason[seasonNumbers.getOrNull(selectedSeasonIndex)].orEmpty()
+
                 Text("Episode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                content.episodes.groupBy { it.season ?: 0 }.toSortedMap().forEach { (seasonNumber, episodes) ->
-                    Text(content.seasonNames[seasonNumber] ?: if (seasonNumber > 0) "Season $seasonNumber" else "Episode lainnya", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                    episodes.forEachIndexed { index, episode ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = episode.posterUrl, contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                                episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
-                                listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                            TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }) }) { Text("Link", fontSize = 10.sp) }
+                if (seasonNumbers.size > 1) {
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedSeasonIndex,
+                        edgePadding = 0.dp,
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {}
+                    ) {
+                        seasonNumbers.forEachIndexed { index, seasonNumber ->
+                            val seasonLabel = content.seasonNames[seasonNumber]
+                                ?: if (seasonNumber > 0) "Season $seasonNumber" else "Lainnya"
+                            Tab(
+                                selected = index == selectedSeasonIndex,
+                                onClick = { selectedSeason = seasonNumber },
+                                text = {
+                                    Text(
+                                        "$seasonLabel • ${episodesBySeason[seasonNumber].orEmpty().size}",
+                                        fontSize = 10.sp,
+                                        fontWeight = if (index == selectedSeasonIndex) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                }
+                            )
                         }
+                    }
+                } else {
+                    val seasonNumber = seasonNumbers.first()
+                    Text(
+                        content.seasonNames[seasonNumber]
+                            ?: if (seasonNumber > 0) "Season $seasonNumber" else "Episode lainnya",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                visibleEpisodes.forEachIndexed { index, episode ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = episode.posterUrl, contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
+                            listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }) }) { Text("Link", fontSize = 10.sp) }
                     }
                 }
             }
