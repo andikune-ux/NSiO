@@ -143,9 +143,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun moveCloudStreamPluginOrder(pluginId: String, direction: Int, visiblePluginIds: List<String>) {
         val profileId = _activeProfile.value?.id ?: return
         if (direction == 0 || pluginId !in visiblePluginIds) return
-        val current = (visiblePluginIds.filter { it in _cloudStreamPluginOrder.value } +
-            _cloudStreamPluginOrder.value.filter { it !in visiblePluginIds } +
-            visiblePluginIds.filter { it !in _cloudStreamPluginOrder.value }).distinct().toMutableList()
+        val savedOrder = _cloudStreamPluginOrder.value
+        val current = (savedOrder.filter { it in visiblePluginIds } +
+            visiblePluginIds.filter { it !in savedOrder } +
+            savedOrder.filter { it !in visiblePluginIds }).distinct().toMutableList()
         val from = current.indexOf(pluginId)
         val to = (from + direction.coerceIn(-1, 1)).coerceIn(0, visiblePluginIds.size - 1)
         if (from == to) return
