@@ -484,7 +484,7 @@ fun PlayerScreen(
                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                             val up = waitForUpOrCancellation(pass = PointerEventPass.Initial)
                             if (up != null && (up.position - down.position).getDistance() <= viewConfiguration.touchSlop) {
-                                showControls = true
+                                revealControls()
                             }
                         }
                     }
@@ -535,7 +535,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
                         detectTapGestures(
-                            onTap = { showControls = true },
+                            onTap = { revealControls() },
                             onPress = {
                                 val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
