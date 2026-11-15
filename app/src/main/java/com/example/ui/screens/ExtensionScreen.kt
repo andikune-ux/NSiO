@@ -1116,7 +1116,9 @@ private fun CloudStreamCatalogManagerPanel(
     Column(
         modifier = Modifier.fillMaxWidth().liquidGlass(
             shape = RoundedCornerShape(22.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 5.dp
-        ).padding(16.dp),
+        ).padding(16.dp).then(
+            if (renderContent) Modifier else Modifier.height(0.dp).clipToBounds()
+        ),
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Text("Katalog CloudStream", fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1243,7 +1245,9 @@ fun CloudStreamSearchPanel(
     repos: List<com.example.data.plugin.RepoManifest>,
     query: String,
     searchRequest: Int,
-    showCatalogControls: Boolean = false
+    showCatalogControls: Boolean = false,
+    renderContent: Boolean = true,
+    handlePendingDetail: Boolean = true
 ) {
     val trailerContext = LocalContext.current
     var loadingHomeCatalog by remember { mutableStateOf(false) }
@@ -1339,7 +1343,8 @@ fun CloudStreamSearchPanel(
         .distinctBy { it.internalName to it.version }
 
     val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
-    LaunchedEffect(pendingCloudStreamDetail?.id, installedEntries) {
+    LaunchedEffect(pendingCloudStreamDetail?.id, installedEntries, handlePendingDetail) {
+        if (!handlePendingDetail) return@LaunchedEffect
         val pendingItem = pendingCloudStreamDetail ?: return@LaunchedEffect
         loadingDetail = true
         selectedContent = null
