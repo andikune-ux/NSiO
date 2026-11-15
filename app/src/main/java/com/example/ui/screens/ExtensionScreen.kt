@@ -1528,6 +1528,13 @@ private fun CloudStreamSearchPanel(
                 }
             }
             content.tags.takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.primary) }
+            content.externalIds.takeIf { it.isNotEmpty() }?.let { ids ->
+                Text(
+                    ids.entries.joinToString(" • ") { "${it.key}: ${it.value}" },
+                    fontSize = 8.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
                 Text("Pemeran", fontSize = 12.sp, fontWeight = FontWeight.Bold)
