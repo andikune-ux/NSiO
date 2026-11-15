@@ -1677,7 +1677,8 @@ private fun CloudStreamSearchPanel(
                                 streamUrl = stream.url,
                                 requestHeaders = headers,
                                 mimeType = mimeType,
-                                externalSubtitles = stream.subtitles
+                                externalSubtitles = stream.subtitles,
+                                extractorData = stream.extractorData
                             )
                         }
                     }
