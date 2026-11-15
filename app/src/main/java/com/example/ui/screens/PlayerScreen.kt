@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -120,6 +121,7 @@ fun PlayerScreen(
     val mediaList by viewModel.mediaList.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showQueue by remember { mutableStateOf(false) }
+    var showTrackMenu by remember { mutableStateOf(false) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
@@ -140,6 +142,7 @@ fun PlayerScreen(
     LaunchedEffect(media.id) {
         showControls = true
         showQueue = false
+        showTrackMenu = false
         isSeeking = false
         seekPreviewMs = media.progressMs.coerceAtLeast(0L)
         previewFrame = null
@@ -443,7 +446,13 @@ fun PlayerScreen(
                         }
                         if (!isPhoto) {
                             IconButton(
-                                onClick = { showQueue = !showQueue },
+                                onClick = { showTrackMenu = !showTrackMenu; showQueue = false },
+                                modifier = Modifier.size(40.dp).liquidGlassTvFocusable(shape = CircleShape)
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = "Pengaturan pemutaran", tint = if (showTrackMenu) controlAccentColor else controlTextColor, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(
+                                onClick = { showQueue = !showQueue; showTrackMenu = false },
                                 modifier = Modifier
                                     .size(44.dp)
                                     .liquidGlassTvFocusable(shape = CircleShape)
@@ -453,6 +462,65 @@ fun PlayerScreen(
                                     contentDescription = "Daftar video",
                                     tint = controlTextColor,
                                     modifier = Modifier.size(21.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showTrackMenu && usesNativePlayer) {
+                    Column(
+                        modifier = Modifier.align(Alignment.TopEnd)
+                            .padding(top = 76.dp)
+                            .width(300.dp)
+                            .heightIn(max = 380.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(20.dp), alpha = 0.32f, borderAlpha = 0.52f, elevation = 18.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("KUALITAS VIDEO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        if (playerState.videoTracks.isEmpty()) {
+                            Text("Pilihan kualitas tidak disediakan oleh sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.videoTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                        Text("AUDIO", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        if (playerState.audioTracks.isEmpty()) {
+                            Text("Tidak ada pilihan track audio tambahan", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.audioTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                        Text("SUBTITLE", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        Text(
+                            text = if (playerState.subtitlesDisabled) "✓ Nonaktif" else "Nonaktifkan subtitle",
+                            color = if (playerState.subtitlesDisabled) controlAccentColor else controlTextColor,
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.disableSubtitles() }.padding(horizontal = 8.dp, vertical = 7.dp)
+                        )
+                        if (playerState.subtitleTracks.isEmpty()) {
+                            Text("Tidak ada subtitle tertanam pada sumber ini", color = controlMutedColor, fontSize = 11.sp)
+                        } else {
+                            playerState.subtitleTracks.forEach { track ->
+                                Text(
+                                    text = (if (track.selected) "✓ " else "") + track.label,
+                                    color = if (track.selected) controlAccentColor else controlTextColor,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { viewModel.player.selectTrack(track) }.padding(horizontal = 8.dp, vertical = 7.dp)
                                 )
                             }
                         }
