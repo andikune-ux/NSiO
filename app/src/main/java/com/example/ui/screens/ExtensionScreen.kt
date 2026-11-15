@@ -943,8 +943,6 @@ private fun PluginRepoTab(
             }
         }
 
-        item { CloudStreamSearchPanel(viewModel, repos) }
-
     }
     if (showPlaylistDialog) {
         AlertDialog(
@@ -1088,7 +1086,7 @@ private fun PluginRepoTab(
 
 
 @Composable
-private fun CloudStreamSearchPanel(
+fun CloudStreamSearchPanel(
     viewModel: MainViewModel,
     repos: List<com.example.data.plugin.RepoManifest>
 ) {
@@ -1381,8 +1379,15 @@ private fun CloudStreamSearchPanel(
                     ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (!item.posterUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.posterUrl,
+                            contentDescription = "Poster ${item.title}",
+                            modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp))
+                        )
+                    }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        Text(item.title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
                             "${item.providerName}${item.year?.let { " • $it" } ?: ""}",
                             fontSize = 8.sp,
@@ -1505,8 +1510,15 @@ private fun CloudStreamSearchPanel(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (!result.posterUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = result.posterUrl,
+                        contentDescription = "Poster ${result.title}",
+                        modifier = Modifier.width(48.dp).height(68.dp).clip(RoundedCornerShape(7.dp))
+                    )
+                }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(result.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(result.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
                         "${result.providerName} • ${result.contentType ?: entry.name}${result.year?.let { " • $it" } ?: ""}",
                         fontSize = 9.sp,
@@ -1670,8 +1682,36 @@ private fun CloudStreamSearchPanel(
                     }
                 ) { Text("Putar trailer ${index + 1} di NSiO", fontSize = 9.sp) }
             }
-            content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
-                Button(onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
+                    Button(
+                        onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) },
+                        enabled = !resolvingLinks,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                    ) { Text("Cari link & putar film", fontSize = 10.sp) }
+                }
+                OutlinedButton(
+                    onClick = {
+                        val shareText = buildString {
+                            append(content.title)
+                            content.year?.let { append(" • ").append(it) }
+                            content.plot?.takeIf { it.isNotBlank() }?.let { append("\n\n").append(it) }
+                            append("\n\n").append(content.url)
+                        }
+                        runCatching {
+                            trailerContext.startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    },
+                                    "Bagikan konten"
+                                )
+                            )
+                        }.onFailure { linkMessage = "Tidak dapat membuka menu berbagi." }
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
+                ) { Text("Bagikan", fontSize = 10.sp) }
             }
             if (content.episodes.isNotEmpty()) {
                 val availableDubStatuses = content.episodes.mapNotNull { it.dubStatus }
