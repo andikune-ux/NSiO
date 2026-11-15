@@ -723,7 +723,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             throw IllegalStateException("Katalog kosong; data terakhir tidak dihapus.")
         }
         val previousRecords = mediaDao.getCloudStreamCatalog(profileId, pluginId).associateBy { it.id }
-        val records = fetchedRecords.map { item ->
+        val refreshedRecords = fetchedRecords.map { item ->
             val previous = previousRecords[item.id]
             if (previous == null) item else item.copy(
                 durationMs = previous.durationMs,
@@ -732,6 +732,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 createdAt = previous.createdAt
             )
         }
+        // Home catalog can be paginated. Keep cached pages that were not fetched in this pass.
+        val refreshedIds = refreshedRecords.mapTo(hashSetOf()) { it.id }
+        val records = (refreshedRecords + previousRecords.values.filterNot { it.id in refreshedIds })
+            .distinctBy { it.id }
         mediaDao.replaceCloudStreamCatalog(profileId, pluginId, records)
         showStatus("Katalog ${entry.name} disimpan: ${records.size} item.")
         return records.size
