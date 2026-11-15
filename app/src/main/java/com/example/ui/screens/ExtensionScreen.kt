@@ -828,7 +828,6 @@ private fun PluginRepoTab(
     var showRepositoryDialog by remember { mutableStateOf(false) }
     var showPluginDialog by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val trailerContext = LocalContext.current
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1650,15 +1649,26 @@ private fun CloudStreamSearchPanel(
             }
             content.trailers.forEachIndexed { index, trailer ->
                 TextButton(
-                    enabled = trailer.url.startsWith("https://", true) || trailer.url.startsWith("http://", true),
+                    enabled = !resolvingLinks && (trailer.url.startsWith("https://", true) || trailer.url.startsWith("http://", true)),
                     onClick = {
-                        runCatching {
-                            trailerContext.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(trailer.url)))
-                        }.onFailure { error ->
-                            linkMessage = "Trailer tidak dapat dibuka: ${error.localizedMessage ?: "URL tidak didukung"}"
+                        resolvingLinks = true
+                        linkMessage = "Menyiapkan trailer di pemutar NSiO..."
+                        scope.launch {
+                            runCatching {
+                                viewModel.pluginManager.resolveCloudStreamTrailer(entry, content.providerName, trailer)
+                                    .sortedWith(compareByDescending<com.example.data.plugin.CloudStreamStream> { it.quality })
+                                    .firstOrNull()
+                                    ?: throw IllegalStateException("Extractor tidak menghasilkan stream trailer.")
+                            }.onSuccess { trailerStream ->
+                                linkMessage = ""
+                                viewModel.playCloudStreamTrailer(content.title, content.posterUrl, trailerStream)
+                            }.onFailure { error ->
+                                linkMessage = "Trailer gagal disiapkan: ${error.localizedMessage ?: "stream tidak tersedia"}"
+                            }
+                            resolvingLinks = false
                         }
                     }
-                ) { Text("Putar trailer ${index + 1}", fontSize = 9.sp) } 
+                ) { Text("Putar trailer ${index + 1} di NSiO", fontSize = 9.sp) }
             }
             content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
                 Button(onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
