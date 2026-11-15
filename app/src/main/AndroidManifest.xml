@@ -35,6 +35,9 @@
         android:banner="@drawable/ic_nsio_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.example.player.NSiOCastOptionsProvider" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
