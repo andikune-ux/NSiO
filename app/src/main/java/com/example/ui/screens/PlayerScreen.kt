@@ -550,6 +550,17 @@ fun PlayerScreen(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        Text("KECEPATAN PEMUTARAN", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).forEach { speed ->
+                            Text(
+                                text = (if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) "✓ " else "") + "${speed}×",
+                                color = if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) controlAccentColor else controlTextColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                    viewModel.player.setPlaybackSpeed(speed)
+                                }.padding(horizontal = 8.dp, vertical = 7.dp)
+                            )
+                        }
                         Text("RASIO LAYAR", color = controlAccentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         listOf(
                             "Fit" to AspectRatioFrameLayout.RESIZE_MODE_FIT,
@@ -659,7 +670,6 @@ fun PlayerScreen(
                 if (usesNativePlayer) {
                     val hasPrevious = viewModel.canSkipPlayback(-1)
                     val hasNext = viewModel.canSkipPlayback(1)
-                    val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter)
@@ -695,31 +705,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Secondary playback options remain compact and separate from transport.
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                            .padding(bottom = 164.dp)
-                            .playerLiquidGlass(shape = RoundedCornerShape(13.dp), alpha = 0.09f, borderAlpha = 0.14f, elevation = 3.dp)
-                            .padding(horizontal = 1.dp, vertical = 0.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = {
-                            val currentIndex = speeds.indexOfFirst { kotlin.math.abs(it - playerState.playbackSpeed) < 0.01f }
-                            viewModel.player.setPlaybackSpeed(speeds[(currentIndex + 1).mod(speeds.size)])
-                        }, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Text("${playerState.playbackSpeed}×", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = controlAccentColor)
-                        }
-                        IconButton(onClick = { viewModel.togglePlaybackShuffle() }, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(Icons.Default.Shuffle, contentDescription = "Acak antrean", tint = if (playerState.shuffleEnabled) controlAccentColor else controlTextColor, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = { viewModel.player.toggleRepeatMode() }, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Mode ulang", tint = if (playerState.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) controlAccentColor else controlTextColor, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = { viewModel.player.toggleMute() }, modifier = Modifier.size(48.dp).liquidGlassTvFocusable(shape = CircleShape)) {
-                            Icon(if (playerState.volume <= 0f) Icons.Default.VolumeOff else Icons.Default.VolumeUp, contentDescription = "Bisukan suara", tint = controlTextColor, modifier = Modifier.size(18.dp))
-                        }
-                    }
+
                 }
 
                 // Floating frame preview: extract the actual video frame at the seek timestamp.
