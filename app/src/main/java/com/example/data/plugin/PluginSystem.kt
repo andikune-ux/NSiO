@@ -481,6 +481,16 @@ class PluginManager(private val context: Context) {
         return cloudStreamRuntime.loadLinks(artifact, providerName, data)
     }
 
+    suspend fun resolveCloudStreamTrailer(
+        entry: CloudStreamPluginEntry,
+        providerName: String,
+        trailer: CloudStreamTrailer
+    ): List<CloudStreamStream> {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.resolveTrailer(artifact, providerName, trailer)
+    }
+
     suspend fun runCloudStreamExtractorVerifier(
         entry: CloudStreamPluginEntry,
         providerName: String,
