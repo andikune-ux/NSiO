@@ -1569,7 +1569,25 @@ private fun CloudStreamSearchPanel(
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                             listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
-                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }, content.url, episode.posterUrl ?: content.posterUrl, (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L) }) { Text("Link", fontSize = 10.sp) }
+                        TextButton(
+                            enabled = !resolvingLinks,
+                            onClick = {
+                                val episodeLabel = listOfNotNull(
+                                    episode.season?.let { "S$it" },
+                                    episode.episode?.let { "E$it" },
+                                    episode.name.takeIf { it.isNotBlank() }
+                                ).joinToString(" • ").ifBlank { "Episode ${index + 1}" }
+                                resolveLinks(
+                                    entry,
+                                    content.providerName,
+                                    episode.data,
+                                    episodeLabel,
+                                    content.url,
+                                    episode.posterUrl ?: content.posterUrl,
+                                    (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L
+                                )
+                            }
+                        ) { Text("Link", fontSize = 10.sp) }
                     }
                 }
             }
