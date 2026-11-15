@@ -373,7 +373,7 @@ class CS3IPlayer(
                 if (player.playbackState == Player.STATE_ENDED) {
                     player.seekTo(0L)
                     lastPositionMs = 0L
-                    _playerState.value = _playerState.value.copy(currentPositionMs = 0L)
+                    _playerState.value = _playerState.value.copy(currentPositionMs = 0L, playbackEnded = false)
                 }
                 player.play()
             }
