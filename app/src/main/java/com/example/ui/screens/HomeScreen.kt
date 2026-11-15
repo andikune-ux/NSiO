@@ -907,7 +907,8 @@ fun HomeScreen(
                                         cachedCount > 0 -> " • Cache $cachedCount"
                                         else -> ""
                                     }
-                                    "CLOUDSTREAM_PLUGIN:$pluginId" to "Plugin: $name$healthLabel"
+                                    val responseLabel = health?.lastResponseTimeMs?.takeIf { it > 0L }?.let { " · ${it}ms" } ?: ""
+                                    "CLOUDSTREAM_PLUGIN:$pluginId" to "Plugin: $name$healthLabel$responseLabel"
                                 }
                                 val cloudStreamRepositoryChips = cloudStreamRepositoryFilters.map { (repositoryId, name) ->
                                     "CLOUDSTREAM_REPO:$repositoryId" to "Repo: $name"
