@@ -74,6 +74,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.ui.MainViewModel
 import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
@@ -1455,45 +1456,63 @@ private fun CloudStreamSearchPanel(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
         selectedContent?.let { (entry, content) ->
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(content.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text(
-                listOfNotNull(content.year?.toString(), content.contentType, content.durationMinutes?.let { "$it menit" }).joinToString(" • "),
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            content.plot?.takeIf { it.isNotBlank() }?.let {
-                Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 5)
+            Spacer(modifier = Modifier.height(6.dp))
+            if (!content.backgroundPosterUrl.isNullOrBlank()) AsyncImage(model = content.backgroundPosterUrl, contentDescription = "Backdrop", modifier = Modifier.fillMaxWidth().height(145.dp).clip(RoundedCornerShape(14.dp)))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                if (!content.posterUrl.isNullOrBlank()) AsyncImage(model = content.posterUrl, contentDescription = "Poster", modifier = Modifier.width(84.dp).height(122.dp).clip(RoundedCornerShape(9.dp)))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(content.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(listOfNotNull(content.year?.toString(), content.contentType, content.durationMinutes?.let { "$it menit" }, content.contentRating).joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    content.rating?.takeIf { it > 0 }?.let { Text("Rating " + String.format("%.1f", it / 1000f) + "/10", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                    content.showStatus?.takeIf { it.isNotBlank() }?.let { Text("Status: $it", fontSize = 9.sp) }
+                    if (content.comingSoon) Text("Segera tayang", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+                }
             }
-            content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
-                Button(
-                    onClick = { resolveLinks(entry, content.providerName, data, "Film") },
-                    enabled = !resolvingLinks,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)
-                ) { Text("Ambil link film", fontSize = 10.sp) }
-            }
-            content.episodes.forEachIndexed { index, episode ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        episode.name.ifBlank { "Episode ${index + 1}" },
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(
-                        enabled = !resolvingLinks,
-                        onClick = {
-                            resolveLinks(
-                                entry,
-                                content.providerName,
-                                episode.data,
-                                episode.name.ifBlank { "Episode ${index + 1}" }
-                            )
+            content.tags.takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 9.sp, color = MaterialTheme.colorScheme.primary) }
+            content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
+                Text("Pemeran", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    cast.take(10).forEach { person ->
+                        Column(modifier = Modifier.width(76.dp)) {
+                            if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = person.imageUrl, contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
+                            Text(person.name, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            person.role?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                         }
-                    ) { Text("Link", fontSize = 10.sp) }
+                    }
+                }
+            }
+            content.trailers.forEachIndexed { index, trailer -> Text("Trailer ${index + 1}: ${trailer.url}", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary) }
+            content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
+                Button(onClick = { resolveLinks(entry, content.providerName, data, "Film") }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
+            }
+            if (content.episodes.isNotEmpty()) {
+                Text("Episode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                content.episodes.groupBy { it.season ?: 0 }.toSortedMap().forEach { (seasonNumber, episodes) ->
+                    Text(content.seasonNames[seasonNumber] ?: if (seasonNumber > 0) "Season $seasonNumber" else "Episode lainnya", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    episodes.forEachIndexed { index, episode ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = episode.posterUrl, contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
+                                listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                            TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }) }) { Text("Link", fontSize = 10.sp) }
+                        }
+                    }
+                }
+            }
+            content.recommendations.takeIf { it.isNotEmpty() }?.let { recommendations ->
+                Text("Rekomendasi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                recommendations.take(12).forEach { item ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!item.posterUrl.isNullOrBlank()) AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(40.dp).height(56.dp).clip(RoundedCornerShape(6.dp)))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(item.title, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                            Text(listOfNotNull(item.contentType, item.year?.toString()).joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
