@@ -407,6 +407,15 @@ class PluginManager(private val context: Context) {
         return cloudStreamRuntime.load(artifact)
     }
 
+    suspend fun loadCloudStreamHomePage(
+        entry: CloudStreamPluginEntry,
+        page: Int = 1
+    ): List<CloudStreamHomeSection> {
+        val artifact = getCloudStreamArtifact(entry)
+            ?: throw IllegalStateException("File .cs3 belum terpasang.")
+        return cloudStreamRuntime.loadHomePage(artifact, page)
+    }
+
     suspend fun searchCloudStreamPlugin(
         entry: CloudStreamPluginEntry,
         query: String
