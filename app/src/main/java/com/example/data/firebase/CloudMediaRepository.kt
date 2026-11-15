@@ -269,6 +269,7 @@ class CloudMediaRepository(
                             sourceUrl = doc.getString("sourceUrl") ?: "",
                             durationMs = doc.getLong("durationMs") ?: 0L,
                             progressMs = doc.getLong("progressMs") ?: 0L,
+                            lastWatchedAt = doc.getLong("lastWatchedAt") ?: 0L,
                             isFavorite = doc.getBoolean("isFavorite") ?: false,
                             createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                             extraInfo = doc.getString("extraInfo") ?: ""
@@ -404,6 +405,7 @@ class CloudMediaRepository(
                     sourceUrl = doc.getString("sourceUrl") ?: "",
                     durationMs = doc.getLong("durationMs") ?: 0L,
                     progressMs = doc.getLong("progressMs") ?: 0L,
+                    lastWatchedAt = doc.getLong("lastWatchedAt") ?: 0L,
                     isFavorite = doc.getBoolean("isFavorite") ?: false,
                     createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                     extraInfo = doc.getString("extraInfo") ?: ""
@@ -428,6 +430,7 @@ class CloudMediaRepository(
         "sourceUrl" to item.sourceUrl,
         "durationMs" to item.durationMs,
         "progressMs" to item.progressMs,
+        "lastWatchedAt" to item.lastWatchedAt,
         "isFavorite" to item.isFavorite,
         "createdAt" to item.createdAt,
         "extraInfo" to item.extraInfo,
