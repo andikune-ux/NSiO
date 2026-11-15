@@ -121,12 +121,9 @@ fun HomeScreen(
     }
     val cloudStreamRepositoryFilters = remember(cloudStreamRepositories) {
         cloudStreamRepositories.mapNotNull { repo ->
-            val rawSource = repo.sourceUrl.ifBlank { repo.pluginLists.firstOrNull().orEmpty() }.trim()
-            if (rawSource.isBlank()) null else {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(rawSource.toByteArray(Charsets.UTF_8))
-                digest.joinToString("") { byte -> "%02x".format(byte) } to repo.name
-            }
+            repo.plugins.firstOrNull()?.let { entry ->
+                viewModel.pluginManager.cloudStreamRepositoryId(entry).takeIf { it.isNotBlank() } to repo.name
+            }?.takeIf { !it.first.isNullOrBlank() }?.let { it.first!! to it.second }
         }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
     }
     val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
