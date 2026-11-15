@@ -823,7 +823,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (result.items.isEmpty()) {
                     return "Error: sumber berhasil dibuka tetapi tidak berisi media yang valid; data playlist lama dipertahankan."
                 }
-                val sourceKind = if (result.title.startsWith("M3U", ignoreCase = true)) "STREAM" else "REPO"
+                val sourceKind = when {
+                    result.title.startsWith("M3U", ignoreCase = true) -> "STREAM"
+                    MediaSourceClassifier.isGoogleDriveUrl(url) -> "DRIVE"
+                    else -> "REPO"
+                }
                 val playlist = ensureSourcePlaylist(
                     url,
                     playlistNameFromUrl(url, result.title),
