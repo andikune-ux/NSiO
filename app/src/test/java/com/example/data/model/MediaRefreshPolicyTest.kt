@@ -94,4 +94,27 @@ class MediaRefreshPolicyTest {
         assertEquals(true, result.isFavorite)
         assertEquals(321L, result.createdAt)
     }
+    @Test
+    fun removedWatchedOrFavoriteItemsRemainAvailableAsHistory() {
+        val removedWatched = MediaItem(
+            "watched", "profile-a", "Watched", "https://example.com/removed.mp4",
+            playlistId = "playlist-a", progressMs = 12_000L, lastWatchedAt = 100L
+        )
+        val removedFavorite = MediaItem(
+            "favorite", "profile-a", "Favorite", "https://example.com/favorite.mp4",
+            playlistId = "playlist-a", isFavorite = true
+        )
+        val refreshed = MediaItem(
+            "new", "profile-a", "New", "https://example.com/new.mp4",
+            playlistId = "playlist-a"
+        )
+
+        val result = MediaRefreshPolicy.mergePlaylist(
+            existing = listOf(removedWatched, removedFavorite),
+            incoming = listOf(refreshed)
+        )
+
+        assertEquals(setOf("new", "watched", "favorite"), result.map { it.id }.toSet())
+    }
+
 }
