@@ -79,8 +79,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
@@ -88,6 +90,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -99,7 +102,6 @@ import com.example.data.model.MediaItem
 import com.example.player.adjacentMedia
 import com.example.player.normalizePlaybackUrl
 import com.example.ui.MainViewModel
-import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 import kotlinx.coroutines.Dispatchers
@@ -320,7 +322,7 @@ fun PlayerScreen(
                     .align(if (isBrightness) Alignment.CenterStart else Alignment.CenterEnd)
                     .padding(horizontal = 22.dp)
                     .width(76.dp)
-                    .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.36f, borderAlpha = 0.22f, elevation = 12.dp)
+                    .playerLiquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.36f, borderAlpha = 0.22f, elevation = 12.dp)
                     .padding(horizontal = 12.dp, vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -350,7 +352,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .size(80.dp)
-                        .liquidGlass(shape = RoundedCornerShape(24.dp), alpha = 0.2f, borderAlpha = 0.5f, elevation = 16.dp),
+                        .playerLiquidGlass(shape = RoundedCornerShape(24.dp), alpha = 0.2f, borderAlpha = 0.5f, elevation = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
@@ -379,7 +381,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth(0.96f)
-                        .liquidGlass(
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(22.dp),
                             alpha = 0.2f,
                             borderAlpha = 0.42f,
@@ -465,7 +467,7 @@ fun PlayerScreen(
                             .padding(top = 76.dp)
                             .width(300.dp)
                             .heightIn(max = 360.dp)
-                            .liquidGlass(
+                            .playerLiquidGlass(
                                 shape = RoundedCornerShape(20.dp),
                                 alpha = 0.3f,
                                 borderAlpha = 0.55f,
@@ -511,7 +513,7 @@ fun PlayerScreen(
                         enabled = playerState.isSeekable,
                         modifier = Modifier
                             .size(56.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.24f)
+                            .playerLiquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.24f)
                             .liquidGlassTvFocusable(shape = CircleShape)
                     ) {
                         Icon(
@@ -554,7 +556,7 @@ fun PlayerScreen(
                         enabled = playerState.isSeekable,
                         modifier = Modifier
                             .size(56.dp)
-                            .liquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
+                            .playerLiquidGlass(shape = CircleShape, alpha = 0.2f, borderAlpha = 0.5f)
                             .liquidGlassTvFocusable(shape = CircleShape)
                     ) {
                         Icon(
@@ -573,7 +575,7 @@ fun PlayerScreen(
                     val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
                     Row(
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp).fillMaxWidth()
-                            .liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.20f, borderAlpha = 0.22f, elevation = 8.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.20f, borderAlpha = 0.22f, elevation = 8.dp)
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -609,7 +611,7 @@ fun PlayerScreen(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 184.dp)
                             .width(132.dp)
-                            .liquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
+                            .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -651,7 +653,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .liquidGlass(
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(16.dp),
                             alpha = 0.16f,
                             borderAlpha = 0.18f,
@@ -718,7 +720,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
-                        .liquidGlass(
+                        .playerLiquidGlass(
                             shape = RoundedCornerShape(26.dp),
                             alpha = 0.22f,
                             borderAlpha = 0.6f,
@@ -854,6 +856,44 @@ fun PlayerScreen(
             }
         }
     }
+}
+
+
+/**
+ * Player-scoped Liquid Glass surface.
+ *
+ * Intentionally local to PlayerScreen: the app-wide legacy liquidGlass()
+ * modifier remains untouched so Home and every other screen keep their theme.
+ * The layered translucent fill and specular gradient border provide a glass
+ * treatment without changing the video/photo rendering surface underneath.
+ */
+private fun Modifier.playerLiquidGlass(
+    shape: Shape = RoundedCornerShape(16.dp),
+    tint: Color = Color.White,
+    alpha: Float = 0.20f,
+    borderAlpha: Float = 0.38f,
+    elevation: Dp = 10.dp
+): Modifier {
+    val fill = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFF142033).copy(alpha = (0.30f + alpha * 0.38f).coerceIn(0f, 0.82f)),
+            tint.copy(alpha = (0.08f + alpha * 0.26f).coerceIn(0f, 0.48f)),
+            Color(0xFF24364B).copy(alpha = (0.22f + alpha * 0.34f).coerceIn(0f, 0.78f))
+        )
+    )
+    val specularEdge = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = (borderAlpha * 1.15f).coerceIn(0f, 0.82f)),
+            Color(0xFFBDEBFF).copy(alpha = (borderAlpha * 0.72f).coerceIn(0f, 0.68f)),
+            Color.White.copy(alpha = (borderAlpha * 0.16f).coerceIn(0f, 0.28f)),
+            Color.White.copy(alpha = (borderAlpha * 0.58f).coerceIn(0f, 0.68f))
+        )
+    )
+    return this
+        .shadow(elevation, shape, clip = false)
+        .clip(shape)
+        .background(fill)
+        .border(0.9.dp, specularEdge, shape)
 }
 
 private fun formatMs(ms: Long): String {
