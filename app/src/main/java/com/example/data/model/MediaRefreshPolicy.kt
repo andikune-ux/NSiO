@@ -12,7 +12,7 @@ object MediaRefreshPolicy {
             .mapValues { (_, rows) -> rows.toMutableList() }
             .toMutableMap()
 
-        return incoming.map { fresh ->
+        val merged = incoming.map { fresh ->
             val matches = oldByKey[playlistKey(fresh)]
             val previous = if (matches.isNullOrEmpty()) null else matches.removeAt(0)
             if (previous == null) fresh else fresh.copy(
@@ -24,6 +24,11 @@ object MediaRefreshPolicy {
                 createdAt = previous.createdAt
             )
         }
+        // Keep removed source entries when they still represent user-owned history or favorites.
+        val retainedHistory = oldByKey.values.flatten().filter {
+            it.isFavorite || it.lastWatchedAt > 0L || it.progressMs > 0L
+        }
+        return (merged + retainedHistory).distinctBy { it.id }
     }
 
     fun cloudStreamId(profileId: String, pluginId: String, providerName: String, url: String): String {
