@@ -1518,7 +1518,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         requestHeaders: Map<String, String> = emptyMap(),
         mimeType: String? = null,
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
-        extractorData: String? = null
+        extractorData: String? = null,
+        videoInterceptor: okhttp3.Interceptor? = null
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             showStatus("Profil aktif tidak ditemukan.")
@@ -1567,7 +1568,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     startPositionMs = item.progressMs.coerceAtLeast(0L),
                     requestHeaders = requestHeaders,
                     mimeType = mimeType,
-                    externalSubtitles = externalSubtitles
+                    externalSubtitles = externalSubtitles,
+                    videoInterceptor = videoInterceptor
                 )
                 if (!extractorData.isNullOrBlank()) {
                     viewModelScope.launch {
