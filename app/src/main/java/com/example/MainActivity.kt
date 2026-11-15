@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.pm.ActivityInfo
+import android.app.Activity
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Uri
@@ -186,7 +187,6 @@ private fun MainApplicationContent(viewModel: MainViewModel) {
     val settings by viewModel.settings.collectAsState()
     val devMode by viewModel.devMode.collectAsState()
     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
-    val playerState by viewModel.player.playerState.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
@@ -194,7 +194,7 @@ private fun MainApplicationContent(viewModel: MainViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(settings.displayMode) {
-        requestedOrientation = when (settings.displayMode) {
+        (context as? Activity)?.requestedOrientation = when (settings.displayMode) {
             "TV" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             "HP" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
