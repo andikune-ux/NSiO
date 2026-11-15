@@ -53,7 +53,9 @@ data class PlayerState(
     val audioTracks: List<PlayerTrackOption> = emptyList(),
     val subtitleTracks: List<PlayerTrackOption> = emptyList(),
     val videoTracks: List<PlayerTrackOption> = emptyList(),
-    val subtitlesDisabled: Boolean = true
+    val subtitlesDisabled: Boolean = true,
+    val pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
+    val selectedPluginStreamUrl: String? = null
 )
 
 interface IPlayer {
@@ -96,6 +98,7 @@ class CS3IPlayer(
     private var lastMimeType: String? = null
     private var lastExternalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
+    private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private var lastNonZeroVolume: Float = 1f
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
@@ -276,6 +279,32 @@ class CS3IPlayer(
         refreshTrackOptions()
     }
 
+    override fun selectPluginStream(stream: com.example.data.plugin.CloudStreamStream) {
+        if (stream.url.isBlank()) return
+        val currentPosition = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
+        val headers = stream.headers.toMutableMap().apply {
+            if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", ignoreCase = true) }) {
+                put("Referer", stream.referer)
+            }
+        }
+        val mimeType = when (stream.streamType.substringAfterLast('.').uppercase()) {
+            "M3U8", "HLS" -> "application/x-mpegURL"
+            "DASH", "MPD" -> "application/dash+xml"
+            "MP4", "VIDEO" -> "video/mp4"
+            else -> null
+        }
+        playInternal(
+            url = stream.url,
+            title = lastTitle,
+            startPositionMs = currentPosition,
+            requestHeaders = headers,
+            mimeType = mimeType,
+            externalSubtitles = stream.subtitles,
+            videoInterceptor = stream.videoInterceptor,
+            pluginStreams = lastPluginStreams
+        )
+    }
+
     fun disableSubtitles() {
         val player = exoPlayer ?: return
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -314,9 +343,10 @@ class CS3IPlayer(
         requestHeaders: Map<String, String> = emptyMap(),
         mimeType: String? = null,
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
-        videoInterceptor: okhttp3.Interceptor? = null
+        videoInterceptor: okhttp3.Interceptor? = null,
+        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     ) {
-        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor)
+        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams)
     }
 
     private fun playInternal(
@@ -326,7 +356,8 @@ class CS3IPlayer(
         requestHeaders: Map<String, String>,
         mimeType: String?,
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
-        videoInterceptor: okhttp3.Interceptor? = null
+        videoInterceptor: okhttp3.Interceptor? = null,
+        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = lastPluginStreams
     ) {
         lastUrl = url
         lastTitle = title
@@ -335,6 +366,7 @@ class CS3IPlayer(
         lastMimeType = mimeType
         lastExternalSubtitles = externalSubtitles
         lastVideoInterceptor = videoInterceptor
+        lastPluginStreams = pluginStreams
         httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor)
 
         exoPlayer?.let { player ->
@@ -353,7 +385,9 @@ class CS3IPlayer(
                     playbackSpeed = player.playbackParameters.speed,
                     repeatMode = logicalRepeatMode,
                     shuffleEnabled = logicalShuffleEnabled,
-                    volume = player.volume
+                    volume = player.volume,
+                    pluginStreams = pluginStreams,
+                    selectedPluginStreamUrl = url
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
@@ -396,7 +430,7 @@ class CS3IPlayer(
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
             val current = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
-            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor)
+            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
         }
     }
 
