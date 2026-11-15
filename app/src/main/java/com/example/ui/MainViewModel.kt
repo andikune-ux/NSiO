@@ -419,7 +419,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .mapTo(mutableSetOf()) { it.id }
         val base = com.example.player.PlaybackQueuePolicy
             .filterForCurrentSource(_mediaList.value, current, drivePlaylistIds)
-            .take(200)
         val baseChanged = base.map { it.id } != playbackQueueBase.map { it.id }
         if (forceRebuild || baseChanged || playbackQueueOrder.none { it.id == current.id }) {
             playbackQueueBase = base
