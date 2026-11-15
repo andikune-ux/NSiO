@@ -82,9 +82,19 @@ class VideoDownloadManager private constructor(private val context: Context) {
                 .also { downloadDao.insertDownload(it) }
         }
 
+        // Keep credentials out of the local download database. Non-secret
+        // routing headers (such as Referer and Origin) remain available on resume.
+        val persistedHeaders = requestHeaders.filterKeys { key ->
+            !key.equals("Authorization", true) &&
+                !key.equals("Proxy-Authorization", true) &&
+                !key.equals("Cookie", true) &&
+                !key.equals("Set-Cookie", true) &&
+                !key.equals("X-API-Key", true) &&
+                !key.equals("Api-Key", true)
+        }
         val savedItem = item.copy(
             status = if (item.status == "DOWNLOADING") "DOWNLOADING" else "PENDING",
-            requestHeadersJson = JSONObject(requestHeaders).toString()
+            requestHeadersJson = JSONObject(persistedHeaders).toString()
         )
         if (savedItem != item) downloadDao.updateDownload(savedItem)
         scheduleDownload(savedItem, requestHeaders)
