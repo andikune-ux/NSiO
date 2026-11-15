@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -495,13 +496,62 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(filteredList, key = { it.id }) { item ->
-                            MediaGridCard(
-                                item = item,
-                                onClick = { viewModel.playMedia(item) },
-                                onLongClick = { viewModel.toggleFavorite(item) },
-                                onDownload = { viewModel.downloadMedia(item) }
-                            )
+                        val sourceGroups = filteredList
+                            .groupBy { it.sourceType.uppercase() }
+                            .toSortedMap(compareBy<String> {
+                                when (it) {
+                                    "LINK" -> 0
+                                    "STREAM" -> 1
+                                    "REPO" -> 2
+                                    "FILE" -> 3
+                                    "SERVER" -> 4
+                                    else -> 5
+                                }
+                            }.thenBy { it })
+                        sourceGroups.forEach { (sourceType, sourceItems) ->
+                            item(
+                                key = "source_header_$sourceType",
+                                span = { GridItemSpan(maxLineSpan) }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 10.dp, bottom = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = when (sourceType) {
+                                            "LINK" -> "Playlist / Link"
+                                            "STREAM" -> "Stream"
+                                            "REPO" -> "Repository"
+                                            "FILE" -> "File Lokal"
+                                            "SERVER" -> "Server"
+                                            else -> sourceType.ifBlank { "Sumber Lain" }
+                                        },
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Text(
+                                        text = "${sourceItems.size} item",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            items(
+                                items = sourceItems,
+                                key = { it.id },
+                                span = { GridItemSpan(1) }
+                            ) { item ->
+                                MediaGridCard(
+                                    item = item,
+                                    onClick = { viewModel.playMedia(item) },
+                                    onLongClick = { viewModel.toggleFavorite(item) },
+                                    onDownload = { viewModel.downloadMedia(item) }
+                                )
+                            }
                         }
                     }
                 }
