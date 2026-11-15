@@ -1587,6 +1587,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showStatus("Informasi episode CloudStream belum lengkap.")
             return
         }
+        if (_playbackPreparationMessage.value == null) {
+            beginCloudStreamPlaybackPreparation(contentUrl, title, posterUrl, category)
+        }
         viewModelScope.launch {
             runCatching {
                 val pluginId = pluginManager.cloudStreamPluginId(entry)
@@ -1699,6 +1702,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     streamType.contains("MP4") || streamType.contains("VIDEO") || streamExtension == "MP4" -> "video/mp4"
                     else -> null
                 }
+                _playbackPreparationMessage.value = null
                 player.playWithMimeType(
                     url = stream.url,
                     title = item.title,
@@ -1714,6 +1718,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess { message ->
                 showStatus(message)
             }.onFailure { error ->
+                if (_currentlyPlaying.value?.id == item.id) _currentlyPlaying.value = null
+                _playbackPreparationMessage.value = null
                 showStatus("CloudStream gagal memutar '${item.title}': ${error.localizedMessage ?: "sumber tidak tersedia"}")
             }
         }
@@ -1761,6 +1767,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             createdAt = System.currentTimeMillis()
         )
         _currentlyPlaying.value = item
+        _playbackPreparationMessage.value = null
         player.playWithMimeType(
             url = stream.url,
             title = item.title,
@@ -1775,12 +1782,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playMedia(item: MediaItem) {
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
+            _playbackPreparationMessage.value = "Mencari sumber video dari plugin..."
             _currentlyPlaying.value = item
             playCloudStreamMedia(item)
             return
         }
         val useNativePlayer = shouldUseNativePlayer(item.type, item.url)
         if (!useNativePlayer) player.stop()
+        _playbackPreparationMessage.value = null
         _currentlyPlaying.value = item
         if (useNativePlayer) {
             val headers = item.extraInfo.split('&')
