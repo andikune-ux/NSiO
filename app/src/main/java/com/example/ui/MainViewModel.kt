@@ -163,8 +163,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val prefix = "$pluginId|"
         if (reset) {
-            cloudStreamHomeSectionPages.keys.filter { it.startsWith(prefix) }.forEach(cloudStreamHomeSectionPages::remove)
-            cloudStreamHomeSectionHasNext.keys.filter { it.startsWith(prefix) }.forEach(cloudStreamHomeSectionHasNext::remove)
+            cloudStreamHomeSectionPages.keys.filter { it.startsWith(prefix) }.forEach { cloudStreamHomeSectionPages.remove(it) }
+            cloudStreamHomeSectionHasNext.keys.filter { it.startsWith(prefix) }.forEach { cloudStreamHomeSectionHasNext.remove(it) }
         }
         sections.forEach { section ->
             val key = cloudStreamSectionStateKey(pluginId, section)
