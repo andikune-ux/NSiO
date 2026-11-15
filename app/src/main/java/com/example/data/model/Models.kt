@@ -15,6 +15,8 @@ data class MediaItem(
     val category: String = "Umum",
     val playlistId: String = "",
     val sourceUrl: String = "",
+    val pluginId: String = "",
+    val repositoryId: String = "",
     val durationMs: Long = 0L,
     val progressMs: Long = 0L,
     val isFavorite: Boolean = false,
