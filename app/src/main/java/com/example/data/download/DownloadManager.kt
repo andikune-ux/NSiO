@@ -16,11 +16,12 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.DownloadItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import androidx.work.getWorkInfosByTagFlow
-import okhttp3.Call
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Job
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -194,8 +195,10 @@ class VideoDownloadManager private constructor(private val context: Context) {
         val tag = "DOWNLOAD_$id"
         val workManager = WorkManager.getInstance(context)
         workManager.cancelAllWorkByTag(tag)
-        workManager.getWorkInfosByTagFlow(tag).first { infos ->
-            infos.isEmpty() || infos.all { it.state.isFinished }
+        while (true) {
+            val infos = workManager.getWorkInfosByTag(tag).get()
+            if (infos.isEmpty() || infos.all { it.state.isFinished }) break
+            delay(50)
         }
     }
 
@@ -205,18 +208,10 @@ class VideoDownloadManager private constructor(private val context: Context) {
 }
 
 class DownloadFileWorkManager(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    @Volatile private var activeCall: Call? = null
-
-    override fun onStopped() {
-        // Abort a blocking network read so the worker can close the partial file before
-        // the manager commits pause/cancel state.
-        activeCall?.cancel()
-        super.onStopped()
-    }
-
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS).build()
 
+    @OptIn(InternalCoroutinesApi::class)
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val id = inputData.getString(VideoDownloadManager.KEY_ID) ?: return@withContext Result.failure()
         val mediaId = inputData.getString(VideoDownloadManager.KEY_MEDIA_ID) ?: ""
@@ -255,8 +250,11 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 requestBuilder.header("If-Range", resumeValidator)
             }
             val call = client.newCall(requestBuilder.build())
-            activeCall = call
-            if (isStopped) call.cancel()
+            // WorkManager cancels the worker coroutine on pause/cancel. Cancel the
+            // underlying OkHttp call at the cancellation signal so blocking reads end.
+            currentCoroutineContext()[Job]?.invokeOnCompletion(onCancelling = true, invokeImmediately = true) { cause ->
+                if (cause != null) call.cancel()
+            }
             val response = call.execute()
             if (response.code == 416 && existingBytes > 0L) {
                 val isAlreadyComplete = isVerifiedCompletedRange(
