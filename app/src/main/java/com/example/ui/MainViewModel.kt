@@ -808,7 +808,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
+                        updateCloudStreamSourceHealth(pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
@@ -870,7 +870,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
+                        updateCloudStreamSourceHealth(pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
