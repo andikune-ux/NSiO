@@ -1090,10 +1090,11 @@ private fun PluginRepoTab(
 @Composable
 fun CloudStreamSearchPanel(
     viewModel: MainViewModel,
-    repos: List<com.example.data.plugin.RepoManifest>
+    repos: List<com.example.data.plugin.RepoManifest>,
+    query: String,
+    searchRequest: Int
 ) {
     val trailerContext = LocalContext.current
-    var query by rememberSaveable { mutableStateOf("") }
     var loadingHomeCatalog by remember { mutableStateOf(false) }
     var savingHomeCatalog by remember { mutableStateOf(false) }
     var homeCatalogMessage by remember { mutableStateOf("") }
@@ -1421,55 +1422,46 @@ fun CloudStreamSearchPanel(
                 }
             }
         }
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it.take(180) },
-            placeholder = { Text("Judul film atau serial", fontSize = 12.sp) },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(
-            onClick = {
-                searching = true
-                results = emptyList()
-                searchNextPages = emptyMap()
-                selectedContent = null
-                streams = emptyList()
-                searchMessage = ""
-                scope.launch {
-                    val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
-                    val nextPages = mutableMapOf<String, Int>()
-                    val failures = mutableListOf<String>()
-                    installedEntries.forEach { entry ->
-                        runCatching {
-                            viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), 1)
-                        }.onSuccess { page ->
-                            page.items.forEach { found.add(entry to it) }
-                            if (page.hasNext) nextPages[viewModel.pluginManager.cloudStreamPluginId(entry)] = 2
-                        }.onFailure { error ->
-                            failures.add("${entry.name}: ${error.message ?: "gagal"}")
-                        }
-                    }
-                    results = found
-                    searchNextPages = nextPages
-                    searchMessage = when {
-                        found.isNotEmpty() && failures.isNotEmpty() ->
-                            "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
-                        found.isNotEmpty() -> "Ditemukan ${found.size} hasil."
-                        installedEntries.isEmpty() -> "Belum ada plugin .cs3 terpasang."
-                        failures.isNotEmpty() -> failures.take(2).joinToString(" • ")
-                        else -> "Tidak ada hasil untuk kata kunci ini."
-                    }
-                    searching = false
+        LaunchedEffect(searchRequest) {
+            if (searchRequest <= 0 || query.isBlank()) return@LaunchedEffect
+            searching = true
+            results = emptyList()
+            searchNextPages = emptyMap()
+            selectedContent = null
+            streams = emptyList()
+            searchMessage = ""
+            val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
+            val nextPages = mutableMapOf<String, Int>()
+            val failures = mutableListOf<String>()
+            installedEntries.forEach { entry ->
+                runCatching {
+                    // searchCloudStreamPlugin obtains the installed artifact and the runtime
+                    // loads/activates it before invoking the provider search method.
+                    viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), 1)
+                }.onSuccess { page ->
+                    page.items.forEach { found.add(entry to it) }
+                    if (page.hasNext) nextPages[viewModel.pluginManager.cloudStreamPluginId(entry)] = 2
+                }.onFailure { error ->
+                    failures.add("${entry.name}: ${error.message ?: "gagal"}")
                 }
-            },
-            enabled = !searching && query.isNotBlank() && installedEntries.isNotEmpty(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (searching) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-            else Text("Cari di ${installedEntries.size} plugin terpasang", fontSize = 11.sp)
+            }
+            results = found
+            searchNextPages = nextPages
+            searchMessage = when {
+                found.isNotEmpty() && failures.isNotEmpty() ->
+                    "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
+                found.isNotEmpty() -> "Ditemukan ${found.size} hasil dari pencarian CloudStream."
+                installedEntries.isEmpty() -> "Belum ada plugin .cs3 terpasang."
+                failures.isNotEmpty() -> failures.take(2).joinToString(" • ")
+                else -> "Tidak ada hasil CloudStream untuk kata kunci ini."
+            }
+            searching = false
+        }
+        if (searching) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                Text("Mencari di ${installedEntries.size} plugin .cs3...", fontSize = 10.sp)
+            }
         }
         if (searchMessage.isNotBlank()) {
             Text(searchMessage, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
