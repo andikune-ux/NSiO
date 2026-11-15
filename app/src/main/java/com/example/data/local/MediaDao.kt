@@ -54,6 +54,18 @@ interface MediaDao {
     @Query("DELETE FROM media_items WHERE playlistId = :playlistId")
     suspend fun clearPlaylist(playlistId: String)
 
+    @Query("DELETE FROM media_items WHERE profileId = :profileId AND pluginId = :pluginId")
+    suspend fun clearCloudStreamCatalog(profileId: String, pluginId: String)
+
+    @Transaction
+    suspend fun replaceCloudStreamCatalog(profileId: String, pluginId: String, items: List<MediaItem>) {
+        require(items.all { it.profileId == profileId && it.pluginId == pluginId }) {
+            "Identitas katalog CloudStream tidak konsisten."
+        }
+        clearCloudStreamCatalog(profileId, pluginId)
+        if (items.isNotEmpty()) insertAll(items)
+    }
+
     @Transaction
     suspend fun replacePlaylist(playlistId: String, items: List<MediaItem>) {
         clearPlaylist(playlistId)
