@@ -90,6 +90,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -138,6 +139,7 @@ fun PlayerScreen(
     var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
     var activeGesture by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
     val originalBrightness = remember(activity) { activity?.window?.attributes?.screenBrightness ?: -1f }
     val originalRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
@@ -756,6 +758,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 174.dp)
+                            .offset(x = (((if (playerState.durationMs > 0L) seekPreviewMs.toFloat() / playerState.durationMs.toFloat() else 0.5f) - 0.5f) * (screenWidth - 36.dp) * 0.88f).coerceIn(-((screenWidth - 36.dp) / 2f - 66.dp), (screenWidth - 36.dp) / 2f - 66.dp))
                             .width(132.dp)
                             .playerLiquidGlass(shape = RoundedCornerShape(14.dp), alpha = 0.30f, borderAlpha = 0.20f, elevation = 12.dp)
                             .padding(7.dp),
@@ -867,7 +870,6 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
-                                    .graphicsLayer { scaleY = 0.4f }
                                     .liquidGlassTvFocusable(shape = RoundedCornerShape(8.dp))
                             )
                         }
