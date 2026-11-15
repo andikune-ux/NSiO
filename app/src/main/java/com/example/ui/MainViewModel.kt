@@ -66,6 +66,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val settings: StateFlow<ProfileSettings> = _settings.asStateFlow()
 
     private val devModePreferences = application.getSharedPreferences("nsio_developer_preferences", Application.MODE_PRIVATE)
+    // Keep Home catalog selection independently for each local profile.
+    private val catalogPreferences = application.getSharedPreferences("nsio_catalog_preferences", Application.MODE_PRIVATE)
     private val _devMode = MutableStateFlow(devModePreferences.getBoolean("dev_mode_enabled", false))
     val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
@@ -170,6 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val active = decodedProfiles.firstOrNull { it.isDefault } ?: decodedProfiles.first()
                 _activeProfile.value = active
                 _settings.value = loadSettingsForProfile(active.id)
+                _selectedFilter.value = loadSelectedFilter(active.id)
             }
 
             if (didRecoverLocalPin) {
@@ -213,8 +216,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (_activeProfile.value?.id == profile.id) return@launch
             _activeProfile.value = profile
             _isServerUnlocked.value = false
-            _selectedFilter.value = "ALL"
             _settings.value = loadSettingsForProfile(profile.id)
+            _selectedFilter.value = loadSelectedFilter(profile.id)
             observeActiveProfileMedia()
             observeSourcePlaylists()
             showStatus("Beralih ke profil '${profile.name}'")
@@ -303,8 +306,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery.value = query
     }
 
+    private fun filterPreferenceKey(profileId: String) = "home_filter_$profileId"
+
+    private fun loadSelectedFilter(profileId: String): String =
+        catalogPreferences.getString(filterPreferenceKey(profileId), "ALL") ?: "ALL"
+
     fun selectFilter(filter: String) {
         _selectedFilter.value = filter
+        _activeProfile.value?.id?.let { profileId ->
+            catalogPreferences.edit().putString(filterPreferenceKey(profileId), filter).apply()
+        }
     }
 
     fun unlockServerAccess() {
@@ -652,7 +663,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             mediaDao.clearPlaylist(playlist.id)
             sourcePlaylistDao.delete(playlist)
-            if (_selectedFilter.value == "PLAYLIST:${playlist.id}") _selectedFilter.value = "ALL"
+            if (_selectedFilter.value == "PLAYLIST:${playlist.id}") selectFilter("ALL")
 
             showStatus(
                 if (warnings.isEmpty()) "Playlist '${playlist.name}' dan data terkait berhasil dihapus"
