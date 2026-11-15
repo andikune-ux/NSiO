@@ -74,6 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val devModePreferences = application.getSharedPreferences("nsio_developer_preferences", Application.MODE_PRIVATE)
     // Keep Home catalog selection independently for each local profile.
     private val catalogPreferences = application.getSharedPreferences("nsio_catalog_preferences", Application.MODE_PRIVATE)
+    private val cloudStreamHealthPreferences = application.getSharedPreferences("nsio_cloudstream_health", Application.MODE_PRIVATE)
     private val _devMode = MutableStateFlow(devModePreferences.getBoolean("dev_mode_enabled", false))
     val devMode: StateFlow<Boolean> = _devMode.asStateFlow()
 
@@ -126,20 +127,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _cloudStreamSourceHealth = MutableStateFlow<Map<String, CloudStreamSourceHealth>>(emptyMap())
     val cloudStreamSourceHealth: StateFlow<Map<String, CloudStreamSourceHealth>> = _cloudStreamSourceHealth.asStateFlow()
 
+    private fun loadCloudStreamSourceHealth(profileId: String): Map<String, CloudStreamSourceHealth> {
+        val prefix = "$profileId|"
+        return cloudStreamHealthPreferences.all.entries
+            .filter { it.key.startsWith(prefix) && it.value is String }
+            .mapNotNull { (key, raw) ->
+                runCatching {
+                    val pluginId = key.removePrefix(prefix)
+                    val values = org.json.JSONObject(raw as String)
+                    pluginId to CloudStreamSourceHealth(
+                        lastSuccessAt = values.optLong("lastSuccessAt", 0L),
+                        lastError = values.optString("lastError").takeIf { it.isNotBlank() },
+                        hasNext = if (values.has("hasNext") && !values.isNull("hasNext")) values.optBoolean("hasNext") else null
+                    )
+                }.getOrNull()
+            }.toMap()
+    }
+
     private fun updateCloudStreamSourceHealth(
+        profileId: String,
         pluginId: String,
         hasNext: Boolean? = null,
         error: String? = null,
         succeeded: Boolean = false
     ) {
+        if (_activeProfile.value?.id != profileId) return
         val previous = _cloudStreamSourceHealth.value[pluginId] ?: CloudStreamSourceHealth()
-        _cloudStreamSourceHealth.value = _cloudStreamSourceHealth.value + (
-            pluginId to previous.copy(
-                lastSuccessAt = if (succeeded) System.currentTimeMillis() else previous.lastSuccessAt,
-                lastError = if (succeeded) null else error ?: previous.lastError,
-                hasNext = hasNext ?: previous.hasNext
-            )
+        val updated = previous.copy(
+            lastSuccessAt = if (succeeded) System.currentTimeMillis() else previous.lastSuccessAt,
+            lastError = if (succeeded) null else error ?: previous.lastError,
+            hasNext = hasNext ?: previous.hasNext
         )
+        _cloudStreamSourceHealth.value = _cloudStreamSourceHealth.value + (pluginId to updated)
+        val values = org.json.JSONObject()
+            .put("lastSuccessAt", updated.lastSuccessAt)
+            .put("lastError", updated.lastError ?: org.json.JSONObject.NULL)
+            .put("hasNext", updated.hasNext ?: org.json.JSONObject.NULL)
+        cloudStreamHealthPreferences.edit()
+            .putString("$profileId|$pluginId", values.toString())
+            .apply()
     }
 
     init {
@@ -206,6 +232,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val active = decodedProfiles.firstOrNull { it.isDefault } ?: decodedProfiles.first()
                 _activeProfile.value = active
                 _settings.value = loadSettingsForProfile(active.id)
+                _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(active.id)
                 _selectedFilter.value = loadSelectedFilter(active.id)
                 _selectedSort.value = loadSelectedSort(active.id)
             }
@@ -252,6 +279,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _activeProfile.value = profile
             _isServerUnlocked.value = false
             _settings.value = loadSettingsForProfile(profile.id)
+            _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profile.id)
             _selectedFilter.value = loadSelectedFilter(profile.id)
             _selectedSort.value = loadSelectedSort(profile.id)
             observeActiveProfileMedia()
@@ -801,14 +829,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }.onSuccess { sections ->
                         cloudStreamHomePages[pluginId] = nextPage
                         cloudStreamHomeHasNext[pluginId] = sections.any { it.hasNext }
-                        updateCloudStreamSourceHealth(pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
+                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = sections.any { it.hasNext }, succeeded = true)
                         if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
                             runCatching { persistCloudStreamCatalog(entry, sections) }
                                 .onSuccess { added += it }
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
+                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
@@ -847,7 +875,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val profileId = _activeProfile.value?.id ?: return
         if (cloudStreamHomeRefreshJob?.isActive == true) return
         cloudStreamHomeRefreshJob = viewModelScope.launch {
-            _cloudStreamSourceHealth.value = emptyMap()
+            _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profileId)
             var refreshed = 0
             val failures = mutableListOf<String>()
             try {
@@ -870,7 +898,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
                         }
                     }.onFailure { error ->
-                        updateCloudStreamSourceHealth(pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
+                        updateCloudStreamSourceHealth(profileId, pluginManager.cloudStreamPluginId(entry), error = error.localizedMessage ?: "Gagal memuat katalog")
                         failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
                     }
                 }
