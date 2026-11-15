@@ -44,7 +44,8 @@ data class CloudStreamHomeSection(
     val providerName: String,
     val sectionName: String,
     val items: List<CloudStreamSearchItem>,
-    val hasNext: Boolean
+    val hasNext: Boolean,
+    val requestName: String = sectionName
 )
 
 data class CloudStreamEpisodeItem(
@@ -117,15 +118,22 @@ class CloudStreamPluginRuntime(private val context: Context) {
      * without a main page are reported as unsupported rather than silently
      * substituting search results.
      */
-    suspend fun loadHomePage(artifact: File, page: Int = 1): List<CloudStreamHomeSection> =
+    suspend fun loadHomePage(
+        artifact: File,
+        page: Int = 1,
+        sectionPages: Map<String, Int>? = null
+    ): List<CloudStreamHomeSection> =
         withContext(Dispatchers.IO) {
             require(page >= 1) { "Nomor halaman katalog tidak valid." }
             val loaded = loadPlugin(artifact)
             loaded.providers.filter { it.hasMainPage }.flatMap { api ->
                 api.mainPage.mapNotNull requestLoop@ { request ->
+                    val sectionKey = "${api.name}|${request.name}"
+                    val sectionPage = sectionPages?.get(sectionKey) ?: page
+                    if (sectionPage <= 0) return@requestLoop null
                     val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
                         runCatching {
-                            api.getMainPage(page, MainPageRequest(request.name, request.data, request.horizontalImages))
+                            api.getMainPage(sectionPage, MainPageRequest(request.name, request.data, request.horizontalImages))
                         }.getOrNull()
                     } ?: return@requestLoop null
                     val items = response.items.flatMap { section ->
@@ -149,7 +157,8 @@ class CloudStreamPluginRuntime(private val context: Context) {
                         providerName = api.name,
                         sectionName = response.items.firstOrNull()?.name?.ifBlank { request.name } ?: request.name,
                         items = items,
-                        hasNext = response.hasNext
+                        hasNext = response.hasNext,
+                        requestName = request.name
                     )
                 }
             }
