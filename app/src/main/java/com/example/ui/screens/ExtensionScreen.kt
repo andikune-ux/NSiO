@@ -1631,15 +1631,49 @@ private fun CloudStreamSearchPanel(
                 Button(onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
             }
             if (content.episodes.isNotEmpty()) {
-                val episodesBySeason = content.episodes.groupBy { it.season ?: 0 }.toSortedMap()
+                val availableDubStatuses = content.episodes.mapNotNull { it.dubStatus }
+                    .distinct()
+                    .sortedBy { if (it.equals("Subbed", true)) 0 else 1 }
+                var selectedDubStatus by remember(content.url) {
+                    mutableStateOf<String?>(availableDubStatuses.firstOrNull())
+                }
+                val dubFilteredEpisodes = if (selectedDubStatus == null) content.episodes
+                    else content.episodes.filter { it.dubStatus == selectedDubStatus }
+                val episodesBySeason = dubFilteredEpisodes.groupBy { it.season ?: 0 }.toSortedMap()
                 val seasonNumbers = episodesBySeason.keys.toList()
-                var selectedSeason by remember(content.url) {
+                var selectedSeason by remember(content.url, selectedDubStatus) {
                     mutableIntStateOf(seasonNumbers.firstOrNull() ?: 0)
                 }
                 val selectedSeasonIndex = seasonNumbers.indexOf(selectedSeason).takeIf { it >= 0 } ?: 0
                 val visibleEpisodes = episodesBySeason[seasonNumbers.getOrNull(selectedSeasonIndex)].orEmpty()
 
                 Text("Episode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                if (availableDubStatuses.size > 1) {
+                    Text("Audio / Versi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    ScrollableTabRow(
+                        selectedTabIndex = availableDubStatuses.indexOf(selectedDubStatus).coerceAtLeast(0),
+                        edgePadding = 0.dp,
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {}
+                    ) {
+                        availableDubStatuses.forEachIndexed { index, status ->
+                            Tab(
+                                selected = status == selectedDubStatus,
+                                onClick = { selectedDubStatus = status },
+                                text = { Text(if (status.equals("Subbed", true)) "Subbed" else if (status.equals("Dubbed", true)) "Dubbed" else status, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+                } else {
+                    availableDubStatuses.firstOrNull()?.let { status ->
+                        Text(
+                            "Versi audio: ${if (status.equals("Subbed", true)) "Subbed" else if (status.equals("Dubbed", true)) "Dubbed" else status}",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 if (seasonNumbers.size > 1) {
                     ScrollableTabRow(
                         selectedTabIndex = selectedSeasonIndex,
@@ -1680,7 +1714,7 @@ private fun CloudStreamSearchPanel(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
-                            listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            listOfNotNull(episode.dubStatus?.let { if (it.equals("Subbed", true)) "Subbed" else if (it.equals("Dubbed", true)) "Dubbed" else it }, episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                         TextButton(
                             enabled = !resolvingLinks,
