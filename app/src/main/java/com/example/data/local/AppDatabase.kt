@@ -44,6 +44,14 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE profile_settings ADD COLUMN gridColumnsTv INTEGER NOT NULL DEFAULT 4")
             }
         }
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE media_items ADD COLUMN pluginId TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE media_items ADD COLUMN repositoryId TEXT NOT NULL DEFAULT ''")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_profileId_pluginId ON media_items(profileId, pluginId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_profileId_repositoryId ON media_items(profileId, repositoryId)")
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
