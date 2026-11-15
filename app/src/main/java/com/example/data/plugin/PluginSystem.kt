@@ -443,11 +443,12 @@ class PluginManager(private val context: Context) {
 
     suspend fun searchCloudStreamPlugin(
         entry: CloudStreamPluginEntry,
-        query: String
-    ): List<CloudStreamSearchItem> {
+        query: String,
+        page: Int = 1
+    ): CloudStreamSearchPage {
         val artifact = getCloudStreamArtifact(entry)
             ?: throw IllegalStateException("File .cs3 belum terpasang.")
-        return cloudStreamRuntime.search(artifact, query)
+        return cloudStreamRuntime.search(artifact, query, page)
     }
 
     suspend fun loadCloudStreamContent(
