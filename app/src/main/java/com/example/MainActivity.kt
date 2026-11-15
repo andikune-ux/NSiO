@@ -71,8 +71,8 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
-
     private val viewModel: MainViewModel by viewModels()
+    @Volatile private var coreStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,259 +81,185 @@ class MainActivity : ComponentActivity() {
         hideSystemNotificationBar()
 
         setContent {
-            val context = LocalContext.current
-            var isCalculatorUnlocked by remember { mutableStateOf(false) }
-            var secretDialogText by remember { mutableStateOf<String?>(null) }
+            var unlocked by rememberSaveable { mutableStateOf(false) }
+            var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
-            var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
-            val settings by viewModel.settings.collectAsState()
-            val devMode by viewModel.devMode.collectAsState()
-            val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
-            val playerState by viewModel.player.playerState.collectAsState()
-            val activeProfile by viewModel.activeProfile.collectAsState()
-            val statusMessage by viewModel.statusMessage.collectAsState()
+            val context = LocalContext.current
 
-            // Dynamic orientation response according to user settings
-            LaunchedEffect(settings.displayMode) {
-                requestedOrientation = when (settings.displayMode) {
-                    "TV" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    "HP" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                }
-            }
-
-            var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
-            val snackbarHostState = remember { SnackbarHostState() }
-
-            LaunchedEffect(statusMessage, settings.language, isCalculatorUnlocked) {
-                statusMessage?.let { msg ->
-                    val translated = translateAppText(msg, settings.language)
-                    if (isCalculatorUnlocked) {
-                        snackbarHostState.showSnackbar(translated)
-                    } else {
-                        secretDialogText = translated
-                    }
-                    viewModel.clearStatus()
-                }
-            }
-
-            MyApplicationTheme(themeMode = settings.themeMode) {
-                CompositionLocalProvider(LocalAppLanguage provides settings.language) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // 1. iOS 26 Ambient Fluid Glow Canvas
-                    val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
-                    AmbientFluidBackground(isDark = isDark)
-
-                    // Calculator gate: main application UI is not composed until the correct PIN is entered.
-                    if (!isCalculatorUnlocked) {
-                        CalculatorAccessGate(
-                            onUnlock = { isCalculatorUnlocked = true },
-                            onSecretCode = { code ->
-                                val message = when (code) {
-                                    "000" -> SecretCodeRegistry.allCodes
-                                    "101" -> developerDiagnostics(context, playerState, viewModel.mediaList.value.size, viewModel.sourcePlaylists.value.size)
-                                    "103" -> "PANDUAN GESTUR NSiO\n• Gunakan gestur yang tersedia pada pemutar media.\n• Gunakan DPAD/remote untuk berpindah fokus.\n• Tekan Back untuk kembali."
-                                    "104" -> {
-                                        viewModel.toggleDisplayMode()
-                                        "Mode tampilan diganti. Periksa Pengaturan untuk melihat mode aktif."
-                                    }
-                                    "111" -> CrashLogStore.read(context) ?: "Belum ada catatan crash tersimpan."
-                                    "333" -> "INFORMASI SISTEM\nPerangkat: ${Build.MANUFACTURER} ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\nArsitektur: ${Build.SUPPORTED_ABIS.joinToString()}"
-                                    "555" -> {
-                                        val cm = context.getSystemService(ConnectivityManager::class.java)
-                                        val network = cm?.activeNetwork
-                                        val capabilities = network?.let { cm.getNetworkCapabilities(it) }
-                                        "INFORMASI JARINGAN\nStatus: ${if (capabilities != null) "Terhubung" else "Tidak terhubung"}\nWi-Fi: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true}\nSeluler: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}"
-                                    }
-                                    "666" -> permissionDiagnostics(context)
-                                    "777" -> {
-                                        secretDialogText = "Menghitung penggunaan penyimpanan NSiO…"
-                                        Thread {
-                                            val report = appStorageDiagnostics(context)
-                                            runOnUiThread { secretDialogText = report }
-                                        }.start()
-                                        null
-                                    }
-                                    "888" -> "STATISTIK NSiO\nMedia terdaftar: ${viewModel.mediaList.value.size}\nPlaylist/sumber: ${viewModel.sourcePlaylists.value.size}"
-                                    "123" -> {
-                                        showCacheResetConfirm = true
-                                        null
-                                    }
-                                    "444" -> playerDiagnostics(currentlyPlaying?.title, playerState)
-                                    "456" -> {
-                                        viewModel.refreshAllSourcePlaylists()
-                                        "Penyegaran sumber playlist dimulai."
-                                    }
-                                    "200" -> {
-                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.parse("package:${context.packageName}")
-                                        })
-                                        null
-                                    }
-                                    "202" -> {
-                                        runCatching {
-                                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            })
-                                        }.onFailure { secretDialogText = "Pengaturan notifikasi tidak tersedia pada perangkat ini." }
-                                        null
-                                    }
-                                    else -> "Kode tidak dikenal."
+            if (!unlocked) {
+                MyApplicationTheme(themeMode = "system") {
+                    CalculatorAccessGate(
+                        onUnlock = {
+                            // Only this transition composes MainApplicationContent and creates MainViewModel.
+                            coreStarted = true
+                            unlocked = true
+                        },
+                        onSecretCode = { code ->
+                            val message = when (code) {
+                                "000" -> SecretCodeRegistry.allCodes
+                                "101" -> {
+                                    val state = viewModel.player.playerState.value
+                                    developerDiagnostics(context, state, viewModel.mediaList.value.size, viewModel.sourcePlaylists.value.size)
                                 }
-                                if (message != null) secretDialogText = message
+                                "103" -> "PANDUAN GESTUR NSiO\\n• Gunakan gestur yang tersedia pada pemutar media.\\n• Gunakan DPAD/remote untuk berpindah fokus.\\n• Tekan Back untuk kembali."
+                                "104" -> { viewModel.toggleDisplayMode(); "Mode tampilan diganti. Periksa Pengaturan untuk melihat mode aktif." }
+                                "111" -> CrashLogStore.read(context) ?: "Belum ada catatan crash tersimpan."
+                                "333" -> "INFORMASI SISTEM\\nPerangkat: ${Build.MANUFACTURER} ${Build.MODEL}\\nAndroid: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\\nArsitektur: ${Build.SUPPORTED_ABIS.joinToString()}"
+                                "555" -> {
+                                    val cm = context.getSystemService(ConnectivityManager::class.java)
+                                    val capabilities = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+                                    "INFORMASI JARINGAN\\nStatus: ${if (capabilities != null) "Terhubung" else "Tidak terhubung"}\\nWi-Fi: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true}\\nSeluler: ${capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}"
+                                }
+                                "666" -> permissionDiagnostics(context)
+                                "777" -> {
+                                    secretMessage = "Menghitung penggunaan penyimpanan NSiO…"
+                                    Thread { val report = appStorageDiagnostics(context); runOnUiThread { secretMessage = report } }.start()
+                                    null
+                                }
+                                "888" -> "STATISTIK NSiO\\nMedia terdaftar: ${viewModel.mediaList.value.size}\\nPlaylist/sumber: ${viewModel.sourcePlaylists.value.size}"
+                                "123" -> { showCacheResetConfirm = true; null }
+                                "444" -> playerDiagnostics(null, viewModel.player.playerState.value)
+                                "456" -> { viewModel.refreshAllSourcePlaylists(); "Penyegaran sumber playlist dimulai." }
+                                "200" -> { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.parse("package:${context.packageName}") }); null }
+                                "202" -> {
+                                    runCatching { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }) }
+                                        .onFailure { secretMessage = "Pengaturan notifikasi tidak tersedia pada perangkat ini." }
+                                    null
+                                }
+                                else -> "Kode tidak dikenal."
                             }
-                        )
-                    } else if (currentlyPlaying != null) {
-                        PlayerScreen(
-                            media = currentlyPlaying!!,
-                            viewModel = viewModel,
-                            onClose = { viewModel.closePlayer() }
-                        )
-                    } else {
-                        Scaffold(
-                            modifier = Modifier.fillMaxSize(),
-                            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                            snackbarHost = { SnackbarHost(snackbarHostState) },
-                            containerColor = Color.Transparent
-                        ) { innerPadding ->
-                            BoxWithConstraints(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(innerPadding)
-                            ) {
-                                val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
-
-                                if (isLandscape) {
-                                    // TV: navigation floats above full-screen content with no gray backplate.
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        AppNavContent(
-                                            destination = currentNav,
-                                            viewModel = viewModel,
-                                            devMode = devMode,
-                                            onNavigate = { currentNav = it }
-                                        )
-                                        VerticalNavToolbar(
-                                            currentDestination = currentNav,
-                                            onNavigate = { dest -> currentNav = dest },
-                                            activeProfileAvatar = activeProfile?.avatarEmoji ?: "🎬",
-                                            modifier = Modifier.align(Alignment.CenterStart)
-                                        )
-                                    }
-                                } else {
-                                    // HP: bottom navigation floats above full-screen content with no gray backplate.
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        // Reserve a real 48.05dp safe area so screen content ends
-                                        // above the glass boundary; navigation remains overlaid.
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(bottom = 48.05.dp)
-                                        ) {
-                                            AppNavContent(
-                                                destination = currentNav,
-                                                viewModel = viewModel,
-                                                devMode = devMode,
-                                                onNavigate = { currentNav = it }
-                                            )
-                                        }
-                                        BottomNavSafeAreaGlass(
-                                            modifier = Modifier.align(Alignment.BottomCenter)
-                                        )
-                                        BottomNavGlassBar(
-                                            currentDestination = currentNav,
-                                            onNavigate = { dest -> currentNav = dest },
-                                            modifier = Modifier.align(Alignment.BottomCenter)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                secretDialogText?.let { message ->
-                    AlertDialog(
-                        onDismissRequest = { secretDialogText = null },
-                        title = { Text(if (message == SecretCodeRegistry.allCodes) "Kode Rahasia NSiO" else "NSiO • Secret Tools") },
-                        text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState()), maxLines = 24) },
-                        confirmButton = { Button(onClick = { secretDialogText = null }) { Text("Tutup") } }
-                    )
-                }
-
-                if (showCacheResetConfirm) {
-                    AlertDialog(
-                        onDismissRequest = { showCacheResetConfirm = false },
-                        title = { Text("Bersihkan cache NSiO?") },
-                        text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
-                        confirmButton = {
-                            Button(onClick = {
-                                val cacheDirs = listOfNotNull(context.cacheDir, context.externalCacheDir)
-                                val results = cacheDirs.map { dir -> runCatching { dir.deleteRecursively() }.getOrDefault(false) }
-                                val success = results.all { it }
-                                showCacheResetConfirm = false
-                                secretDialogText = if (success) {
-                                    "Cache sementara berhasil dibersihkan. Data media, playlist, profil, dan pengaturan tidak disentuh."
-                                } else {
-                                    "Pembersihan cache tidak sepenuhnya berhasil. Sebagian file mungkin sedang digunakan."
-                                }
-                            }) { Text("Bersihkan") }
-                        },
-                        dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
-                    )
-                }
-
-                if (isCalculatorUnlocked) crashLog?.let { log ->
-                    AlertDialog(
-                        onDismissRequest = { crashLog = null },
-                        title = { Text("Aplikasi mengalami crash") },
-                        text = {
-                            Text(
-                                text = log,
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
-                                maxLines = 18
-                            )
-                        },
-                        confirmButton = {
-                            Button(onClick = {
-                                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("NSiO crash log", log))
-                                CrashLogStore.clear(context)
-                                crashLog = null
-                            }) { Text("Salin Log") }
-                        },
-                        dismissButton = {
-                            Button(onClick = {
-                                CrashLogStore.clear(context)
-                                crashLog = null
-                            }) { Text("Hapus") }
+                            if (message != null) secretMessage = message
                         }
                     )
                 }
-                }
+            } else {
+                MainApplicationContent(viewModel)
+            }
+
+            secretMessage?.let { message ->
+                AlertDialog(
+                    onDismissRequest = { secretMessage = null },
+                    title = { Text(if (message == SecretCodeRegistry.allCodes) "Kode Rahasia NSiO" else "NSiO • Secret Tools") },
+                    text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState()), maxLines = 24) },
+                    confirmButton = { Button(onClick = { secretMessage = null }) { Text("Tutup") } }
+                )
+            }
+            if (showCacheResetConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showCacheResetConfirm = false },
+                    title = { Text("Bersihkan cache NSiO?") },
+                    text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            val dirs = listOfNotNull(context.cacheDir, context.externalCacheDir)
+                            val success = dirs.map { dir -> runCatching { dir.deleteRecursively() }.getOrDefault(false) }.all { it }
+                            showCacheResetConfirm = false
+                            secretMessage = if (success) "Cache sementara berhasil dibersihkan. Data media, playlist, profil, dan pengaturan tidak disentuh." else "Pembersihan cache tidak sepenuhnya berhasil. Sebagian file mungkin sedang digunakan."
+                        }) { Text("Bersihkan") }
+                    },
+                    dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
+                )
             }
         }
     }
 
     override fun onPause() {
-        // Prevent native video audio from continuing after the app loses foreground.
-        // MainViewModel persists the playback position without closing the player.
-        viewModel.pausePlaybackForBackground()
+        if (coreStarted) viewModel.pausePlaybackForBackground()
         super.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemNotificationBar()
-        }
+        if (hasFocus) hideSystemNotificationBar()
     }
 
     private fun hideSystemNotificationBar() {
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        insetsController.hide(WindowInsetsCompat.Type.statusBars())
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.statusBars())
     }
 }
+
+@Composable
+private fun MainApplicationContent(viewModel: MainViewModel) {
+    val context = LocalContext.current
+    val settings by viewModel.settings.collectAsState()
+    val devMode by viewModel.devMode.collectAsState()
+    val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
+    val playerState by viewModel.player.playerState.collectAsState()
+    val activeProfile by viewModel.activeProfile.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
+    var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
+    var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(settings.displayMode) {
+        requestedOrientation = when (settings.displayMode) {
+            "TV" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            "HP" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+    LaunchedEffect(statusMessage, settings.language) {
+        statusMessage?.let { msg ->
+            snackbarHostState.showSnackbar(translateAppText(msg, settings.language))
+            viewModel.clearStatus()
+        }
+    }
+
+    MyApplicationTheme(themeMode = settings.themeMode) {
+        CompositionLocalProvider(LocalAppLanguage provides settings.language) {
+            Box(Modifier.fillMaxSize()) {
+                val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
+                AmbientFluidBackground(isDark = isDark)
+                if (currentlyPlaying != null) {
+                    PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() })
+                } else {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        containerColor = Color.Transparent
+                    ) { innerPadding ->
+                        BoxWithConstraints(Modifier.fillMaxSize().padding(innerPadding)) {
+                            val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
+                            if (isLandscape) {
+                                Box(Modifier.fillMaxSize()) {
+                                    AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                    VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
+                                }
+                            } else {
+                                Box(Modifier.fillMaxSize()) {
+                                    Box(Modifier.fillMaxSize().padding(bottom = 48.05.dp)) {
+                                        AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                    }
+                                    BottomNavSafeAreaGlass(Modifier.align(Alignment.BottomCenter))
+                                    BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (crashLog != null) {
+                val log = crashLog!!
+                AlertDialog(
+                    onDismissRequest = { crashLog = null },
+                    title = { Text("Aplikasi mengalami crash") },
+                    text = { Text(text = log, modifier = Modifier.verticalScroll(rememberScrollState()), maxLines = 18) },
+                    confirmButton = {
+                        Button(onClick = {
+                            context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("NSiO crash log", log))
+                            CrashLogStore.clear(context); crashLog = null
+                        }) { Text("Salin Log") }
+                    },
+                    dismissButton = { Button(onClick = { CrashLogStore.clear(context); crashLog = null }) { Text("Hapus") } }
+                )
+            }
+        }
+    }
+}
+
 
 
 private fun formatMb(bytes: Long): String = String.format(java.util.Locale.US, "%.2f MB", bytes / (1024.0 * 1024.0))
