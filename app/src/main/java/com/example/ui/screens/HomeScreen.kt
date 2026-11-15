@@ -639,7 +639,7 @@ fun HomeScreen(
                                     }
                                 } else {
                                     item(
-                                        key = "horizontal_catalog_\${sourceType}_\${playlistId}",
+                                        key = "horizontal_catalog_" + sourceType + "_" + playlistId,
                                         span = { GridItemSpan(maxLineSpan) }
                                     ) {
                                         Row(
