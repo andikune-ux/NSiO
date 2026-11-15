@@ -622,77 +622,174 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            val playlistNames = sourcePlaylists.associate { it.id to it.name }
-                            val playlistGroups = sourceItems
-                                .groupBy { it.playlistId.ifBlank { "__no_playlist__" } }
-                                .toSortedMap(compareBy<String> { it == "__no_playlist__" }
-                                    .thenBy { playlistId ->
-                                        playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
-                                    })
-                            playlistGroups.forEach { (playlistId, playlistItems) ->
-                                val playlistTitle = if (playlistId == "__no_playlist__") {
-                                    "Item tanpa playlist"
-                                } else {
-                                    playlistNames[playlistId] ?: "Playlist tidak dikenal"
-                                }
-                                item(
-                                    key = "playlist_header_${sourceType}_${playlistId}",
-                                    span = { GridItemSpan(maxLineSpan) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = playlistTitle,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${playlistItems.size}",
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                            if (sourceType == "CLOUDSTREAM") {
+                                val pluginOrder = orderedCloudStreamPluginFilters.mapIndexed { index, pair ->
+                                    pair.first to index
+                                }.toMap()
+                                val pluginNames = orderedCloudStreamPluginFilters.associate { it.first to it.second }
+                                val sectionGroups = sourceItems
+                                    .flatMap { mediaItem ->
+                                        mediaItem.category.split(" • ")
+                                            .map { it.trim() }
+                                            .filter { it.isNotBlank() }
+                                            .map { sectionName -> sectionName to mediaItem }
                                     }
-                                }
-                                if (expandedSourceType == sourceType) {
-                                    items(
-                                        items = playlistItems,
-                                        key = { it.id },
-                                        span = { GridItemSpan(1) }
-                                    ) { mediaItem ->
-                                        MediaGridCard(
-                                            item = mediaItem,
-                                            onClick = { viewModel.playMedia(mediaItem) },
-                                            onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                            onDownload = { viewModel.downloadMedia(mediaItem) }
-                                        )
-                                    }
-                                } else {
+                                    .groupBy { (sectionName, mediaItem) -> mediaItem.pluginId to sectionName }
+                                    .toSortedMap(
+                                        compareBy<Pair<String, String>> { pluginOrder[it.first] ?: Int.MAX_VALUE }
+                                            .thenBy { it.second.lowercase() }
+                                    )
+
+                                sectionGroups.forEach { (sectionKey, memberships) ->
+                                    val pluginId = sectionKey.first
+                                    val sectionName = sectionKey.second
+                                    val sectionItems = memberships.map { it.second }.distinctBy { it.id }
+                                    val pluginName = pluginNames[pluginId] ?: sectionItems.firstOrNull()?.extraInfo.orEmpty()
                                     item(
-                                        key = "horizontal_catalog_" + sourceType + "_" + playlistId,
+                                        key = "cloudstream_section_header_${pluginId}_${sectionName}",
                                         span = { GridItemSpan(maxLineSpan) }
                                     ) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                .padding(start = 4.dp, top = 5.dp, bottom = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            playlistItems.forEach { mediaItem ->
-                                                MediaGridCard(
-                                                    item = mediaItem,
-                                                    modifier = Modifier.width(148.dp),
-                                                    onClick = { viewModel.playMedia(mediaItem) },
-                                                    onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                                    onDownload = { viewModel.downloadMedia(mediaItem) }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = sectionName,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
+                                                Text(
+                                                    text = pluginName,
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            Text(
+                                                text = "${sectionItems.size}",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (expandedSourceType == sourceType) {
+                                        items(
+                                            items = sectionItems,
+                                            key = { "${pluginId}_${sectionName}_${it.id}" },
+                                            span = { GridItemSpan(1) }
+                                        ) { mediaItem ->
+                                            MediaGridCard(
+                                                item = mediaItem,
+                                                onClick = { viewModel.playMedia(mediaItem) },
+                                                onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                                onDownload = { viewModel.downloadMedia(mediaItem) }
+                                            )
+                                        }
+                                    } else {
+                                        item(
+                                            key = "horizontal_cloudstream_${pluginId}_${sectionName}",
+                                            span = { GridItemSpan(maxLineSpan) }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState()),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                sectionItems.forEach { mediaItem ->
+                                                    MediaGridCard(
+                                                        item = mediaItem,
+                                                        modifier = Modifier.width(148.dp),
+                                                        onClick = { viewModel.playMedia(mediaItem) },
+                                                        onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                                        onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                val playlistNames = sourcePlaylists.associate { it.id to it.name }
+                                val playlistGroups = sourceItems
+                                    .groupBy { it.playlistId.ifBlank { "__no_playlist__" } }
+                                    .toSortedMap(compareBy<String> { it == "__no_playlist__" }
+                                        .thenBy { playlistId ->
+                                            playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
+                                        })
+                                playlistGroups.forEach { (playlistId, playlistItems) ->
+                                    val playlistTitle = if (playlistId == "__no_playlist__") {
+                                        "Item tanpa playlist"
+                                    } else {
+                                        playlistNames[playlistId] ?: "Playlist tidak dikenal"
+                                    }
+                                    item(
+                                        key = "playlist_header_${sourceType}_${playlistId}",
+                                        span = { GridItemSpan(maxLineSpan) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = playlistTitle,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${playlistItems.size}",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (expandedSourceType == sourceType) {
+                                        items(
+                                            items = playlistItems,
+                                            key = { it.id },
+                                            span = { GridItemSpan(1) }
+                                        ) { mediaItem ->
+                                            MediaGridCard(
+                                                item = mediaItem,
+                                                onClick = { viewModel.playMedia(mediaItem) },
+                                                onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                                onDownload = { viewModel.downloadMedia(mediaItem) }
+                                            )
+                                        }
+                                    } else {
+                                        item(
+                                            key = "horizontal_catalog_" + sourceType + "_" + playlistId,
+                                            span = { GridItemSpan(maxLineSpan) }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState()),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                playlistItems.forEach { mediaItem ->
+                                                    MediaGridCard(
+                                                        item = mediaItem,
+                                                        modifier = Modifier.width(148.dp),
+                                                        onClick = { viewModel.playMedia(mediaItem) },
+                                                        onLongClick = { viewModel.toggleFavorite(mediaItem) },
+                                                        onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
