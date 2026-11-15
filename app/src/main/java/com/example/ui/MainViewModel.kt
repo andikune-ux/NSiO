@@ -1576,10 +1576,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         category: String = "CloudStream • Episode"
     ) {
         val profileId = _activeProfile.value?.id ?: run {
+            _currentlyPlaying.value = null
+            _playbackPreparationMessage.value = null
             showStatus("Profil aktif tidak ditemukan.")
             return
         }
         if (contentUrl.isBlank() || providerName.isBlank() || playbackData.isBlank() || streamUrl.isBlank()) {
+            _currentlyPlaying.value = null
+            _playbackPreparationMessage.value = null
             showStatus("Informasi episode CloudStream belum lengkap.")
             return
         }
