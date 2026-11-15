@@ -16,6 +16,11 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.DownloadItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import androidx.work.getWorkInfosByTagFlow
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -27,6 +32,7 @@ import java.util.concurrent.TimeUnit
 class VideoDownloadManager private constructor(private val context: Context) {
     private val database = AppDatabase.getInstance(context)
     private val downloadDao = database.downloadDao()
+    private val operationMutex = Mutex()
     private val _activeDownloads = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Int>>(emptyMap())
     val activeDownloads: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> = _activeDownloads
     val downloads = downloadDao.getAllDownloads()
@@ -50,7 +56,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
         title: String,
         url: String,
         requestHeaders: Map<String, String> = emptyMap()
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO) { operationMutex.withLock {
         require(url.startsWith("http://") || url.startsWith("https://")) { "URL unduhan tidak valid" }
         val parsedUri = Uri.parse(url)
         val urlExtension = parsedUri.lastPathSegment?.substringAfterLast('.', "")?.lowercase().orEmpty()
@@ -98,7 +104,7 @@ class VideoDownloadManager private constructor(private val context: Context) {
         )
         if (savedItem != item) downloadDao.updateDownload(savedItem)
         scheduleDownload(savedItem, requestHeaders)
-    }
+    } }
 
     private fun scheduleDownload(item: DownloadItem, requestHeaders: Map<String, String>) {
         val input = Data.Builder()
@@ -122,17 +128,22 @@ class VideoDownloadManager private constructor(private val context: Context) {
         )
     }
 
-    suspend fun resumeDownload(id: String) = withContext(Dispatchers.IO) {
+    suspend fun resumeDownload(id: String) = withContext(Dispatchers.IO) { operationMutex.withLock {
+        awaitWorkerStopped(id)
         val item = downloadDao.getDownloadById(id) ?: throw IllegalArgumentException("Unduhan tidak ditemukan.")
         require(item.status == "PAUSED" || item.status == "PENDING") { "Hanya unduhan yang dijeda atau menunggu yang dapat dilanjutkan." }
+        val bytes = File("${item.localPath}.part").length()
+        val percent = if (item.totalBytes > 0L) ((bytes * 100L) / item.totalBytes).toInt().coerceIn(0, 99) else item.progressPercent.coerceIn(0, 99)
+        val ready = item.copy(status = "PENDING", downloadedBytes = bytes, progressPercent = percent)
+        downloadDao.updateDownload(ready)
         val headers = runCatching {
-            val json = JSONObject(item.requestHeadersJson)
+            val json = JSONObject(ready.requestHeadersJson)
             json.keys().asSequence().associateWith { json.optString(it) }
         }.getOrDefault(emptyMap())
-        scheduleDownload(item, headers)
-    }
+        scheduleDownload(ready, headers)
+    } }
 
-    suspend fun retryDownload(id: String) = withContext(Dispatchers.IO) {
+    suspend fun retryDownload(id: String) = withContext(Dispatchers.IO) { operationMutex.withLock {
         val item = downloadDao.getDownloadById(id) ?: throw IllegalArgumentException("Unduhan tidak ditemukan.")
         require(item.status == "FAILED") { "Hanya unduhan gagal yang dapat dicoba ulang." }
         val retry = item.copy(
@@ -150,29 +161,42 @@ class VideoDownloadManager private constructor(private val context: Context) {
             json.keys().asSequence().associateWith { json.optString(it) }
         }.getOrDefault(emptyMap())
         scheduleDownload(retry, headers)
-    }
+    } }
 
-    suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) {
-        val item = downloadDao.getDownloadById(id)
-        WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
-        // Preserve byte totals so the paused row still shows truthful progress.
-        val bytes = item?.localPath?.let { File("$it.part").length() } ?: 0L
-        val total = item?.totalBytes ?: 0L
-        val percent = if (total > 0L) ((bytes * 100L) / total).toInt().coerceIn(0, 99)
-            else item?.progressPercent?.coerceIn(0, 99) ?: 0
-        downloadDao.updateProgress(id, "PAUSED", percent, bytes, total, item?.localPath.orEmpty())
+    suspend fun pauseDownload(id: String) = withContext(Dispatchers.IO) { operationMutex.withLock {
+        if (downloadDao.getDownloadById(id) == null) return@withLock
+        awaitWorkerStopped(id)
+        // Wait until the worker has stopped and closed its file stream before reading
+        // the partial file or committing the PAUSED state.
+        val latest = downloadDao.getDownloadById(id) ?: return@withLock
+        if (latest.status != "COMPLETED") {
+            val bytes = latest.localPath.takeIf { it.isNotBlank() }?.let { File("$it.part").length() } ?: 0L
+            val total = latest.totalBytes
+            val percent = if (total > 0L) ((bytes * 100L) / total).toInt().coerceIn(0, 99)
+                else latest.progressPercent.coerceIn(0, 99)
+            downloadDao.updateProgress(id, "PAUSED", percent, bytes, total, latest.localPath)
+        }
         _activeDownloads.value = _activeDownloads.value - id
-    }
+    } }
 
-    suspend fun cancelDownload(id: String) = withContext(Dispatchers.IO) {
-        val item = downloadDao.getDownloadById(id)
-        WorkManager.getInstance(context).cancelAllWorkByTag("DOWNLOAD_$id")
-        item?.localPath?.takeIf { it.isNotBlank() }?.let { path ->
+    suspend fun cancelDownload(id: String) = withContext(Dispatchers.IO) { operationMutex.withLock {
+        awaitWorkerStopped(id)
+        val latest = downloadDao.getDownloadById(id)
+        latest?.localPath?.takeIf { it.isNotBlank() }?.let { path ->
             File("$path.part").delete()
-            if (item.status != "COMPLETED") File(path).delete()
+            if (latest.status != "COMPLETED") File(path).delete()
         }
         downloadDao.deleteById(id)
         _activeDownloads.value = _activeDownloads.value - id
+    } }
+
+    private suspend fun awaitWorkerStopped(id: String) {
+        val tag = "DOWNLOAD_$id"
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelAllWorkByTag(tag)
+        workManager.getWorkInfosByTagFlow(tag).first { infos ->
+            infos.isEmpty() || infos.all { it.state.isFinished }
+        }
     }
 
     fun updateProgress(id: String, percent: Int) {
@@ -181,6 +205,15 @@ class VideoDownloadManager private constructor(private val context: Context) {
 }
 
 class DownloadFileWorkManager(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    @Volatile private var activeCall: Call? = null
+
+    override fun onStopped() {
+        // Abort a blocking network read so the worker can close the partial file before
+        // the manager commits pause/cancel state.
+        activeCall?.cancel()
+        super.onStopped()
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS).build()
 
@@ -221,7 +254,9 @@ class DownloadFileWorkManager(context: Context, params: WorkerParameters) : Coro
                 requestBuilder.header("Range", "bytes=$existingBytes-")
                 requestBuilder.header("If-Range", resumeValidator)
             }
-            val response = client.newCall(requestBuilder.build()).execute()
+            val call = client.newCall(requestBuilder.build())
+            activeCall = call
+            val response = call.execute()
             if (response.code == 416 && existingBytes > 0L) {
                 val isAlreadyComplete = isVerifiedCompletedRange(
                     contentRange = response.header("Content-Range").orEmpty(),
