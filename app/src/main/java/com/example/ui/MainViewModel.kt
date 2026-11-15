@@ -136,6 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         posterUrl: String?,
         category: String = "CloudStream • Film"
     ) {
+        player.clearError()
         player.stop()
         _playbackPreparationMessage.value = "Menghubungkan ke sumber video..."
         _currentlyPlaying.value = MediaItem(
@@ -1646,7 +1647,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     else "Permintaan putar ${item.title} dikirim. Riwayat lokal gagal disimpan."
                 )
             }.onFailure { error ->
-                showStatus("Gagal menyimpan riwayat episode: ${error.localizedMessage ?: "kesalahan database"}")
+                if (_currentlyPlaying.value?.id?.startsWith("cloudstream-preparing:") == true) {
+                    _currentlyPlaying.value = null
+                    _playbackPreparationMessage.value = null
+                }
+                showStatus("Gagal menyiapkan pemutaran episode: ${error.localizedMessage ?: "kesalahan database"}")
             }
         }
     }
