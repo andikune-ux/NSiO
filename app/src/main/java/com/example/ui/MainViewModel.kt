@@ -1508,19 +1508,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         player.pause()
         val positionMs = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
-        persistPlaybackProgress(current, positionMs)
+        persistPlaybackProgress(current, positionMs, player.playerState.value.durationMs)
     }
 
-    private fun persistPlaybackProgress(item: MediaItem, positionMs: Long) {
+    private fun persistPlaybackProgress(item: MediaItem, positionMs: Long, durationMs: Long) {
         // External streams have no catalog row; CloudStream catalog items do.
         if (item.id.startsWith("external-stream:")) return
         val safePosition = positionMs.coerceAtLeast(0L)
         viewModelScope.launch {
-            runCatching { mediaDao.updateProgress(item.id, safePosition) }
+            runCatching { mediaDao.updatePlaybackState(item.id, safePosition, durationMs.coerceAtLeast(0L)) }
             authManager.currentUser?.let { user ->
                 runCatching {
                     cloudRepository.saveMediaItem(user.uid, item.copy(
                         progressMs = safePosition,
+                        durationMs = durationMs.coerceAtLeast(item.durationMs),
                         lastWatchedAt = if (safePosition > 0L) System.currentTimeMillis() else item.lastWatchedAt
                     ))
                 }
@@ -1533,7 +1534,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isPlayableVideo = current?.let { shouldUseNativePlayer(it.type, it.url) } == true
         if (current != null && isPlayableVideo) {
             val pos = player.playerState.value.currentPositionMs.coerceAtLeast(0L)
-            persistPlaybackProgress(current, pos)
+            persistPlaybackProgress(current, pos, player.playerState.value.durationMs)
         }
         player.stop()
         _currentlyPlaying.value = null
