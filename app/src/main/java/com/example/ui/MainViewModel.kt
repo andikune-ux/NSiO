@@ -107,6 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Keep only one database observer per active profile.
     private var mediaObserverJob: Job? = null
     private var playlistObserverJob: Job? = null
+    private var sourceRefreshJob: Job? = null
 
     init {
         loadInitialData()
@@ -686,27 +687,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAllSourcePlaylists() {
         val profileId = _activeProfile.value?.id ?: return
-        viewModelScope.launch {
-            val playlists = sourcePlaylistDao.getForProfile(profileId)
-                .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" }
-            if (playlists.isEmpty()) {
-                showStatus("Belum ada playlist sumber untuk diperbarui")
-                return@launch
-            }
+        if (sourceRefreshJob?.isActive == true) {
+            showStatus("Pembaruan sumber sedang berjalan. Tunggu sampai selesai.")
+            return
+        }
+        sourceRefreshJob = viewModelScope.launch {
+            try {
+                val playlists = sourcePlaylistDao.getForProfile(profileId)
+                    .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" }
+                if (playlists.isEmpty()) {
+                    showStatus("Belum ada playlist sumber untuk diperbarui")
+                    return@launch
+                }
 
-            var successCount = 0
-            val failures = mutableListOf<String>()
-            playlists.forEach { playlist ->
-                val result = runCatching { parseAndAddLinkInternal(playlist.url, profileId) }
-                    .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
-                if (result.startsWith("Error:")) failures += "${playlist.name}: $result"
-                else successCount++
-            }
+                var successCount = 0
+                val failures = mutableListOf<String>()
+                playlists.forEach { playlist ->
+                    // A profile switch must not refresh the previous profile into the active UI.
+                    if (_activeProfile.value?.id != profileId) return@forEach
+                    val result = runCatching { parseAndAddLinkInternal(playlist.url, profileId) }
+                        .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
+                    if (result.startsWith("Error:")) failures += "${playlist.name}: $result"
+                    else successCount++
+                }
 
-            showStatus(
-                if (failures.isEmpty()) "Selesai memperbarui $successCount playlist sumber"
-                else "$successCount playlist berhasil diperbarui, ${failures.size} gagal"
-            )
+                showStatus(
+                    if (failures.isEmpty()) "Selesai memperbarui $successCount playlist sumber"
+                    else "$successCount playlist berhasil diperbarui, ${failures.size} gagal"
+                )
+            } finally {
+                sourceRefreshJob = null
+            }
         }
     }
 
