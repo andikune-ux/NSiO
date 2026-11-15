@@ -1103,6 +1103,8 @@ private fun CloudStreamSearchPanel(
     val viewportHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     var searching by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf("") }
+    var searchNextPages by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var loadingMoreSearch by remember { mutableStateOf(false) }
     var results by remember {
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>>(emptyList())
     }
@@ -1387,22 +1389,26 @@ private fun CloudStreamSearchPanel(
             onClick = {
                 searching = true
                 results = emptyList()
+                searchNextPages = emptyMap()
                 selectedContent = null
                 streams = emptyList()
                 searchMessage = ""
                 scope.launch {
                     val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
+                    val nextPages = mutableMapOf<String, Int>()
                     val failures = mutableListOf<String>()
                     installedEntries.forEach { entry ->
                         runCatching {
-                            viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim())
-                        }.onSuccess { items ->
-                            items.forEach { found.add(entry to it) }
+                            viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), 1)
+                        }.onSuccess { page ->
+                            page.items.forEach { found.add(entry to it) }
+                            if (page.hasNext) nextPages[viewModel.pluginManager.cloudStreamPluginId(entry)] = 2
                         }.onFailure { error ->
                             failures.add("${entry.name}: ${error.message ?: "gagal"}")
                         }
                     }
                     results = found
+                    searchNextPages = nextPages
                     searchMessage = when {
                         found.isNotEmpty() && failures.isNotEmpty() ->
                             "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
@@ -1423,6 +1429,39 @@ private fun CloudStreamSearchPanel(
         }
         if (searchMessage.isNotBlank()) {
             Text(searchMessage, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (searchNextPages.isNotEmpty()) {
+            OutlinedButton(
+                onClick = {
+                    loadingMoreSearch = true
+                    scope.launch {
+                        val appended = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
+                        val updatedPages = searchNextPages.toMutableMap()
+                        val failures = mutableListOf<String>()
+                        installedEntries.filter { viewModel.pluginManager.cloudStreamPluginId(it) in searchNextPages }.forEach { entry ->
+                            val key = viewModel.pluginManager.cloudStreamPluginId(entry)
+                            val pageNumber = searchNextPages[key] ?: return@forEach
+                            runCatching {
+                                viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), pageNumber)
+                            }.onSuccess { page ->
+                                page.items.forEach { appended.add(entry to it) }
+                                if (page.hasNext) updatedPages[key] = pageNumber + 1 else updatedPages.remove(key)
+                            }.onFailure { error ->
+                                failures.add("${entry.name}: ${error.message ?: "gagal"}")
+                            }
+                        }
+                        results = results + appended
+                        searchNextPages = updatedPages
+                        searchMessage = "Ditemukan ${results.size} hasil." + if (failures.isNotEmpty()) " Gagal memuat: ${failures.take(2).joinToString(" • ")}" else ""
+                        loadingMoreSearch = false
+                    }
+                },
+                enabled = !loadingMoreSearch && !searching,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (loadingMoreSearch) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                else Text("Muat hasil pencarian lainnya", fontSize = 11.sp)
+            }
         }
         results.forEach { (entry, result) ->
             Row(
