@@ -34,7 +34,10 @@ import java.util.UUID
 data class CloudStreamSourceHealth(
     val lastSuccessAt: Long = 0L,
     val lastError: String? = null,
-    val hasNext: Boolean? = null
+    val hasNext: Boolean? = null,
+    val consecutiveFailures: Int = 0,
+    val lastAttemptAt: Long = 0L,
+    val nextAutoRetryAt: Long = 0L
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -123,6 +126,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cloudStreamHomeLoadMoreJob: Job? = null
     private val cloudStreamHomePages = mutableMapOf<String, Int>()
     private val cloudStreamHomeHasNext = mutableMapOf<String, Boolean>()
+    private val cloudStreamAutoRetryJobs = mutableMapOf<String, Job>()
     private val _isLoadingMoreCloudStreamHome = MutableStateFlow(false)
     val isLoadingMoreCloudStreamHome: StateFlow<Boolean> = _isLoadingMoreCloudStreamHome.asStateFlow()
     private val _cloudStreamSourceHealth = MutableStateFlow<Map<String, CloudStreamSourceHealth>>(emptyMap())
@@ -180,7 +184,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     pluginId to CloudStreamSourceHealth(
                         lastSuccessAt = values.optLong("lastSuccessAt", 0L),
                         lastError = values.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
-                        hasNext = if (values.has("hasNext") && !values.isNull("hasNext")) values.optBoolean("hasNext") else null
+                        hasNext = if (values.has("hasNext") && !values.isNull("hasNext")) values.optBoolean("hasNext") else null,
+                        consecutiveFailures = values.optInt("consecutiveFailures", 0).coerceAtLeast(0),
+                        lastAttemptAt = values.optLong("lastAttemptAt", 0L),
+                        nextAutoRetryAt = values.optLong("nextAutoRetryAt", 0L)
                     )
                 }.getOrNull()
             }.toMap()
@@ -195,19 +202,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         if (_activeProfile.value?.id != profileId) return
         val previous = _cloudStreamSourceHealth.value[pluginId] ?: CloudStreamSourceHealth()
+        val now = System.currentTimeMillis()
+        val failureCount = if (succeeded) 0 else previous.consecutiveFailures + 1
+        val retryDelay = if (succeeded || failureCount < 2) 0L else
+            (60_000L * (1L shl (failureCount - 2).coerceIn(0, 5))).coerceAtMost(30 * 60_000L)
         val updated = previous.copy(
-            lastSuccessAt = if (succeeded) System.currentTimeMillis() else previous.lastSuccessAt,
+            lastSuccessAt = if (succeeded) now else previous.lastSuccessAt,
             lastError = if (succeeded) null else error ?: previous.lastError,
-            hasNext = hasNext ?: previous.hasNext
+            hasNext = hasNext ?: previous.hasNext,
+            consecutiveFailures = failureCount,
+            lastAttemptAt = now,
+            nextAutoRetryAt = if (succeeded) 0L else if (retryDelay > 0L) now + retryDelay else 0L
         )
         _cloudStreamSourceHealth.value = _cloudStreamSourceHealth.value + (pluginId to updated)
         val values = org.json.JSONObject()
             .put("lastSuccessAt", updated.lastSuccessAt)
             .put("lastError", updated.lastError ?: org.json.JSONObject.NULL)
             .put("hasNext", updated.hasNext ?: org.json.JSONObject.NULL)
+            .put("consecutiveFailures", updated.consecutiveFailures)
+            .put("lastAttemptAt", updated.lastAttemptAt)
+            .put("nextAutoRetryAt", updated.nextAutoRetryAt)
         cloudStreamHealthPreferences.edit()
             .putString("$profileId|$pluginId", values.toString())
             .apply()
+        if (succeeded) {
+            cloudStreamAutoRetryJobs.remove(pluginId)?.cancel()
+        } else if (updated.consecutiveFailures >= 2) {
+            scheduleCloudStreamAutoRetry(profileId, pluginId, updated.nextAutoRetryAt)
+        }
+    }
+
+
+    /**
+     * Retry a repeatedly failing source with exponential backoff.
+     * Retries are profile-scoped and never run concurrently for the same provider.
+     */
+    private fun scheduleCloudStreamAutoRetry(profileId: String, pluginId: String, retryAt: Long) {
+        if (retryAt <= 0L || cloudStreamAutoRetryJobs[pluginId]?.isActive == true) return
+        cloudStreamAutoRetryJobs[pluginId] = viewModelScope.launch {
+            try {
+                val waitMs = (retryAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                if (waitMs > 0L) kotlinx.coroutines.delay(waitMs)
+                if (_activeProfile.value?.id != profileId) return@launch
+                val health = _cloudStreamSourceHealth.value[pluginId] ?: return@launch
+                if (health.consecutiveFailures < 2 || health.nextAutoRetryAt > System.currentTimeMillis()) return@launch
+                refreshCloudStreamPluginOnHome(pluginId)
+            } finally {
+                cloudStreamAutoRetryJobs.remove(pluginId)
+            }
+        }
     }
 
     init {
@@ -276,6 +319,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value = loadSettingsForProfile(active.id)
                 _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(active.id)
                 _cloudStreamPluginOrder.value = loadCloudStreamPluginOrder(active.id)
+                _cloudStreamSourceHealth.value.forEach { (pluginId, health) ->
+                    if (health.consecutiveFailures >= 2) scheduleCloudStreamAutoRetry(active.id, pluginId, health.nextAutoRetryAt)
+                }
                 _selectedFilter.value = loadSelectedFilter(active.id)
                 _selectedSort.value = loadSelectedSort(active.id)
             }
@@ -324,6 +370,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _settings.value = loadSettingsForProfile(profile.id)
             _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profile.id)
             _cloudStreamPluginOrder.value = loadCloudStreamPluginOrder(profile.id)
+            cloudStreamAutoRetryJobs.values.forEach { it.cancel() }
+            cloudStreamAutoRetryJobs.clear()
+            _cloudStreamSourceHealth.value.forEach { (pluginId, health) ->
+                if (health.consecutiveFailures >= 2) scheduleCloudStreamAutoRetry(profile.id, pluginId, health.nextAutoRetryAt)
+            }
             _selectedFilter.value = loadSelectedFilter(profile.id)
             _selectedSort.value = loadSelectedSort(profile.id)
             observeActiveProfileMedia()
