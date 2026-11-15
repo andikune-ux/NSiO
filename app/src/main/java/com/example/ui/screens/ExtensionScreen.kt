@@ -1113,6 +1113,12 @@ private fun CloudStreamSearchPanel(
     var resolvingLinks by remember { mutableStateOf(false) }
     var linkMessage by remember { mutableStateOf("") }
     var linkTarget by remember { mutableStateOf("") }
+    var resolvedPlaybackData by remember { mutableStateOf("") }
+    var resolvedPlaybackTitle by remember { mutableStateOf("") }
+    var resolvedPlaybackPoster by remember { mutableStateOf<String?>(null) }
+    var resolvedPlaybackContentUrl by remember { mutableStateOf("") }
+    var resolvedPlaybackProvider by remember { mutableStateOf("") }
+    var resolvedPlaybackEntry by remember { mutableStateOf<com.example.data.plugin.CloudStreamPluginEntry?>(null) }
     var streams by remember {
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamStream>>>(emptyList())
     }
@@ -1173,10 +1179,19 @@ private fun CloudStreamSearchPanel(
         entry: com.example.data.plugin.CloudStreamPluginEntry,
         providerName: String,
         data: String,
-        target: String
+        target: String,
+        contentUrl: String = selectedContent?.second?.url.orEmpty(),
+        posterUrl: String? = selectedContent?.second?.posterUrl
     ) {
         resolvingLinks = true
         linkTarget = target
+        resolvedPlaybackEntry = entry
+        resolvedPlaybackProvider = providerName
+        resolvedPlaybackData = data
+        resolvedPlaybackTitle = if (target == "Film") selectedContent?.second?.title ?: target
+            else listOf(selectedContent?.second?.title, target).filterNotNull().filter { it.isNotBlank() }.joinToString(" • ")
+        resolvedPlaybackPoster = posterUrl
+        resolvedPlaybackContentUrl = contentUrl
         linkMessage = ""
         streams = emptyList()
         scope.launch {
@@ -1497,7 +1512,7 @@ private fun CloudStreamSearchPanel(
                 ) { Text("Putar trailer ${index + 1}", fontSize = 9.sp) } 
             }
             content.dataUrl?.takeIf { it.isNotBlank() }?.let { data ->
-                Button(onClick = { resolveLinks(entry, content.providerName, data, "Film") }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
+                Button(onClick = { resolveLinks(entry, content.providerName, data, "Film", content.url, content.posterUrl) }, enabled = !resolvingLinks, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 3.dp)) { Text("Ambil link film", fontSize = 10.sp) }
             }
             if (content.episodes.isNotEmpty()) {
                 val episodesBySeason = content.episodes.groupBy { it.season ?: 0 }.toSortedMap()
@@ -1551,7 +1566,7 @@ private fun CloudStreamSearchPanel(
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                             listOfNotNull(episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
-                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }) }) { Text("Link", fontSize = 10.sp) }
+                        TextButton(enabled = !resolvingLinks, onClick = { resolveLinks(entry, content.providerName, episode.data, episode.name.ifBlank { "Episode ${index + 1}" }, content.url, episode.posterUrl ?: content.posterUrl) }) { Text("Link", fontSize = 10.sp) }
                     }
                 }
             }
@@ -1616,13 +1631,23 @@ private fun CloudStreamSearchPanel(
                             "DASH" -> "application/dash+xml"
                             else -> null
                         }
-                        viewModel.playExternalStream(
-                            url = stream.url,
-                            title = stream.name.ifBlank { selectedContent?.second?.title ?: "CloudStream" },
-                            requestHeaders = headers,
-                            mimeType = mimeType,
-                            sourceUrl = stream.referer
-                        )
+                        val playbackEntry = resolvedPlaybackEntry
+                        if (playbackEntry == null || resolvedPlaybackData.isBlank() || resolvedPlaybackContentUrl.isBlank()) {
+                            linkMessage = "Konteks episode tidak tersedia. Ambil link episode kembali."
+                        } else {
+                            viewModel.playCloudStreamEpisode(
+                                entry = playbackEntry,
+                                contentUrl = resolvedPlaybackContentUrl,
+                                providerName = resolvedPlaybackProvider,
+                                playbackData = resolvedPlaybackData,
+                                title = resolvedPlaybackTitle.ifBlank { stream.name.ifBlank { "CloudStream" } },
+                                posterUrl = resolvedPlaybackPoster,
+                                streamUrl = stream.url,
+                                requestHeaders = headers,
+                                mimeType = mimeType,
+                                sourceUrl = stream.referer
+                            )
+                        }
                     }
                 ) { Text("Putar", fontSize = 10.sp) }
             }
