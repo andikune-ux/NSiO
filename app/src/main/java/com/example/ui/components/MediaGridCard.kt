@@ -69,14 +69,16 @@ fun MediaGridCard(
             .fillMaxWidth()
             .liquidGlassTvFocusable(
                 shape = RoundedCornerShape(18.dp),
-                scaleFocused = 1.055f,
+                scaleFocused = 1.025f,
                 interactionSource = interactionSource
             )
-            .liquidGlass(
-                shape = RoundedCornerShape(18.dp),
-                alpha = 0.12f,
-                borderAlpha = 0.24f,
-                elevation = 11.dp
+            // Avoid per-card dual blurred shadows: many simultaneous shadows
+            // cause frame drops while rapidly scrolling a dense poster grid.
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
+            .border(
+                0.65.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+                RoundedCornerShape(18.dp)
             )
             .clip(RoundedCornerShape(18.dp))
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
