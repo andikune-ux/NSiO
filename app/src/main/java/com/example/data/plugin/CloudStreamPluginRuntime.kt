@@ -122,15 +122,15 @@ class CloudStreamPluginRuntime(private val context: Context) {
             require(page >= 1) { "Nomor halaman katalog tidak valid." }
             val loaded = loadPlugin(artifact)
             loaded.providers.filter { it.hasMainPage }.flatMap { api ->
-                api.mainPage.mapNotNull { request ->
+                api.mainPage.mapNotNull requestLoop@ { request ->
                     val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
                         api.getMainPage(page, MainPageRequest(request.name, request.data, request.horizontalImages))
-                    } ?: return@mapNotNull null
+                    } ?: return@requestLoop null
                     val items = response.items.flatMap { section ->
-                        section.list.mapNotNull { item ->
+                        section.list.mapNotNull itemLoop@ { item ->
                             val title = (readProperty(item, "name") as? String).orEmpty()
                             val url = (readProperty(item, "url") as? String).orEmpty()
-                            if (title.isBlank() || url.isBlank()) return@mapNotNull null
+                            if (title.isBlank() || url.isBlank()) return@itemLoop null
                             CloudStreamSearchItem(
                                 pluginName = artifact.nameWithoutExtension,
                                 providerName = api.name,
