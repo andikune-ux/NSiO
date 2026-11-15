@@ -5,6 +5,7 @@ import dalvik.system.DexClassLoader
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
@@ -36,6 +37,14 @@ data class CloudStreamSearchItem(
     val posterUrl: String?,
     val contentType: String?,
     val year: Int?
+)
+
+data class CloudStreamHomeSection(
+    val pluginName: String,
+    val providerName: String,
+    val sectionName: String,
+    val items: List<CloudStreamSearchItem>,
+    val hasNext: Boolean
 )
 
 data class CloudStreamEpisodeItem(
@@ -102,6 +111,47 @@ class CloudStreamPluginRuntime(private val context: Context) {
             )
         }
     }
+
+    /**
+     * Reads the provider's declared CloudStream home-page categories. Providers
+     * without a main page are reported as unsupported rather than silently
+     * substituting search results.
+     */
+    suspend fun loadHomePage(artifact: File, page: Int = 1): List<CloudStreamHomeSection> =
+        withContext(Dispatchers.IO) {
+            require(page >= 1) { "Nomor halaman katalog tidak valid." }
+            val loaded = loadPlugin(artifact)
+            loaded.providers.filter { it.hasMainPage }.flatMap { api ->
+                api.mainPage.mapNotNull { request ->
+                    val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
+                        api.getMainPage(page, MainPageRequest(request.name, request.data, request.horizontalImages))
+                    } ?: return@mapNotNull null
+                    val items = response.items.flatMap { section ->
+                        section.list.mapNotNull { item ->
+                            val title = (readProperty(item, "name") as? String).orEmpty()
+                            val url = (readProperty(item, "url") as? String).orEmpty()
+                            if (title.isBlank() || url.isBlank()) return@mapNotNull null
+                            CloudStreamSearchItem(
+                                pluginName = artifact.nameWithoutExtension,
+                                providerName = api.name,
+                                title = title,
+                                url = url,
+                                posterUrl = readProperty(item, "posterUrl") as? String,
+                                contentType = readProperty(item, "type")?.toString(),
+                                year = readProperty(item, "year") as? Int
+                            )
+                        }
+                    }
+                    CloudStreamHomeSection(
+                        pluginName = artifact.nameWithoutExtension,
+                        providerName = api.name,
+                        sectionName = response.items.firstOrNull()?.name?.ifBlank { request.name } ?: request.name,
+                        items = items,
+                        hasNext = response.hasNext
+                    )
+                }
+            }
+        }
 
     suspend fun search(artifact: File, query: String): List<CloudStreamSearchItem> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Masukkan kata pencarian terlebih dahulu." }
