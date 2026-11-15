@@ -41,6 +41,12 @@ object MediaRefreshPolicy {
             val previous = previousBySource[cloudStreamKey(fresh)]
             fresh.copy(
                 id = cloudStreamId(profileId, pluginId, fresh.extraInfo, fresh.url),
+                category = ((previous?.category.orEmpty().split(" • ")) + fresh.category.split(" • "))
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" • ")
+                    .ifBlank { "CloudStream" },
                 durationMs = previous?.durationMs ?: fresh.durationMs,
                 progressMs = previous?.progressMs ?: fresh.progressMs,
                 lastWatchedAt = previous?.lastWatchedAt ?: fresh.lastWatchedAt,
