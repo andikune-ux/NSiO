@@ -10,11 +10,10 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
-import okhttp3.OkHttpClient
+import com.lagradost.cloudstream3.app
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
@@ -133,29 +132,31 @@ class CS3IPlayer(
         val subtitleHeaderMap = subtitles
             .filter { it.url.isNotBlank() && it.headers.isNotEmpty() }
             .associate { normalizePlaybackUrl(it.url) to it.headers }
-        if (interceptor != null || subtitleHeaderMap.isNotEmpty()) {
-            val client = OkHttpClient.Builder().apply {
-                interceptor?.let(::addInterceptor)
-                if (subtitleHeaderMap.isNotEmpty()) {
-                    addInterceptor { chain ->
-                        val request = chain.request()
-                        val headers = subtitleHeaderMap.entries.firstOrNull { (url, _) ->
-                            runCatching { normalizePlaybackUrl(request.url.toString()) == url }.getOrDefault(false)
-                        }?.value
-                        val updated = request.newBuilder().apply {
-                            headers?.forEach { (name, value) -> header(name, value) }
-                        }.build()
-                        chain.proceed(updated)
-                    }
+
+        // Match CloudStream's own player networking: reuse its shared OkHttp client
+        // so provider cookies, cookie-jar state, TLS configuration and other session
+        // settings survive from plugin resolution into the actual media requests.
+        // Creating a fresh OkHttpClient here silently drops that shared session.
+        val client = app.baseClient.newBuilder().apply {
+            interceptor?.let(::addInterceptor)
+            if (subtitleHeaderMap.isNotEmpty()) {
+                addInterceptor { chain ->
+                    val request = chain.request()
+                    val headers = subtitleHeaderMap.entries.firstOrNull { (url, _) ->
+                        runCatching { normalizePlaybackUrl(request.url.toString()) == url }.getOrDefault(false)
+                    }?.value
+                    val updated = request.newBuilder().apply {
+                        headers?.forEach { (name, value) -> header(name, value) }
+                    }.build()
+                    chain.proceed(updated)
                 }
-            }.build()
-            return OkHttpDataSource.Factory(client).setDefaultRequestProperties(baseHeaders)
-        }
-        return DefaultHttpDataSource.Factory()
+            }
+        }.build()
+
+        // CloudStream uses OkHttpDataSource for online playback even when a plugin
+        // does not supply a custom video interceptor. Keep the same behavior here.
+        return OkHttpDataSource.Factory(client)
             .setUserAgent(STANDARD_USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(20000)
             .setDefaultRequestProperties(baseHeaders)
     }
 
