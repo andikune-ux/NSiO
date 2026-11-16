@@ -15,10 +15,13 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.extractorApis
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.io.File
+import java.io.IOException
+import java.net.URI
 import java.lang.ref.WeakReference
 import java.util.zip.ZipFile
 import com.lagradost.api.setContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -150,7 +153,7 @@ class CloudStreamPluginRuntime(private val context: Context) {
 
     companion object {
         private const val SEARCH_TIMEOUT_MS = 30_000L
-        private const val LOAD_TIMEOUT_MS = 30_000L
+        private const val LOAD_TIMEOUT_MS = 45_000L
         private const val LINKS_TIMEOUT_MS = 45_000L
     }
 
@@ -292,8 +295,36 @@ class CloudStreamPluginRuntime(private val context: Context) {
     ): CloudStreamContent = withContext(Dispatchers.IO) {
         val api = loadPlugin(artifact).providers.firstOrNull { it.name == providerName }
             ?: throw IllegalArgumentException("Provider CloudStream tidak ditemukan: $providerName")
-        val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) { api.load(url) }
-            ?: throw IllegalStateException("Provider tidak mengembalikan detail konten atau waktu pemuatan habis.")
+        val response = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
+            var lastNetworkError: IOException? = null
+            repeat(2) { attempt ->
+                try {
+                    return@withTimeoutOrNull api.load(url)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (error: IOException) {
+                    lastNetworkError = error
+                    if (attempt == 0) delay(900L)
+                }
+            }
+
+            val host = runCatching { URI(url).host }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: api.mainUrl
+            val networkError = lastNetworkError
+            if (networkError != null) {
+                throw IllegalStateException(
+                    "Tidak dapat terhubung ke server provider ${api.name} ($host) setelah 2 percobaan. " +
+                        "Periksa koneksi internet atau coba jaringan lain. Jika hanya provider ini yang gagal, " +
+                        "server sumber mungkin sedang tidak tersedia.",
+                    networkError
+                )
+            }
+            throw IllegalStateException("Provider ${api.name} tidak mengembalikan detail konten.")
+        } ?: throw IllegalStateException(
+            "Waktu pemuatan detail dari provider ${api.name} habis setelah 45 detik."
+        )
 
         response.toCloudStreamContent(artifact.nameWithoutExtension, api.name)
     }
