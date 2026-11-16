@@ -1167,12 +1167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val entries = pluginManager.repositories.value
                     .flatMap { it.plugins }
-                    .filter { entry ->
-                        entry.status != 0 &&
-                            pluginManager.isCloudStreamPluginInstalled(entry) &&
-                            (selectedPluginId.isNullOrBlank() ||
-                                pluginManager.cloudStreamPluginId(entry) == selectedPluginId)
-                    }
+                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
                     .distinctBy { pluginManager.cloudStreamPluginId(it) }
                 prioritizeCloudStreamEntries(entries).forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
@@ -1291,7 +1286,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val entries = pluginManager.repositories.value
                     .flatMap { it.plugins }
-                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
+                    .filter { entry ->
+                        entry.status != 0 &&
+                            pluginManager.isCloudStreamPluginInstalled(entry) &&
+                            (selectedPluginId.isNullOrBlank() ||
+                                pluginManager.cloudStreamPluginId(entry) == selectedPluginId)
+                    }
                     .distinctBy { pluginManager.cloudStreamPluginId(it) }
                 entries.forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
