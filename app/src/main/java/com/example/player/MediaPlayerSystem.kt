@@ -234,7 +234,7 @@ class CS3IPlayer(
                         if (cause is HttpDataSource.InvalidResponseCodeException && cause.responseCode == 403) {
                             val alternative = lastPluginStreams
                                 .asSequence()
-                                .filter { it.url.isNotBlank() && it.url != lastUrl }
+                                .filter { it.url.isNotBlank() }
                                 .filter { stream ->
                                     val key = "${stream.url}|${stream.referer}"
                                     key !in attemptedPluginStreamKeys
