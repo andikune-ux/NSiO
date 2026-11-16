@@ -92,6 +92,8 @@ fun MediaGridCard(
                     .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    // Explicit tap target for poster; card body stays clickable too.
+                    .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             ) {
                 if (item.thumbnailUrl.isNotEmpty()) {
                     AsyncImage(
