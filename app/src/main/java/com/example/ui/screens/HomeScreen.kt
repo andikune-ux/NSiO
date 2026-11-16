@@ -183,9 +183,12 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(activeProfile?.id) {
+    LaunchedEffect(activeProfile?.id, selectedFilter) {
         if (activeProfile != null) {
-            viewModel.refreshCloudStreamCatalogOnHome()
+            val selectedCloudStreamPluginId = selectedFilter
+                .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
+                ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+            viewModel.refreshCloudStreamCatalogOnHome(selectedCloudStreamPluginId)
         }
     }
 
