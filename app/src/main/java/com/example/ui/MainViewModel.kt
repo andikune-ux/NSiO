@@ -67,6 +67,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val player = CS3IPlayer(application, viewModelScope)
     private var cloudStreamVerifierJob: Job? = null
 
+    init {
+        // Expired CDN URLs are re-resolved through the original provider, not retried
+        // from the stale in-memory stream list.
+        player.onCloudStreamRefreshRequested = { resumePositionMs ->
+            val item = _currentlyPlaying.value
+            if (item == null || item.sourceType != "CLOUDSTREAM" || item.pluginId.isBlank()) {
+                false
+            } else {
+                runCatching {
+                    val metadata = org.json.JSONObject(item.extraInfo)
+                    val providerName = metadata.optString("providerName").takeIf { it.isNotBlank() }
+                        ?: return@runCatching false
+                    val playbackData = metadata.optString("playbackData").takeIf { it.isNotBlank() }
+                        ?: return@runCatching false
+                    val entry = pluginManager.findCloudStreamPlugin(item.pluginId) ?: return@runCatching false
+                    val freshStreams = pluginManager.loadCloudStreamLinks(entry, providerName, playbackData)
+                        .filter { it.url.isNotBlank() }
+                        .distinctBy { it.url to it.referer }
+                    val fresh = freshStreams.maxByOrNull { it.quality } ?: return@runCatching false
+                    val headers = fresh.headers.toMutableMap().apply {
+                        if (fresh.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
+                            put("Referer", fresh.referer)
+                        }
+                    }
+                    val type = fresh.streamType.substringAfterLast('.').uppercase()
+                    val extension = runCatching {
+                        java.net.URI(fresh.url).path.substringAfterLast('.', "").uppercase()
+                    }.getOrDefault("")
+                    val mimeType = when {
+                        type.contains("M3U8") || type.contains("HLS") || extension == "M3U8" -> "application/x-mpegURL"
+                        type.contains("DASH") || type == "MPD" || extension == "MPD" -> "application/dash+xml"
+                        type.contains("WEBM") || extension == "WEBM" -> "video/webm"
+                        type.contains("MKV") || type.contains("MATROSKA") || extension == "MKV" -> "video/x-matroska"
+                        type.contains("MP4") || type.contains("VIDEO") || extension == "MP4" -> "video/mp4"
+                        else -> null
+                    }
+                    player.playWithMimeType(
+                        url = fresh.url,
+                        title = item.title,
+                        startPositionMs = resumePositionMs,
+                        requestHeaders = headers,
+                        mimeType = mimeType,
+                        externalSubtitles = fresh.subtitles,
+                        videoInterceptor = fresh.videoInterceptor,
+                        pluginStreams = freshStreams
+                    )
+                    true
+                }.getOrDefault(false)
+            }
+        }
+    }
+
     // Firebase Auth & Cloud Firestore Integration
     val authManager = FirebaseAuthManager(application)
     val authState: StateFlow<AuthState> = authManager.authState
