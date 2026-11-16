@@ -577,13 +577,29 @@ class CloudStreamPluginRuntime(private val context: Context) {
         }
 
         setContext(WeakReference(context as Any))
-        val dexDirectory = File(
-            context.codeCacheDir,
-            "cloudstream_plugins/${canonical.nameWithoutExtension}"
-        ).apply { mkdirs() }
+
+        // Android 14+ rejects dynamically loaded DEX/APK containers when the
+        // source file is writable. Installed .cs3 archives live in filesDir and
+        // are writable by design, so load an immutable private copy instead.
+        // Keep the optimized-dex directory writable; only the source archive
+        // passed to DexClassLoader must be read-only.
+        val dexRoot = File(context.codeCacheDir, "cloudstream_plugins").apply { mkdirs() }
+        val optimizedDirectory = File(dexRoot, "optimized/${canonical.nameWithoutExtension}").apply { mkdirs() }
+        val immutableArtifact = File(
+            dexRoot,
+            "readonly/${canonical.nameWithoutExtension}-${canonical.length()}-${canonical.lastModified()}.cs3"
+        )
+        if (!immutableArtifact.isFile || immutableArtifact.length() != canonical.length()) {
+            immutableArtifact.parentFile?.mkdirs()
+            canonical.copyTo(immutableArtifact, overwrite = true)
+        }
+        require(immutableArtifact.setReadOnly() && !immutableArtifact.canWrite()) {
+            "Tidak dapat mengunci salinan plugin agar aman dimuat Android."
+        }
+
         val loader = DexClassLoader(
-            canonical.absolutePath,
-            dexDirectory.absolutePath,
+            immutableArtifact.absolutePath,
+            optimizedDirectory.absolutePath,
             null,
             BasePlugin::class.java.classLoader
         )
