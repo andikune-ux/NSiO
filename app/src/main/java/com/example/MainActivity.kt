@@ -58,6 +58,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ui.MainViewModel
 import com.example.ui.components.AmbientFluidBackground
 import com.example.ui.components.LocalAppLanguage
+import com.example.ui.components.LocalDevModeTextSelection
 import com.example.ui.components.translateAppText
 import com.example.ui.components.BottomNavGlassBar
 import com.example.ui.components.BottomNavSafeAreaGlass
@@ -207,7 +208,10 @@ private fun MainApplicationContent(viewModel: MainViewModel) {
     }
 
     MyApplicationTheme(themeMode = settings.themeMode) {
-        CompositionLocalProvider(LocalAppLanguage provides settings.language) {
+        CompositionLocalProvider(
+            LocalAppLanguage provides settings.language,
+            LocalDevModeTextSelection provides devMode
+        ) {
             Box(Modifier.fillMaxSize()) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
