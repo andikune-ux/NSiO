@@ -1343,16 +1343,20 @@ fun CloudStreamSearchPanel(
         .distinctBy { it.internalName to it.version }
 
     val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
-    LaunchedEffect(pendingCloudStreamDetail?.id, installedEntries, handlePendingDetail) {
+    val cloudStreamDetailRequestId by viewModel.cloudStreamDetailRequestId.collectAsState()
+    LaunchedEffect(cloudStreamDetailRequestId, handlePendingDetail) {
         if (!handlePendingDetail) return@LaunchedEffect
         val pendingItem = pendingCloudStreamDetail ?: return@LaunchedEffect
         loadingDetail = true
         selectedContent = null
         detailLoadError = null
+        streams = emptyList()
+        linkMessage = ""
+        android.util.Log.i("NSiO.CloudStreamDetail", "Handling request=" + cloudStreamDetailRequestId + " item=" + pendingItem.id + " plugin=" + pendingItem.pluginId)
         detailRetry = { viewModel.requestCloudStreamDetail(pendingItem) }
         runCatching {
             val entry = viewModel.pluginManager.findCloudStreamPlugin(pendingItem.pluginId)
-                ?: throw IllegalStateException("Plugin asal konten tidak ditemukan atau belum terpasang.")
+                ?: throw IllegalStateException("Plugin asal konten tidak ditemukan/terpasang. ID tersimpan: '" + pendingItem.pluginId + "'.")
             val metadata = runCatching { org.json.JSONObject(pendingItem.extraInfo) }.getOrNull()
             val providerName = metadata?.optString("providerName")
                 ?.takeIf { it.isNotBlank() } ?: pendingItem.extraInfo
@@ -1362,12 +1366,14 @@ fun CloudStreamSearchPanel(
                 title = content.title.ifBlank { pendingItem.title }
             )
         }.onSuccess { (entry, content) ->
+            android.util.Log.i("NSiO.CloudStreamDetail", "Detail loaded: " + content.title + " via " + entry.name)
             selectedContent = entry to content
             detailLoadError = null
             streams = emptyList()
             linkMessage = ""
             searchMessage = "Detail CloudStream siap. Pilih film atau episode untuk mengambil sumber pemutaran."
         }.onFailure { error ->
+            android.util.Log.e("NSiO.CloudStreamDetail", "Detail request failed for " + pendingItem.id, error)
             val message = "Gagal membuka detail CloudStream: ${error.localizedMessage ?: "provider tidak merespons"}"
             detailLoadError = message
             searchMessage = message
