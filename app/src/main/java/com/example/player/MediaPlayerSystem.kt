@@ -105,6 +105,7 @@ class CS3IPlayer(
     private var lastExternalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
+    private val attemptedPluginStreamKeys = mutableSetOf<String>()
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
@@ -230,6 +231,21 @@ class CS3IPlayer(
 
                     override fun onPlayerError(error: PlaybackException) {
                         val cause = error.cause
+                        if (cause is HttpDataSource.InvalidResponseCodeException && cause.responseCode == 403) {
+                            val alternative = lastPluginStreams
+                                .asSequence()
+                                .filter { it.url.isNotBlank() && it.url != lastUrl }
+                                .filter { stream ->
+                                    val key = "${stream.url}|${stream.referer}"
+                                    key !in attemptedPluginStreamKeys
+                                }
+                                .sortedByDescending { it.quality }
+                                .firstOrNull()
+                            if (alternative != null) {
+                                selectPluginStream(alternative)
+                                return
+                            }
+                        }
                         val errorDesc = when {
                             cause is HttpDataSource.InvalidResponseCodeException -> {
                                 when (cause.responseCode) {
@@ -371,6 +387,7 @@ class CS3IPlayer(
     }
 
     override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
+        attemptedPluginStreamKeys.clear()
         playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList())
     }
 
@@ -384,6 +401,7 @@ class CS3IPlayer(
         videoInterceptor: okhttp3.Interceptor? = null,
         pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     ) {
+        attemptedPluginStreamKeys.clear()
         playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams)
     }
 
@@ -405,6 +423,10 @@ class CS3IPlayer(
         lastExternalSubtitles = externalSubtitles
         lastVideoInterceptor = videoInterceptor
         lastPluginStreams = pluginStreams
+        if (url.isNotBlank()) {
+            val referer = requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
+            attemptedPluginStreamKeys.add("$url|$referer")
+        }
         httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, externalSubtitles)
 
         exoPlayer?.let { player ->
@@ -515,6 +537,8 @@ class CS3IPlayer(
         lastPositionMs = 0L
         lastHeaders = emptyMap()
         lastMimeType = null
+        attemptedPluginStreamKeys.clear()
+        lastPluginStreams = emptyList()
         _playerState.value = PlayerState(audioDelayMs = audioDelayMs)
     }
 
