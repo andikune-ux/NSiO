@@ -1167,7 +1167,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val entries = pluginManager.repositories.value
                     .flatMap { it.plugins }
-                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
+                    .filter { entry ->
+                        entry.status != 0 &&
+                            pluginManager.isCloudStreamPluginInstalled(entry) &&
+                            (selectedPluginId.isNullOrBlank() ||
+                                pluginManager.cloudStreamPluginId(entry) == selectedPluginId)
+                    }
                     .distinctBy { pluginManager.cloudStreamPluginId(it) }
                 prioritizeCloudStreamEntries(entries).forEach { entry ->
                     if (_activeProfile.value?.id != profileId) return@forEach
@@ -1273,9 +1278,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Refreshes the first page of each enabled, installed CloudStream provider when Home opens.
      * Each plugin is isolated; failed or empty responses leave its last saved catalog untouched.
      */
-    fun refreshCloudStreamCatalogOnHome() {
+    fun refreshCloudStreamCatalogOnHome(selectedPluginId: String? = null) {
         val profileId = _activeProfile.value?.id ?: return
-        if (cloudStreamHomeRefreshJob?.isActive == true) return
+        if (cloudStreamHomeRefreshJob?.isActive == true) {
+            if (selectedPluginId.isNullOrBlank()) return
+            cloudStreamHomeRefreshJob?.cancel()
+        }
         cloudStreamHomeRefreshJob = viewModelScope.launch {
             _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profileId)
             var refreshed = 0
