@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -739,13 +741,15 @@ fun HomeScreen(
                                             key = "horizontal_cloudstream_${pluginId}_${sectionName}",
                                             span = { GridItemSpan(maxLineSpan) }
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .horizontalScroll(rememberScrollState()),
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            LazyRow(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                contentPadding = PaddingValues(horizontal = 2.dp)
                                             ) {
-                                                sectionItems.forEach { mediaItem ->
+                                                items(
+                                                    items = sectionItems,
+                                                    key = { pluginId + "_" + sectionName + "_" + it.id }
+                                                ) { mediaItem ->
                                                     MediaGridCard(
                                                         item = mediaItem,
                                                         modifier = Modifier.width(148.dp),
