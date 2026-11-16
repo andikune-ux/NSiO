@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text as Material3Text
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
 val LocalAppLanguage = staticCompositionLocalOf { "ID" }
+val LocalDevModeTextSelection = staticCompositionLocalOf { false }
 
 private val englishText = mapOf(
     "Aplikasi mengalami crash" to "The app crashed",
@@ -201,23 +203,33 @@ fun AppText(
         style.color != Color.Unspecified -> style.color
         else -> MaterialTheme.colorScheme.onSurface
     }
-    Material3Text(
-        text = translateAppText(text, LocalAppLanguage.current),
-        modifier = modifier,
-        color = resolvedColor,
-        fontSize = readableFontSize,
-        fontStyle = fontStyle,
-        fontWeight = fontWeight,
-        fontFamily = fontFamily,
-        letterSpacing = letterSpacing,
-        textDecoration = textDecoration,
-        textAlign = textAlign,
-        lineHeight = lineHeight,
-        overflow = overflow,
-        softWrap = softWrap,
-        maxLines = maxLines,
-        minLines = minLines,
-        onTextLayout = onTextLayout,
-        style = style
-    )
+    val renderedText: @Composable () -> Unit = {
+        Material3Text(
+            text = translateAppText(text, LocalAppLanguage.current),
+            modifier = modifier,
+            color = resolvedColor,
+            fontSize = readableFontSize,
+            fontStyle = fontStyle,
+            fontWeight = fontWeight,
+            fontFamily = fontFamily,
+            letterSpacing = letterSpacing,
+            textDecoration = textDecoration,
+            textAlign = textAlign,
+            lineHeight = lineHeight,
+            overflow = overflow,
+            softWrap = softWrap,
+            maxLines = maxLines,
+            minLines = minLines,
+            onTextLayout = onTextLayout,
+            style = style
+        )
+    }
+
+    // Keep each text surface in its own selection tree. This preserves Dev Mode
+    // copy/selection without one root SelectionContainer spanning Dialog windows.
+    if (LocalDevModeTextSelection.current) {
+        SelectionContainer { renderedText() }
+    } else {
+        renderedText()
+    }
 }
