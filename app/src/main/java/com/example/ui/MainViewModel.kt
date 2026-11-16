@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
@@ -164,11 +165,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // A CloudStream catalogue card opens its provider detail page before playback.
     private val _pendingCloudStreamDetail = MutableStateFlow<MediaItem?>(null)
     val pendingCloudStreamDetail: StateFlow<MediaItem?> = _pendingCloudStreamDetail.asStateFlow()
+    // A monotonically increasing token makes repeated taps on the same card observable.
+    private val _cloudStreamDetailRequestId = MutableStateFlow(0L)
+    val cloudStreamDetailRequestId: StateFlow<Long> = _cloudStreamDetailRequestId.asStateFlow()
 
     fun requestCloudStreamDetail(item: MediaItem) {
-        if (item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)) {
-            _pendingCloudStreamDetail.value = item
+        if (!item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)) {
+            Log.w("NSiO.CloudStreamDetail", "Rejected detail request: item=" + item.id + ", source=" + item.sourceType)
+            showStatus("Item ini bukan konten CloudStream.")
+            return
         }
+        Log.i("NSiO.CloudStreamDetail", "Poster tapped: item=" + item.id + ", plugin=" + item.pluginId + ", provider=" + item.extraInfo + ", url=" + item.url)
+        _pendingCloudStreamDetail.value = item
+        _cloudStreamDetailRequestId.value = _cloudStreamDetailRequestId.value + 1L
     }
 
     fun clearPendingCloudStreamDetail(itemId: String) {
