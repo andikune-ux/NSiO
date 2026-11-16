@@ -231,8 +231,17 @@ class CS3IPlayer(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        val cause = error.cause
-                        if (cause is HttpDataSource.InvalidResponseCodeException && cause.responseCode == 403) {
+                        // Media3 may wrap the HTTP exception more than one level deep
+                        // (for example through a playlist/chunk source error).
+                        val httpError = generateSequence(error.cause) { it.cause }
+                            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                            .firstOrNull()
+                        val cause = httpError ?: error.cause
+
+                        // A stale/deleted CDN URL can return 404 just like a blocked
+                        // URL can return 403. Try each distinct plugin-resolved stream
+                        // before surfacing the error to the user.
+                        if (httpError?.responseCode == 403 || httpError?.responseCode == 404) {
                             val alternative = lastPluginStreams
                                 .asSequence()
                                 .filter { it.url.isNotBlank() }
