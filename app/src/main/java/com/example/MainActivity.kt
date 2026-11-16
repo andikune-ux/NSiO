@@ -47,7 +47,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -414,5 +413,7 @@ private fun AppNavContent(
 
 @Composable
 private fun DevModeSelection(enabled: Boolean, content: @Composable () -> Unit) {
-    if (enabled) SelectionContainer(content = content) else content()
+    // Avoid wrapping dialogs and their separate Compose window in the parent selection hierarchy.
+    // SelectionContainer can crash on long-press when Dialog content belongs to another layout tree.
+    content()
 }
