@@ -1796,6 +1796,8 @@ fun CloudStreamSearchPanel(
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         }
     }
+    }
+
         if ((loadingDetail && selectedContent == null) || detailLoadError != null) {
             Dialog(onDismissRequest = {
                 loadingDetail = false
@@ -2251,5 +2253,4 @@ fun CloudStreamSearchPanel(
             }
         }
     }
-}
 }
