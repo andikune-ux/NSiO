@@ -105,6 +105,10 @@ class CS3IPlayer(
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
+    @Volatile private var cloudStreamRefreshInProgress = false
+
+    /** Called after existing plugin URLs fail with HTTP 403/404. */
+    var onCloudStreamRefreshRequested: (suspend (Long) -> Boolean)? = null
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
@@ -238,9 +242,8 @@ class CS3IPlayer(
                             .firstOrNull()
                         val cause = httpError ?: error.cause
 
-                        // A stale/deleted CDN URL can return 404 just like a blocked
-                        // URL can return 403. Try each distinct plugin-resolved stream
-                        // before surfacing the error to the user.
+                        // Try other streams first. If all resolved URLs are stale, ask the
+                        // CloudStream provider for a fresh set of links (one refresh per play).
                         if (httpError?.responseCode == 403 || httpError?.responseCode == 404) {
                             val alternative = lastPluginStreams
                                 .asSequence()
@@ -253,6 +256,24 @@ class CS3IPlayer(
                                 .firstOrNull()
                             if (alternative != null) {
                                 selectPluginStream(alternative)
+                                return
+                            }
+                            val refreshHandler = onCloudStreamRefreshRequested
+                            if (refreshHandler != null && !cloudStreamRefreshInProgress) {
+                                cloudStreamRefreshInProgress = true
+                                val position = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
+                                coroutineScope.launch {
+                                    val refreshed = runCatching { refreshHandler(position) }.getOrDefault(false)
+                                    cloudStreamRefreshInProgress = false
+                                    if (!refreshed) {
+                                        _playerState.value = _playerState.value.copy(
+                                            isBuffering = false,
+                                            isPlaying = false,
+                                            error = "Link video lama tidak berlaku (HTTP ${httpError.responseCode}). Provider gagal memberikan link baru. Coba pilih sumber lain atau putar ulang.",
+                                            isFallbackAvailable = true
+                                        )
+                                    }
+                                }
                                 return
                             }
                         }
@@ -398,6 +419,7 @@ class CS3IPlayer(
 
     override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
         attemptedPluginStreamKeys.clear()
+        cloudStreamRefreshInProgress = false
         playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList())
     }
 
