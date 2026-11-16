@@ -406,19 +406,12 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 }
             } ?: false
             val emitted = synchronized(resolved) { resolved.size > before }
-            if (!handled || !emitted) synchronized(resolved) { resolved.add(raw) }
-
-            // Some providers already return a direct media URL. Keep that original
-            // candidate alongside extractor results so a failed extractor rewrite
-            // cannot remove the only playable source.
-            val extension = runCatching {
-                java.net.URI(raw.url).path.substringAfterLast('.', "").lowercase()
-            }.getOrDefault("")
-            if (extension in setOf("mp4", "m3u8", "mpd", "webm", "mkv", "m4v", "mov", "ts")) {
-                synchronized(resolved) {
-                    if (resolved.none { it.url == raw.url && it.referer == raw.referer }) {
-                        resolved.add(raw)
-                    }
+            // Prefer the extractor's resolved media URL. Keeping the original URL
+            // beside a successful extraction can make the player choose a stale
+            // source merely because its advertised quality is higher.
+            if (!emitted) synchronized(resolved) {
+                if (resolved.none { it.url == raw.url && it.referer == raw.referer }) {
+                    resolved.add(raw)
                 }
             }
         }
