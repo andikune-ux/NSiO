@@ -380,12 +380,18 @@ class CloudStreamPluginRuntime(private val context: Context) {
         } ?: false
 
         if (rawLinks.isEmpty()) {
-            val reason = if (completed) {
-                "Provider $providerName selesai memproses permintaan, tetapi tidak mengirim link streaming."
+            val sourceHost = runCatching { URI(data).host }.getOrNull().orEmpty()
+            val outcome = if (completed) {
+                "Provider mengembalikan status selesai (true), tetapi callback ExtractorLink tidak pernah dipanggil."
             } else {
-                "Provider $providerName tidak menemukan sumber streaming atau proses loadLinks tidak selesai."
+                "Provider tidak menyelesaikan loadLinks sebelum batas waktu atau mengembalikan false."
             }
-            throw IllegalStateException(reason)
+            val sourceHint = sourceHost.takeIf { it.isNotBlank() }?.let { " Sumber: $it." }.orEmpty()
+            throw IllegalStateException(
+                "Provider $providerName tidak menghasilkan link streaming.$sourceHint $outcome " +
+                    "Kemungkinan halaman server/iframe situs berubah atau data episode sudah kedaluwarsa. " +
+                    "Coba muat ulang detail konten dan pilih episode/server lagi."
+            )
         }
 
         val resolved = mutableListOf<ExtractorLink>()
