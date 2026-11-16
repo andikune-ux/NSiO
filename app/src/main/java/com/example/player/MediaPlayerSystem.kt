@@ -241,10 +241,11 @@ class CS3IPlayer(
                             .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                             .firstOrNull()
                         val cause = httpError ?: error.cause
+                        val responseCode = httpError?.responseCode
 
                         // Try other streams first. If all resolved URLs are stale, ask the
                         // CloudStream provider for a fresh set of links (one refresh per play).
-                        if (httpError?.responseCode == 403 || httpError?.responseCode == 404) {
+                        if (responseCode == 403 || responseCode == 404) {
                             val alternative = lastPluginStreams
                                 .asSequence()
                                 .filter { it.url.isNotBlank() }
@@ -269,7 +270,7 @@ class CS3IPlayer(
                                         _playerState.value = _playerState.value.copy(
                                             isBuffering = false,
                                             isPlaying = false,
-                                            error = "Link video lama tidak berlaku (HTTP ${httpError.responseCode}). Provider gagal memberikan link baru. Coba pilih sumber lain atau putar ulang.",
+                                            error = "Link video lama tidak berlaku (HTTP $responseCode). Provider gagal memberikan link baru. Coba pilih sumber lain atau putar ulang.",
                                             isFallbackAvailable = true
                                         )
                                     }
