@@ -72,6 +72,7 @@ interface IPlayer {
     fun pause()
     fun stop()
     fun seekTo(positionMs: Long)
+    fun seekToLive()
     fun seekForward(offsetMs: Long = 10000L)
     fun seekBackward(offsetMs: Long = 10000L)
     fun setPlaybackSpeed(speed: Float)
@@ -706,6 +707,10 @@ class CS3IPlayer(
         player.seekTo(target)
         lastPositionMs = target
         _playerState.value = _playerState.value.copy(currentPositionMs = target)
+    }
+
+    override fun seekToLive() {
+        exoPlayer?.takeIf { it.isCurrentMediaItemDynamic }?.seekToDefaultPosition()
     }
 
     override fun seekForward(offsetMs: Long) {
