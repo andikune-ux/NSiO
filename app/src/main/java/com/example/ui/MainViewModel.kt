@@ -1640,7 +1640,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playbackData: String,
         title: String,
         posterUrl: String?,
-        durationMs: Long = 0L
+        durationMs: Long = 0L,
+        skipMetadata: Map<String, String> = emptyMap()
     ) {
         beginCloudStreamPlaybackPreparation(contentUrl, title, posterUrl, "CloudStream • Film")
         viewModelScope.launch {
@@ -1681,7 +1682,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     extractorData = stream.extractorData,
                     videoInterceptor = stream.videoInterceptor,
                     availablePluginStreams = playable,
-                    category = "CloudStream • Film"
+                    category = "CloudStream • Film",
+                    skipMetadata = skipMetadata
                 )
             }.onFailure { error ->
                 cancelCloudStreamPlaybackPreparation(

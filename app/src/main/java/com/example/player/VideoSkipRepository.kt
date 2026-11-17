@@ -64,8 +64,10 @@ object VideoSkipRepository {
         }
 
     private fun value(json: JSONObject, vararg keys: String): String? {
+        val available = json.keys().asSequence().associateBy { it.lowercase() }
         for (key in keys) {
-            val candidate = json.opt(key)?.toString()?.trim()
+            val actualKey = available[key.lowercase()] ?: continue
+            val candidate = json.opt(actualKey)?.toString()?.trim()
             if (!candidate.isNullOrBlank() && candidate != "null") return candidate
         }
         return null

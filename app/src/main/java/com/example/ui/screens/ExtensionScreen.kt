@@ -1452,7 +1452,8 @@ fun CloudStreamSearchPanel(
                 playbackData = data,
                 title = resolvedPlaybackTitle,
                 posterUrl = posterUrl,
-                durationMs = durationMs
+                durationMs = durationMs,
+                skipMetadata = resolvedPlaybackSkipMetadata
             )
             resolvingLinks = false
             return
