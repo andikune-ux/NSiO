@@ -64,12 +64,17 @@ class MultiviewSourceRegistry(adapters: Collection<MultiviewSourceAdapter>) {
             ?: return MultiviewResolveResult.Failure(
                 reason = "Adapter ${request.kind} belum tersedia."
             )
-        return runCatching { adapter.resolve(request) }
-            .getOrElse { error ->
-                MultiviewResolveResult.Failure(
-                    reason = error.localizedMessage ?: "Sumber tidak dapat dibuka."
-                )
-            }
+        return try {
+            adapter.resolve(request)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            // Preserve structured-concurrency cancellation; do not turn a cancelled
+            // slot operation into a visible source error.
+            throw cancelled
+        } catch (error: Exception) {
+            MultiviewResolveResult.Failure(
+                reason = error.localizedMessage ?: "Sumber tidak dapat dibuka."
+            )
+        }
     }
 
     fun supports(kind: MultiviewSourceKind): Boolean = kind in adaptersByKind.keys
