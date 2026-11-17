@@ -238,12 +238,16 @@ jobs:
             VALID="$(echo "$JOB_RESULTS" | jq -r '.apk_validation.result // "unknown"')"
             RELEASE="$(echo "$JOB_RESULTS" | jq -r '.release.result // "unknown"')"
             echo
-            if [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == success ]]; then
-              echo "✅ APK berhasil dibuat, divalidasi, dan diterbitkan. Pemeriksaan update di aplikasi NSiO dapat menemukan rilis ini."
-            elif [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == skipped ]]; then
-              echo "⚠️ APK valid, tetapi publikasi gagal. Periksa job Release dan izin GitHub token."
+            if [[ "$BUILD" == success && "$RELEASE" == success ]]; then
+              if [[ "$VALID" == success ]]; then
+                echo "✅ APK berhasil dibuat, validasi berhasil, dan Release diterbitkan. Pemeriksaan update di aplikasi NSiO dapat menemukan rilis ini."
+              else
+                echo "✅ Release tetap diterbitkan karena Build APK berhasil; job APK Validation gagal atau dilewati. Periksa laporan validasi secara terpisah."
+              fi
+            elif [[ "$BUILD" == success && "$RELEASE" != success ]]; then
+              echo "⚠️ APK berhasil dibuat, tetapi publikasi Release belum berhasil. Periksa job Release dan izin GitHub token."
             else
-              echo "❌ APK belum berhasil melewati build dan validasi; tidak ada rilis baru."
+              echo "❌ Build APK gagal; tanpa APK hasil build, Release tidak dapat diterbitkan."
             fi
             echo
             echo "### Commit"
