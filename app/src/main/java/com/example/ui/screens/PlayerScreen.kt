@@ -162,6 +162,18 @@ fun PlayerScreen(
         controlsInteraction++
     }
     var showQueue by remember { mutableStateOf(false) }
+    var showTrackMenu by remember { mutableStateOf(false) }
+    var selectedPlayerSetting by remember { mutableStateOf<String?>(null) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
+    var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
+    var activeGesture by remember { mutableStateOf<String?>(null) }
+    var isRewindingHeld by remember { mutableStateOf(false) }
+    var isFastForwardHeld by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val playerPreferences = remember(context) {
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
     }
@@ -190,18 +202,6 @@ fun PlayerScreen(
             }
         }
     }
-    var showTrackMenu by remember { mutableStateOf(false) }
-    var selectedPlayerSetting by remember { mutableStateOf<String?>(null) }
-    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-    var selectedResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
-    var isFullscreen by remember { mutableStateOf(false) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var seekPreviewMs by remember { mutableStateOf(media.progressMs.coerceAtLeast(0L)) }
-    var previewFrame by remember(media.id) { mutableStateOf<Bitmap?>(null) }
-    var activeGesture by remember { mutableStateOf<String?>(null) }
-    var isRewindingHeld by remember { mutableStateOf(false) }
-    var isFastForwardHeld by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val castContext = remember(context) { runCatching { CastContext.getSharedInstance(context.applicationContext) }.getOrNull() }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
