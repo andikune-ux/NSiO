@@ -32,8 +32,8 @@ open class Vtbe : ExtractorApi() {
                             URI(link).path.endsWith(".m3u8")
                         )
                     )
-                }
             }
-            return null
+        }
+        return null
     }
 }
