@@ -153,11 +153,6 @@ jobs:
           VERSION_TAG: ${{ needs.build.outputs.version_tag }}
         run: |
           set -euo pipefail
-          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          if [[ "$CURRENT_MAIN" != "$GITHUB_SHA" ]]; then
-            echo "A newer main commit exists; latest commit workflow will publish."
-            exit 0
-          fi
           APK="release-files/NSiO-$VERSION_TAG-debug.apk"
           CHECKSUM="$APK.sha256"
           test -s "$APK"
