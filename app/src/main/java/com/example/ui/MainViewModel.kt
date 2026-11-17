@@ -446,6 +446,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun scheduleCloudStreamAutoRetry(profileId: String, pluginId: String, retryAt: Long) {
         val retryKey = "$profileId|$pluginId"
+        if (_selectedFilter.value != "CLOUDSTREAM_PLUGIN:$pluginId") return
         if (retryAt <= 0L || cloudStreamAutoRetryJobs[retryKey]?.isActive == true) return
         cloudStreamAutoRetryJobs[retryKey] = viewModelScope.launch {
             try {
@@ -457,7 +458,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _refreshingCloudStreamPluginId.value != null)) {
                     kotlinx.coroutines.delay(30_000L)
                 }
-                if (_activeProfile.value?.id != profileId) return@launch
+                if (_activeProfile.value?.id != profileId || _selectedFilter.value != "CLOUDSTREAM_PLUGIN:$pluginId") return@launch
                 val health = _cloudStreamSourceHealth.value[pluginId] ?: return@launch
                 if (health.consecutiveFailures < 2 || health.nextAutoRetryAt > System.currentTimeMillis()) return@launch
                 refreshCloudStreamPluginOnHome(pluginId)

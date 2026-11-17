@@ -103,52 +103,67 @@ class CatalogRefreshWorker(
                 .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
                 .distinctBy { pluginManager.cloudStreamPluginId(it) }
             val profiles = database.profileDao().getAllProfilesList()
-            profiles.forEach { profile ->
-                entries.forEach entryLoop@ { entry ->
-                    if (isStopped) return@withContext Result.retry()
-                    try {
-                        val sections = pluginManager.loadCloudStreamHomePage(entry, 1)
-                        val pluginId = pluginManager.cloudStreamPluginId(entry)
-                        val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
-                        val fetched = sections.flatMap { section ->
-                            section.items.map { item ->
-                                MediaItem(
-                                    id = MediaRefreshPolicy.cloudStreamId(profile.id, pluginId, item.providerName, item.url),
-                                    profileId = profile.id,
-                                    title = item.title,
-                                    url = item.url,
-                                    thumbnailUrl = item.posterUrl.orEmpty(),
-                                    type = "CLOUDSTREAM",
-                                    sourceType = "CLOUDSTREAM",
-                                    category = section.sectionName.ifBlank { "CloudStream" },
-                                    sourceUrl = entry.url,
-                                    pluginId = pluginId,
-                                    repositoryId = repositoryId,
-                                    extraInfo = item.providerName
-                                )
-                            }
-                        }.distinctBy { it.id }
-                        if (fetched.isEmpty()) {
-                            failures++
-                            return@entryLoop
+            val catalogPreferences = applicationContext.getSharedPreferences("nsio_catalog_preferences", Context.MODE_PRIVATE)
+            profiles.forEach profileLoop@ { profile ->
+                // No implicit bulk catalog refresh: only the plugin explicitly selected
+                // in this profile's Home filter is allowed to fetch its main page.
+                val selectedFilter = catalogPreferences.getString("home_filter_${profile.id}", "ALL") ?: "ALL"
+                val selectedPluginId = selectedFilter
+                    .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
+                    ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@profileLoop
+                val entry = entries.firstOrNull { pluginManager.cloudStreamPluginId(it) == selectedPluginId }
+                    ?: return@profileLoop
+                if (isStopped) return@withContext Result.retry()
+                try {
+                    val sections = pluginManager.loadCloudStreamHomePage(entry, 1)
+                    val pluginId = pluginManager.cloudStreamPluginId(entry)
+                    val repositoryId = pluginManager.cloudStreamRepositoryId(entry)
+                    val fetched = sections.flatMap { section ->
+                        section.items.map { item ->
+                            MediaItem(
+                                id = MediaRefreshPolicy.cloudStreamId(profile.id, pluginId, item.providerName, item.url),
+                                profileId = profile.id,
+                                title = item.title,
+                                url = item.url,
+                                thumbnailUrl = item.posterUrl.orEmpty(),
+                                type = "CLOUDSTREAM",
+                                sourceType = "CLOUDSTREAM",
+                                category = section.sectionName.ifBlank { "CloudStream" },
+                                sourceUrl = entry.url,
+                                pluginId = pluginId,
+                                repositoryId = repositoryId,
+                                extraInfo = item.providerName
+                            )
                         }
-                        val previous = database.mediaDao()
-                            .getCloudStreamCatalog(profile.id, pluginId)
-                        val refreshedRows = MediaRefreshPolicy.mergeCloudStream(
-                            profileId = profile.id,
-                            pluginId = pluginId,
-                            incoming = fetched,
-                            existing = previous
-                        )
-                        val refreshedSourceKeys = refreshedRows.mapTo(hashSetOf()) {
-                            "${it.pluginId}|${it.extraInfo}|${it.url}"
-                        }
-                        val mergedRows = (refreshedRows + previous.filterNot {
-                            "${it.pluginId}|${it.extraInfo}|${it.url}" in refreshedSourceKeys
-                        }).distinctBy { it.id }
-                        database.mediaDao().replaceCloudStreamCatalog(profile.id, pluginId, mergedRows)
-                        refreshed += mergedRows.size
-                    } catch (cancelled: CancellationException) {
+                    }.distinctBy { it.id }
+                    if (fetched.isEmpty()) {
+                        failures++
+                        return@profileLoop
+                    }
+                    val previous = database.mediaDao().getCloudStreamCatalog(profile.id, pluginId)
+                    val refreshedRows = MediaRefreshPolicy.mergeCloudStream(
+                        profileId = profile.id,
+                        pluginId = pluginId,
+                        incoming = fetched,
+                        existing = previous
+                    )
+                    val refreshedSourceKeys = refreshedRows.mapTo(hashSetOf()) {
+                        "${it.pluginId}|${it.extraInfo}|${it.url}"
+                    }
+                    val mergedRows = (refreshedRows + previous.filterNot {
+                        "${it.pluginId}|${it.extraInfo}|${it.url}" in refreshedSourceKeys
+                    }).distinctBy { it.id }
+                    database.mediaDao().replaceCloudStreamCatalog(profile.id, pluginId, mergedRows)
+                    refreshed += mergedRows.size
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    failures++
+                }
+            }
+        } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
                         failures++
