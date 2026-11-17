@@ -1045,6 +1045,7 @@ fun PlayerScreen(
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
                                 "Bahasa audio" to (playerState.preferredAudioLanguage ?: "Otomatis"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
+                                "Subtitle Delay" to (if (playerState.subtitleDelayMs > 0) "+${playerState.subtitleDelayMs} ms" else "${playerState.subtitleDelayMs} ms"),
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
                                 "Bahasa subtitle" to (playerState.preferredSubtitleLanguage ?: "Otomatis"),
@@ -1279,6 +1280,41 @@ fun PlayerScreen(
                                             fontSize = 12.sp,
                                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                                 viewModel.player.setAudioDelay(delayMs)
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Subtitle Delay" -> {
+                                    Text(
+                                        "Sinkronisasi waktu subtitle eksternal dari plugin atau file lokal. Positif menampilkan subtitle lebih lambat; negatif lebih cepat. Track subtitle bawaan di dalam video tidak terpengaruh.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        listOf(-500, -100, -50, 50, 100, 500).forEach { step ->
+                                            Text(
+                                                text = if (step > 0) "+${step}" else "${step}",
+                                                color = controlTextColor,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                                                    .clickable { viewModel.player.setSubtitleDelay(playerState.subtitleDelayMs + step) }
+                                                    .padding(vertical = 9.dp)
+                                            )
+                                        }
+                                    }
+                                    listOf(-5000, -2000, -1000, -500, -250, -100, 0, 100, 250, 500, 1000, 2000, 5000).forEach { delayMs ->
+                                        Text(
+                                            text = (if (playerState.subtitleDelayMs == delayMs) "✓ " else "") +
+                                                if (delayMs > 0) "+${delayMs} ms" else "${delayMs} ms",
+                                            color = if (playerState.subtitleDelayMs == delayMs) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.setSubtitleDelay(delayMs)
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
