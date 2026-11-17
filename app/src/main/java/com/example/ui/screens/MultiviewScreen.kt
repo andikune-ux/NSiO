@@ -105,6 +105,7 @@ fun MultiviewScreen(
     val scope = rememberCoroutineScope()
     val mediaItems by viewModel.mediaList.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
+    val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
     val pluginRepositories by viewModel.pluginManager.repositories.collectAsState()
     val players = remember {
         List(4) { CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false) }
@@ -373,7 +374,7 @@ fun MultiviewScreen(
             MultiviewSourceKind.GOOGLE_DRIVE -> mediaItems.filter { MediaSourceClassifier.isDriveMedia(it) }
             MultiviewSourceKind.CLOUDSTREAM -> mediaItems.filter { it.sourceType == "CLOUDSTREAM" && it.pluginId.isNotBlank() }
             MultiviewSourceKind.LOCAL_FILE -> mediaItems.filter { it.sourceType == "FILE" || it.url.startsWith("content://") || it.url.startsWith("file://") }
-            MultiviewSourceKind.FILE_SERVER -> mediaItems.filter { it.sourceType == "SERVER" }
+            MultiviewSourceKind.FILE_SERVER -> if (isServerUnlocked) mediaItems.filter { it.sourceType == "SERVER" } else emptyList()
         }
         AlertDialog(
             onDismissRequest = { pickerSlot = null },
@@ -449,7 +450,7 @@ fun MultiviewScreen(
                                 MultiviewSourceKind.GOOGLE_DRIVE -> "Belum ada media Google Drive di koleksi NSiO."
                                 MultiviewSourceKind.CLOUDSTREAM -> "Belum ada riwayat atau item CloudStream tersimpan. Pilih konten plugin terlebih dahulu dari katalog NSiO."
                                 MultiviewSourceKind.LOCAL_FILE -> "Pilih file dari File Manager di atas."
-                                MultiviewSourceKind.FILE_SERVER -> "Belum ada sumber server. Slot ini sudah disiapkan untuk sumber HTTP/HTTPS saat server tersedia."
+                                MultiviewSourceKind.FILE_SERVER -> if (isServerUnlocked) "Belum ada sumber server. Slot ini sudah disiapkan untuk sumber HTTP/HTTPS saat server tersedia." else "Akses server masih terkunci. Buka akses server melalui Extension terlebih dahulu."
                             },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
