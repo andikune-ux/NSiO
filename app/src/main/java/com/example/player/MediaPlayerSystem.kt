@@ -70,6 +70,7 @@ data class PlayerState(
     val pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
     val selectedPluginStreamUrl: String? = null,
     val audioDelayMs: Int = 0,
+    val audioCompressorEnabled: Boolean = false,
     val isLive: Boolean = false
 )
 
@@ -85,6 +86,7 @@ interface IPlayer {
     fun seekBackward(offsetMs: Long = 10000L)
     fun setPlaybackSpeed(speed: Float)
     fun setAudioDelay(delayMs: Int)
+    fun setAudioCompressorEnabled(enabled: Boolean)
     fun toggleRepeatMode()
     fun toggleShuffle()
     fun setVolume(volume: Float)
@@ -128,6 +130,7 @@ class CS3IPlayer(
     var onCloudStreamRefreshRequested: (suspend (Long) -> Boolean)? = null
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
+    private var audioCompressorEnabled: Boolean = false
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
@@ -142,6 +145,7 @@ class CS3IPlayer(
         // Keep audio synchronization preference across app launches and player recreation.
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         audioDelayMs = preferences.getInt("audio_delay_ms", 0).coerceIn(-2000, 2000)
+        audioCompressorEnabled = preferences.getBoolean("audio_compressor_enabled", false)
         logicalRepeatMode = preferences.getInt("playback_repeat_mode", Player.REPEAT_MODE_OFF)
             .takeIf { it in Player.REPEAT_MODE_OFF..Player.REPEAT_MODE_ALL }
             ?: Player.REPEAT_MODE_OFF
@@ -209,7 +213,7 @@ class CS3IPlayer(
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(AudioDelayProcessor(audioDelayMs)))
+                    .setAudioProcessors(arrayOf(AudioDelayProcessor(audioDelayMs), AudioCompressorProcessor(audioCompressorEnabled)))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -656,7 +660,8 @@ class CS3IPlayer(
                     volume = player.volume,
                     pluginStreams = pluginStreams,
                     selectedPluginStreamUrl = url,
-                    audioDelayMs = audioDelayMs
+                    audioDelayMs = audioDelayMs,
+                    audioCompressorEnabled = audioCompressorEnabled
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
@@ -858,6 +863,47 @@ class CS3IPlayer(
             audioDelayMs = audioDelayMs
         )
     }
+    override fun setAudioCompressorEnabled(enabled: Boolean) {
+        if (audioCompressorEnabled == enabled) return
+        audioCompressorEnabled = enabled
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putBoolean("audio_compressor_enabled", enabled).apply()
+
+        val player = exoPlayer
+        val currentPosition = player?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
+        val wasPlaying = player?.isPlaying ?: false
+        val speed = player?.playbackParameters?.speed ?: _playerState.value.playbackSpeed
+        val volume = player?.volume ?: _playerState.value.volume
+        if (lastUrl.isBlank()) {
+            _playerState.value = _playerState.value.copy(audioCompressorEnabled = enabled)
+            return
+        }
+
+        progressJob?.cancel()
+        player?.release()
+        exoPlayer = null
+        initExoPlayer()
+        playInternal(
+            url = lastUrl,
+            title = lastTitle,
+            startPositionMs = currentPosition,
+            requestHeaders = lastHeaders,
+            mimeType = lastMimeType,
+            externalSubtitles = lastExternalSubtitles,
+            videoInterceptor = lastVideoInterceptor,
+            pluginStreams = lastPluginStreams
+        )
+        exoPlayer?.setPlaybackSpeed(speed)
+        exoPlayer?.volume = volume
+        if (!wasPlaying) exoPlayer?.pause()
+        _playerState.value = _playerState.value.copy(
+            playbackSpeed = speed,
+            volume = volume,
+            audioDelayMs = audioDelayMs,
+            audioCompressorEnabled = enabled
+        )
+    }
+
     override fun toggleRepeatMode() {
         logicalRepeatMode = when (logicalRepeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
