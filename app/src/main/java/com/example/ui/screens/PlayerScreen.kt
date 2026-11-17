@@ -1185,6 +1185,7 @@ fun PlayerScreen(
                                     }
                                 },
                                 "Info Pemutaran" to (playerState.playbackDiagnostics.firstOrNull() ?: "Menunggu data"),
+                                "Equalizer 10-band" to if (playerState.equalizerGainsDb.any { kotlin.math.abs(it) >= 0.1f }) "Kustom" else "Flat",
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Kontrol gesture" to "Swipe & double tap",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
@@ -1478,6 +1479,57 @@ fun PlayerScreen(
                                         )
                                     }
                                     if (playerState.subtitleTracks.isEmpty()) Text("Daftar bahasa akan muncul saat sumber memuat track subtitle.", color = controlMutedColor, fontSize = 10.sp)
+                                }
+                                "Equalizer 10-band" -> {
+                                    Text(
+                                        "Atur 10 pita frekuensi audio dari 31 Hz sampai 16 kHz. Pengaturan diterapkan langsung pada audio PCM; audio passthrough/encoded tidak dapat diproses.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    val bands = listOf("31 Hz", "62 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz")
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        Text(
+                                            "Reset",
+                                            color = controlAccentColor,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.clickable { viewModel.player.resetEqualizer() }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                    bands.forEachIndexed { index, band ->
+                                        val gain = playerState.equalizerGainsDb.getOrElse(index) { 0f }
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(band, color = controlTextColor, fontSize = 11.sp)
+                                                Text(
+                                                    "${if (gain > 0f) "+" else ""}${gain.toInt()} dB",
+                                                    color = controlAccentColor,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                            Slider(
+                                                value = gain,
+                                                onValueChange = { viewModel.player.setEqualizerBandGain(index, it) },
+                                                valueRange = -12f..12f,
+                                                steps = 23,
+                                                modifier = Modifier.fillMaxWidth().height(26.dp),
+                                                colors = SliderDefaults.colors(
+                                                    thumbColor = controlAccentColor,
+                                                    activeTrackColor = controlAccentColor,
+                                                    inactiveTrackColor = Color.White.copy(alpha = 0.22f)
+                                                )
+                                            )
+                                        }
+                                    }
                                 }
                                 "Kompresor audio" -> {
                                     Text(

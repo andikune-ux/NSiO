@@ -81,6 +81,7 @@ data class PlayerState(
     val repeatA: Long? = null,
     val repeatB: Long? = null,
     val audioCompressorEnabled: Boolean = false,
+    val equalizerGainsDb: List<Float> = List(10) { 0f },
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
     val isLive: Boolean = false,
@@ -105,6 +106,8 @@ interface IPlayer {
     fun setRepeatPointB()
     fun clearABRepeat()
     fun setAudioCompressorEnabled(enabled: Boolean)
+    fun setEqualizerBandGain(index: Int, gainDb: Float)
+    fun resetEqualizer()
     fun setPreferredAudioLanguage(language: String?)
     fun setExternalAudioTrack(uri: Uri, displayName: String)
     fun clearExternalAudioTrack()
@@ -195,6 +198,8 @@ class CS3IPlayer(
     private var repeatPointA: Long? = null
     private var repeatPointB: Long? = null
     private var audioCompressorEnabled: Boolean = false
+    private var equalizerGainsDb: FloatArray = FloatArray(10)
+    private lateinit var equalizerProcessor: TenBandEqualizerProcessor
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
@@ -212,10 +217,18 @@ class CS3IPlayer(
         audioDelayMs = preferences.getInt("audio_delay_ms", 0).coerceIn(-2000, 2000)
         subtitleDelayMs = preferences.getInt("subtitle_delay_ms", 0).coerceIn(-5000, 5000)
         audioCompressorEnabled = preferences.getBoolean("audio_compressor_enabled", false)
+        equalizerGainsDb = preferences.getString("equalizer_gains_db", null)
+            ?.split(",")
+            ?.mapNotNull { it.toFloatOrNull()?.takeIf(Float::isFinite) }
+            ?.takeIf { it.size == 10 }
+            ?.map { it.coerceIn(-12f, 12f) }
+            ?.toFloatArray()
+            ?: FloatArray(10)
         _playerState.value = _playerState.value.copy(
             audioDelayMs = audioDelayMs,
             subtitleDelayMs = subtitleDelayMs,
             audioCompressorEnabled = audioCompressorEnabled,
+            equalizerGainsDb = equalizerGainsDb.toList(),
             preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
             preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
         )
@@ -299,6 +312,7 @@ class CS3IPlayer(
                 activeDrmSessionManager ?: DrmSessionManager.DRM_UNSUPPORTED
             }
 
+        equalizerProcessor = TenBandEqualizerProcessor(equalizerGainsDb)
         val renderersFactory = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
@@ -306,7 +320,7 @@ class CS3IPlayer(
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink {
                 return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(AudioDelayProcessor(audioDelayMs), AudioCompressorProcessor(audioCompressorEnabled)))
+                    .setAudioProcessors(arrayOf(AudioDelayProcessor(audioDelayMs), equalizerProcessor, AudioCompressorProcessor(audioCompressorEnabled)))
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
@@ -904,6 +918,7 @@ class CS3IPlayer(
                     audioDelayMs = audioDelayMs,
                     subtitleDelayMs = subtitleDelayMs,
                     audioCompressorEnabled = audioCompressorEnabled,
+                    equalizerGainsDb = equalizerGainsDb.toList(),
                     externalAudioName = externalAudioName
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
@@ -1273,6 +1288,24 @@ class CS3IPlayer(
             audioDelayMs = audioDelayMs,
             audioCompressorEnabled = enabled
         )
+    }
+
+    override fun setEqualizerBandGain(index: Int, gainDb: Float) {
+        if (index !in 0 until 10 || !gainDb.isFinite()) return
+        val safeGain = gainDb.coerceIn(-12f, 12f)
+        equalizerGainsDb[index] = safeGain
+        equalizerProcessor.setBandGain(index, safeGain)
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putString("equalizer_gains_db", equalizerGainsDb.joinToString(",")).apply()
+        _playerState.value = _playerState.value.copy(equalizerGainsDb = equalizerGainsDb.toList())
+    }
+
+    override fun resetEqualizer() {
+        equalizerGainsDb.fill(0f)
+        equalizerProcessor.reset()
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putString("equalizer_gains_db", equalizerGainsDb.joinToString(",")).apply()
+        _playerState.value = _playerState.value.copy(equalizerGainsDb = equalizerGainsDb.toList())
     }
 
     override fun toggleRepeatMode() {
