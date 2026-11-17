@@ -841,13 +841,6 @@ private fun PluginRepoTab(
     var selectedPluginCategory by rememberSaveable { mutableStateOf("Semua") }
     var expandedPluginDialog by rememberSaveable { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val selectedPluginId = selectedPluginFilter
-        .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
-        ?.removePrefix("CLOUDSTREAM_PLUGIN:")
-    val installedEntries = repos.flatMap { it.plugins }
-        .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
-        .filter { selectedPluginId != null && viewModel.pluginManager.cloudStreamPluginId(it) == selectedPluginId }
-        .distinctBy { it.internalName to it.version }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1260,6 +1253,13 @@ fun CloudStreamSearchPanel(
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamStream>>>(emptyList())
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val selectedPluginId = selectedPluginFilter
+        .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
+        ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+    val installedEntries = repos.flatMap { it.plugins }
+        .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
+        .filter { selectedPluginId != null && viewModel.pluginManager.cloudStreamPluginId(it) == selectedPluginId }
+        .distinctBy { it.internalName to it.version }
     val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
     val cloudStreamDetailRequestId by viewModel.cloudStreamDetailRequestId.collectAsState()
     LaunchedEffect(cloudStreamDetailRequestId, handlePendingDetail) {
