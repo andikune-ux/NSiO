@@ -1046,10 +1046,14 @@ fun PlayerScreen(
                                 "Bahasa audio" to (playerState.preferredAudioLanguage ?: "Otomatis"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Subtitle Delay" to (if (playerState.subtitleDelayMs > 0) "+${playerState.subtitleDelayMs} ms" else "${playerState.subtitleDelayMs} ms"),
-                                "A-B Repeat" to when {
-                                    playerState.repeatA != null && playerState.repeatB != null -> "${formatMs(playerState.repeatA)} – ${formatMs(playerState.repeatB)}"
-                                    playerState.repeatA != null -> "A ${formatMs(playerState.repeatA)} · pilih B"
-                                    else -> "Mati"
+                                "A-B Repeat" to run {
+                                    val repeatA = playerState.repeatA
+                                    val repeatB = playerState.repeatB
+                                    when {
+                                        repeatA != null && repeatB != null -> "${formatMs(repeatA)} – ${formatMs(repeatB)}"
+                                        repeatA != null -> "A ${formatMs(repeatA)} · pilih B"
+                                        else -> "Mati"
+                                    }
                                 },
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
@@ -1277,8 +1281,10 @@ fun PlayerScreen(
                                         fontSize = 10.sp,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
+                                    val repeatA = playerState.repeatA
+                                    val repeatB = playerState.repeatB
                                     Text(
-                                        text = if (playerState.repeatA == null) "＋ Tandai titik A" else "✓ A · ${formatMs(playerState.repeatA)}",
+                                        text = if (repeatA == null) "＋ Tandai titik A" else "✓ A · ${formatMs(repeatA)}",
                                         color = if (playerState.repeatA == null) controlAccentColor else controlTextColor,
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
@@ -1286,15 +1292,15 @@ fun PlayerScreen(
                                         }.padding(horizontal = 10.dp, vertical = 10.dp)
                                     )
                                     Text(
-                                        text = if (playerState.repeatB == null) "＋ Tandai titik B" else "✓ B · ${formatMs(playerState.repeatB)}",
+                                        text = if (repeatB == null) "＋ Tandai titik B" else "✓ B · ${formatMs(repeatB)}",
                                         color = if (playerState.repeatB == null) controlAccentColor else controlTextColor,
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
                                             .clickable(enabled = playerState.repeatA != null) { viewModel.player.setRepeatPointB() }
                                             .padding(horizontal = 10.dp, vertical = 10.dp)
                                     )
-                                    if (playerState.repeatA != null && playerState.repeatB != null) {
-                                        Text("Loop aktif · ${formatMs(playerState.repeatA)} – ${formatMs(playerState.repeatB)}", color = controlAccentColor, fontSize = 11.sp)
+                                    if (repeatA != null && repeatB != null) {
+                                        Text("Loop aktif · ${formatMs(repeatA)} – ${formatMs(repeatB)}", color = controlAccentColor, fontSize = 11.sp)
                                     }
                                     Text(
                                         "Hapus A–B",
