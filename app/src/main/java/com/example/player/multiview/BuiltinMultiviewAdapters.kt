@@ -18,7 +18,6 @@ class GoogleDriveMultiviewAdapter : MultiviewSourceAdapter {
             MultiviewResolvedSource(
                 uri = Uri.parse(normalized),
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: "Google Drive" },
-                mimeType = request.mediaItem?.let { null },
                 sourceKind = kind
             )
         )
@@ -37,14 +36,17 @@ class LocalFileMultiviewAdapter : MultiviewSourceAdapter {
     override val kind = MultiviewSourceKind.LOCAL_FILE
 
     override suspend fun resolve(request: MultiviewSourceRequest): MultiviewResolveResult {
-        val uri = request.uri ?: request.mediaItem?.url?.let(Uri::parse)
+        val raw = request.mediaItem?.url.orEmpty()
+        val uri = request.uri ?: runCatching { Uri.parse(raw) }.getOrNull()
             ?: return MultiviewResolveResult.Failure("Pilih file lokal terlebih dahulu.")
-        if (uri.scheme != "content" && uri.scheme != "file") {
-            return MultiviewResolveResult.Failure("File lokal harus memakai URI content:// atau file://.")
-        }
+        val resolvedUri = when {
+            uri.scheme == "content" || uri.scheme == "file" -> uri
+            raw.startsWith("/") -> Uri.fromFile(java.io.File(raw))
+            else -> null
+        } ?: return MultiviewResolveResult.Failure("File lokal harus memakai URI content://, file://, atau path lokal.")
         return MultiviewResolveResult.Success(
             MultiviewResolvedSource(
-                uri = uri,
+                uri = resolvedUri,
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: "File lokal" },
                 sourceKind = kind
             )
