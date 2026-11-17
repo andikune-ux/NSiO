@@ -1537,9 +1537,9 @@ fun CloudStreamSearchPanel(
                     "Anime" -> metadata.contains("anime") || metadata.contains("ova")
                     "Drama Asia" -> metadata.contains("asiandrama") || metadata.contains("asian drama") ||
                         metadata.contains("k-drama") || metadata.contains("cdrama") || metadata.contains("j-drama")
-                    "Dubb Indo" -> metadata.contains("dubb indo") || metadata.contains("dub indo") ||
-                        metadata.contains("indonesian dub") || metadata.contains("bahasa indonesia") ||
-                        metadata.contains("audio indonesia")
+                    "Dubb Indo" -> entry.language.equals("id", ignoreCase = true) || metadata.contains("dubb indo") ||
+                        metadata.contains("dub indo") || metadata.contains("indonesian dub") ||
+                        metadata.contains("bahasa indonesia") || metadata.contains("audio indonesia")
                     "Kartun" -> metadata.contains("cartoon") || metadata.contains("animation") || metadata.contains("kartun")
                     "NSFW" -> metadata.contains("nsfw")
                     else -> true

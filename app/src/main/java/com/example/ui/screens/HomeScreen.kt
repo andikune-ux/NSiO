@@ -227,7 +227,7 @@ fun HomeScreen(
                 value.contains("k-drama") || value.contains("cdrama") || value.contains("j-drama")
             "Dubb Indo" -> value.contains("dubb indo") || value.contains("dub indo") ||
                 value.contains("indonesian dub") || value.contains("bahasa indonesia") ||
-                value.contains("audio indonesia")
+                value.contains("audio indonesia") || value.contains("language:id")
             "Kartun" -> value.contains("cartoon") || value.contains("animation") || value.contains("kartun")
             "NSFW" -> value.contains("nsfw")
             else -> true
