@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
     private var isPipMode by mutableStateOf(false)
     @Volatile private var coreStarted = false
 
+    @androidx.media3.common.util.UnstableApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
