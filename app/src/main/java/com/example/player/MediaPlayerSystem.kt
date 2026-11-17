@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 data class PlayerTrackOption(
     val id: String,
@@ -59,7 +60,8 @@ data class PlayerState(
     val subtitlesDisabled: Boolean = true,
     val pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
     val selectedPluginStreamUrl: String? = null,
-    val audioDelayMs: Int = 0
+    val audioDelayMs: Int = 0,
+    val isLive: Boolean = false
 )
 
 interface IPlayer {
@@ -214,6 +216,7 @@ class CS3IPlayer(
                                     isBuffering = false,
                                     durationMs = duration.coerceAtLeast(0L),
                                     isSeekable = isCurrentMediaItemSeekable,
+                                    isLive = isCurrentMediaItemDynamic,
                                     isPlaying = isPlaying,
                                     error = null
                                 )
@@ -249,7 +252,12 @@ class CS3IPlayer(
                         val cause = httpError ?: error.cause
                         val responseCode = httpError?.responseCode
 
-                        if (tryNextPluginStream()) return
+                        // Retry only source/network/parser I/O failures. Decoder, DRM and
+                        // renderer failures should be surfaced directly instead of cycling
+                        // through unrelated provider URLs.
+                        val isRecoverableSourceFailure = httpError != null ||
+                            causes.any { it is IOException }
+                        if (isRecoverableSourceFailure && tryNextPluginStream()) return
 
                         // Expired/session-bound links can be refreshed by asking the provider
                         // to resolve the source again, but never start concurrent refreshes.
@@ -381,6 +389,36 @@ class CS3IPlayer(
         )
     }
 
+    /**
+     * Adds a user-selected subtitle without requiring broad storage permission.
+     * The SAF URI permission is retained by the caller and the active stream is
+     * re-prepared at its current timestamp.
+     */
+    fun addExternalSubtitle(uri: Uri, label: String, mimeType: String?) {
+        val player = exoPlayer ?: return
+        if (lastUrl.isBlank()) return
+        val subtitle = com.example.data.plugin.CloudStreamSubtitle(
+            language = label.ifBlank { "Subtitle eksternal" },
+            url = uri.toString(),
+            mimeType = mimeType
+        )
+        val updatedSubtitles = lastExternalSubtitles.filterNot { it.url == subtitle.url } + subtitle
+        val currentPosition = player.currentPosition.coerceAtLeast(0L)
+        val wasPlaying = player.isPlaying
+        lastExternalSubtitles = updatedSubtitles
+        playInternal(
+            url = lastUrl,
+            title = lastTitle,
+            startPositionMs = currentPosition,
+            requestHeaders = lastHeaders,
+            mimeType = lastMimeType,
+            externalSubtitles = updatedSubtitles,
+            videoInterceptor = lastVideoInterceptor,
+            pluginStreams = lastPluginStreams
+        )
+        if (!wasPlaying) exoPlayer?.pause()
+    }
+
     fun disableSubtitles() {
         val player = exoPlayer ?: return
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -420,7 +458,8 @@ class CS3IPlayer(
                         _playerState.value = _playerState.value.copy(
                             currentPositionMs = player.currentPosition.coerceAtLeast(0L),
                             durationMs = player.duration.coerceAtLeast(0L),
-                            isSeekable = player.isCurrentMediaItemSeekable
+                            isSeekable = player.isCurrentMediaItemSeekable,
+                            isLive = player.isCurrentMediaItemDynamic
                         )
                     }
                     if (player.isPlaying) lastPositionMs = player.currentPosition.coerceAtLeast(0L)
@@ -538,7 +577,7 @@ class CS3IPlayer(
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
                 val subtitleConfigurations = externalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
                     val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
-                    val subtitleMime = when (extension) {
+                    val subtitleMime = subtitle.mimeType ?: when (extension) {
                         "vtt" -> "text/vtt"
                         "srt" -> "application/x-subrip"
                         "ttml", "xml" -> "application/ttml+xml"
@@ -549,7 +588,7 @@ class CS3IPlayer(
                         .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
                         .setLabel(subtitle.language.ifBlank { "Subtitle" })
                         .setSelectionFlags(0)
-                        .apply { subtitleMime?.let(::setMimeType) }
+                        .apply { (subtitle.mimeType ?: subtitleMime)?.let(::setMimeType) }
                         .build()
                 }
                 if (subtitleConfigurations.isNotEmpty()) {
