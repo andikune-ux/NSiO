@@ -266,7 +266,7 @@ fun MultiviewScreen(
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     (2..3).forEach { index ->
                         MultiviewPanel(
-                            index = index, slot = slots[index], player = players[index],
+                            index = index, slot = slots[index], runtime = players[index],
                             isAudioActive = audioSlot == index,
                             onChoose = { pickerSlot = index },
                             onClose = { players[index].stop(); slots[index] = MultiviewSlotUi(); if (audioSlot == index) setAudioFocus(0) },
