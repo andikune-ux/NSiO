@@ -18,6 +18,7 @@ class GoogleDriveMultiviewAdapter : MultiviewSourceAdapter {
             MultiviewResolvedSource(
                 uri = Uri.parse(normalized),
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: "Google Drive" },
+                requestHeaders = parseSourceHeaders(request.mediaItem),
                 sourceKind = kind
             )
         )
@@ -93,8 +94,22 @@ class HttpFileServerMultiviewAdapter : MultiviewSourceAdapter {
             MultiviewResolvedSource(
                 uri = uri,
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: uri.lastPathSegment ?: "File Server" },
+                requestHeaders = parseSourceHeaders(request.mediaItem),
                 sourceKind = kind
             )
         )
     }
+}
+
+private fun parseSourceHeaders(item: MediaItem?): Map<String, String> {
+    if (item == null) return emptyMap()
+    val headers = item.extraInfo.split('&').mapNotNull { part ->
+        val separator = part.indexOf('=')
+        if (separator <= 0) null
+        else part.substring(0, separator).trim() to part.substring(separator + 1).trim()
+    }.filter { it.first.isNotBlank() && it.second.isNotBlank() }.toMap().toMutableMap()
+    if (item.sourceUrl.startsWith("http", ignoreCase = true)) {
+        headers.putIfAbsent("Referer", item.sourceUrl)
+    }
+    return headers
 }
