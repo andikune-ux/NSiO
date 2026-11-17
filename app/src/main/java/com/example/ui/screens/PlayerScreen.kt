@@ -1030,9 +1030,11 @@ fun PlayerScreen(
                                 "Sumber" to (playerState.pluginStreams.firstOrNull { it.url == playerState.selectedPluginStreamUrl }?.name?.ifBlank { "Sumber aktif" } ?: "Default"),
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
+                                "Bahasa audio" to (playerState.preferredAudioLanguage ?: "Otomatis"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
+                                "Bahasa subtitle" to (playerState.preferredSubtitleLanguage ?: "Otomatis"),
                                 "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%",
                                 "Warna subtitle" to when (subtitleTextColor) {
                                     android.graphics.Color.YELLOW -> "Kuning"
@@ -1193,6 +1195,42 @@ fun PlayerScreen(
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
+                                }
+                                "Bahasa audio" -> {
+                                    Text("Bahasa ini menjadi prioritas saat sumber menyediakan beberapa track audio. Pilihan disimpan untuk pemutaran berikutnya.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    val languageOptions = listOf<String?>(null) + playerState.audioTracks.mapNotNull { it.language }.distinct()
+                                    languageOptions.forEach { language ->
+                                        val selected = playerState.preferredAudioLanguage == language
+                                        val label = language?.let { "${Locale.forLanguageTag(it).getDisplayName(Locale.getDefault())} ($it)" } ?: "Otomatis"
+                                        Text(
+                                            text = (if (selected) "✓ " else "") + label,
+                                            color = if (selected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.setPreferredAudioLanguage(language)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                    if (playerState.audioTracks.isEmpty()) Text("Daftar bahasa akan muncul saat sumber memuat track audio.", color = controlMutedColor, fontSize = 10.sp)
+                                }
+                                "Bahasa subtitle" -> {
+                                    Text("Bahasa ini menjadi prioritas subtitle saat tersedia. Pilihan Otomatis mengikuti pemilihan track bawaan sumber.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    val languageOptions = listOf<String?>(null) + playerState.subtitleTracks.mapNotNull { it.language }.distinct()
+                                    languageOptions.forEach { language ->
+                                        val selected = playerState.preferredSubtitleLanguage == language
+                                        val label = language?.let { "${Locale.forLanguageTag(it).getDisplayName(Locale.getDefault())} ($it)" } ?: "Otomatis"
+                                        Text(
+                                            text = (if (selected) "✓ " else "") + label,
+                                            color = if (selected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.setPreferredSubtitleLanguage(language)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                    if (playerState.subtitleTracks.isEmpty()) Text("Daftar bahasa akan muncul saat sumber memuat track subtitle.", color = controlMutedColor, fontSize = 10.sp)
                                 }
                                 "Kompresor audio" -> {
                                     Text(
