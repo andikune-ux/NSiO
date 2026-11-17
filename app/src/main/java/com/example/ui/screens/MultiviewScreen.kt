@@ -350,7 +350,7 @@ fun MultiviewScreen(
                             index = index, slot = slots[index], runtime = players[index],
                             isAudioActive = audioSlot == index,
                             onChoose = { pickerSlot = index },
-                            onClose = { players[index].stop(); slots[index] = MultiviewSlotUi(); if (audioSlot == index) setAudioFocus(0) },
+                            onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
                             onFullscreen = { fullscreenSlot = index },
                             modifier = Modifier.weight(1f).fillMaxHeight()
@@ -589,7 +589,7 @@ private fun MultiviewPanel(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text(
                 when {
-                    slot.status == MultiviewSlotStatus.ERROR -> "Error"
+                    slot.status == MultiviewSlotStatus.ERROR || playerState.error != null -> "Error"
                     playerState.isBuffering -> "Buffering"
                     playerState.isPlaying -> "Memutar"
                     slot.source != null -> "Siap / dijeda"
