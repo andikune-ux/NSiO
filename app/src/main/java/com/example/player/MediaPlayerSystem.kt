@@ -232,7 +232,7 @@ class CS3IPlayer(
                 lastNonZeroVolume = preferences.getFloat("last_non_zero_volume", 1f).coerceIn(0.05f, 1f)
                 volume = restoredVolume
                 preferences.getFloat("preferred_playback_speed", 1f)
-                    .takeIf { it.isFinite() && it in 0.25f..4f }
+                    .takeIf { it.isFinite() && it in 0.25f..8f }
                     ?.let(::setPlaybackSpeed)
                 addListener(object : Player.Listener {
                     override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
