@@ -1302,7 +1302,7 @@ class CS3IPlayer(
 
     override fun resetEqualizer() {
         equalizerGainsDb.fill(0f)
-        equalizerProcessor.reset()
+        equalizerProcessor.resetBands()
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
             .edit().putString("equalizer_gains_db", equalizerGainsDb.joinToString(",")).apply()
         _playerState.value = _playerState.value.copy(equalizerGainsDb = equalizerGainsDb.toList())
