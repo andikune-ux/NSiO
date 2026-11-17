@@ -37,7 +37,8 @@ data class PlayerTrackOption(
     val trackType: Int,
     val groupIndex: Int,
     val trackIndex: Int,
-    val selected: Boolean
+    val selected: Boolean,
+    val language: String? = null
 )
 
 data class PlayerState(
@@ -195,6 +196,15 @@ class CS3IPlayer(
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
+                val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+                val preferredParameters = trackSelectionParameters.buildUpon()
+                preferences.getString("preferred_audio_language", null)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(preferredParameters::setPreferredAudioLanguage)
+                preferences.getString("preferred_subtitle_language", null)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(preferredParameters::setPreferredTextLanguage)
+                trackSelectionParameters = preferredParameters.build()
                 addListener(object : Player.Listener {
                     override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                         refreshTrackOptions()
@@ -342,7 +352,8 @@ class CS3IPlayer(
                     trackType = type,
                     groupIndex = groupIndex,
                     trackIndex = trackIndex,
-                    selected = group.isTrackSelected(trackIndex)
+                    selected = group.isTrackSelected(trackIndex),
+                    language = language
                 )
                 when (type) {
                     C.TRACK_TYPE_AUDIO -> audio += option
@@ -364,11 +375,22 @@ class CS3IPlayer(
         val group = player.currentTracks.groups.getOrNull(option.groupIndex) ?: return
         if (option.trackIndex !in 0 until group.length) return
         val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(option.trackIndex))
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        val parameters = player.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(option.trackType)
             .setTrackTypeDisabled(option.trackType, false)
             .addOverride(override)
-            .build()
+        when (option.trackType) {
+            C.TRACK_TYPE_AUDIO -> option.language?.takeIf { it.isNotBlank() }?.let { language ->
+                preferences.edit().putString("preferred_audio_language", language).apply()
+                parameters.setPreferredAudioLanguage(language)
+            }
+            C.TRACK_TYPE_TEXT -> option.language?.takeIf { it.isNotBlank() }?.let { language ->
+                preferences.edit().putString("preferred_subtitle_language", language).apply()
+                parameters.setPreferredTextLanguage(language)
+            }
+        }
+        player.trackSelectionParameters = parameters.build()
         refreshTrackOptions()
     }
 
