@@ -2070,9 +2070,12 @@ fun CloudStreamSearchPanel(
                     mutableIntStateOf(seasonNumbers.firstOrNull() ?: 0)
                 }
                 val selectedSeasonIndex = seasonNumbers.indexOf(selectedSeason).takeIf { it >= 0 } ?: 0
-                val visibleEpisodes = episodesBySeason[seasonNumbers.getOrNull(selectedSeasonIndex)].orEmpty()
+                // Provider order is not guaranteed; sort numbered episodes and keep specials last.
+                val visibleEpisodes = episodesBySeason[seasonNumbers.getOrNull(selectedSeasonIndex)]
+                    .orEmpty()
+                    .sortedWith(compareBy<com.example.data.plugin.CloudStreamEpisodeItem> { it.episode ?: Int.MAX_VALUE }.thenBy { it.name.lowercase() })
 
-                Text("Episode", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Episode • ${visibleEpisodes.size}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 if (availableDubStatuses.size > 1) {
                     Text("Audio / Versi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     ScrollableTabRow(
