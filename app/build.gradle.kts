@@ -61,7 +61,7 @@ val nsioVersionCode = providers.gradleProperty("nsioVersionCode")
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) }
 
   defaultConfig {
     applicationId = "dev.andikune.NSiO"
