@@ -208,10 +208,15 @@ fun PlayerScreen(
     var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
     var sleepTimerRemainingSeconds by remember { mutableStateOf(0L) }
     var sleepTimerDurationMinutes by remember { mutableStateOf(0) }
-    var selectedOrientation by remember { mutableStateOf("Otomatis") }
     val context = LocalContext.current
     val playerPreferences = remember(context) {
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+    }
+    var selectedOrientation by remember(context) {
+        mutableStateOf(
+            playerPreferences.getString("player_orientation", "Otomatis")
+                ?.takeIf { it in setOf("Otomatis", "Potret", "Lanskap") } ?: "Otomatis"
+        )
     }
     var subtitleScale by remember(context) {
         mutableStateOf(playerPreferences.getFloat("subtitle_scale", 1f).coerceIn(0.75f, 1.5f))
@@ -252,6 +257,13 @@ fun PlayerScreen(
     val castContext = remember(context) { runCatching { CastContext.getSharedInstance(context.applicationContext) }.getOrNull() }
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val activity = remember(context) { context.findPlayerActivity() }
+    LaunchedEffect(activity, selectedOrientation) {
+        activity?.requestedOrientation = when (selectedOrientation) {
+            "Potret" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "Lanskap" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+    }
     val originalBrightness = remember(activity) { activity?.window?.attributes?.screenBrightness ?: -1f }
     val originalRequestedOrientation = remember(activity) { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     val originalSystemUiVisibility = remember(activity) { activity?.window?.decorView?.systemUiVisibility ?: 0 }
@@ -1081,6 +1093,7 @@ fun PlayerScreen(
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                             selectedOrientation = orientation
+                                            playerPreferences.edit().putString("player_orientation", orientation).apply()
                                             activity?.requestedOrientation = when (orientation) {
                                                 "Potret" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                                                 "Lanskap" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
