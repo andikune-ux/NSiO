@@ -190,9 +190,17 @@ fun MultiviewScreen(
     }
 
     fun setAudioFocus(index: Int) {
-        audioSlot = index
+        // If the previously selected audio slot is empty, automatically focus the
+        // first populated slot. This prevents a newly loaded video from being muted
+        // simply because slot 1 was selected before any source had been added.
+        val focusedIndex = if (slots.getOrNull(index)?.source != null) {
+            index
+        } else {
+            slots.indices.firstOrNull { slots[it].source != null } ?: index
+        }
+        audioSlot = focusedIndex
         players.forEachIndexed { playerIndex, player ->
-            player.exoPlayer?.volume = if (playerIndex == index && slots[playerIndex].source != null) 1f else 0f
+            player.exoPlayer?.volume = if (playerIndex == focusedIndex && slots[playerIndex].source != null) 1f else 0f
         }
     }
 
