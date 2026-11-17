@@ -2,7 +2,7 @@ name: 🚀 NSiO • Parallel CI & Release
 
 on:
   push:
-    branches: [ main, feature/multiview-integration, optimization/safe-dependency-cleanup ]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -34,6 +34,17 @@ jobs:
           gradle-version: '9.3.1'
       - name: 🧹 Run Android lint
         run: gradle lintDebug --no-daemon
+      - name: 🧾 Print complete lint findings
+        if: failure()
+        shell: bash
+        run: |
+          REPORT="app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+          if [[ -f "$REPORT" ]]; then
+            cat "$REPORT"
+          else
+            echo "Lint text report was not generated at the expected path."
+            find app/build -iname '*lint*results*.txt' -o -iname '*lint*report*.txt' | head -50
+          fi
 
   unit_tests:
     name: 🧪 Unit Tests
@@ -107,7 +118,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash .github/scripts/compute-nsio-version.sh
+          NSIO_BUILD_NUMBER="$GITHUB_RUN_NUMBER" bash .github/scripts/compute-nsio-version.sh
           source nsio-version.env
           echo "version_tag=$NSIO_VERSION_TAG" >> "$GITHUB_OUTPUT"
           echo "version_name=$NSIO_VERSION_NAME" >> "$GITHUB_OUTPUT"
@@ -184,7 +195,7 @@ jobs:
   release:
     name: 🏷️ Publish Verified Release
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ startsWith(github.ref, 'refs/heads/') }}
     needs: [lint, unit_tests, build, apk_validation]
     steps:
       - name: 📚 Checkout full Git history
@@ -193,6 +204,8 @@ jobs:
           fetch-depth: 0
       - name: 🧮 Calculate NSiO version
         shell: bash
+        env:
+          NSIO_BUILD_NUMBER: ${{ github.run_number }}
         run: bash .github/scripts/compute-nsio-version.sh
       - name: ⬇️ Download validated APK artifact
         uses: actions/download-artifact@v4
@@ -206,9 +219,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          if [[ "$CURRENT_MAIN" != "$GITHUB_SHA" ]]; then
-            echo "Skip release: main has advanced to $CURRENT_MAIN."
+          BRANCH_NAME="$GITHUB_REF_NAME"
+          CURRENT_BRANCH_SHA="$(git ls-remote origin "refs/heads/$BRANCH_NAME" | awk '{print $1}')"
+          if [[ "$CURRENT_BRANCH_SHA" != "$GITHUB_SHA" ]]; then
+            echo "Skip release: branch $BRANCH_NAME has advanced to $CURRENT_BRANCH_SHA."
             exit 0
           fi
           if gh release view "$NSIO_VERSION_TAG" >/dev/null 2>&1; then
