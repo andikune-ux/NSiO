@@ -119,6 +119,7 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val selectedSort by viewModel.selectedSort.collectAsState()
+    var selectedVideoFilters by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
@@ -184,10 +185,10 @@ fun HomeScreen(
     }
 
     LaunchedEffect(activeProfile?.id, selectedFilter) {
-        if (activeProfile != null) {
-            val selectedCloudStreamPluginId = selectedFilter
-                .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
-                ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+        val selectedCloudStreamPluginId = selectedFilter
+            .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
+            ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+        if (activeProfile != null && !selectedCloudStreamPluginId.isNullOrBlank()) {
             viewModel.refreshCloudStreamCatalogOnHome(selectedCloudStreamPluginId)
         }
     }
@@ -212,12 +213,27 @@ fun HomeScreen(
     )
     val accentColor = MaterialTheme.colorScheme.primary
 
+    fun matchesVideoCategory(category: String, metadata: String): Boolean {
+        val value = metadata.lowercase()
+        return when (category) {
+            "Movie" -> value.contains("movie") || value.contains("film")
+            "Seri TV" -> value.contains("tv") || value.contains("series") || value.contains("serial")
+            "Anime" -> value.contains("anime")
+            "Drama Asia" -> value.contains("asian") || value.contains("asia") || value.contains("k-drama") || value.contains("cdrama") || value.contains("j-drama")
+            "Dubb Indo" -> value.contains("dubb indo") || value.contains("dub indo") || value.contains("indonesia") || value.contains("indonesian") || value.contains("bahasa indonesia")
+            "Kartun" -> value.contains("cartoon") || value.contains("animation") || value.contains("kartun")
+            "NSFW" -> value.contains("nsfw") || value.contains("adult") || value.contains("18+")
+            else -> true
+        }
+    }
+
     val filteredItems = mediaList.filter { item ->
         val matchesServerAccess = item.sourceType != "SERVER" || isServerUnlocked
         val matchesSearch = searchQuery.isEmpty() ||
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
+        val matchesVideoCategories = selectedVideoFilters.all { category -> matchesVideoCategory(category, "${item.type} ${item.category} ${item.title}") }
         val isDriveMedia = MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
         val matchesFilter = when (selectedFilter) {
             "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"
@@ -244,7 +260,7 @@ fun HomeScreen(
                 item.sourceType == "CLOUDSTREAM" && item.repositoryId == selectedFilter.removePrefix("CLOUDSTREAM_REPO:")
             } else true
         }
-        matchesServerAccess && matchesSearch && matchesFilter && matchesExpandedSource
+        matchesServerAccess && matchesSearch && matchesFilter && matchesExpandedSource && matchesVideoCategories
     }
 
     val filteredList = when (selectedSort) {
@@ -506,6 +522,28 @@ fun HomeScreen(
             }
             }
 
+            // Filter kategori selalu terlihat di Extension Home; geser horizontal untuk semua pilihan.
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun", "NSFW").forEach { category ->
+                    val active = category in selectedVideoFilters
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (active) accentColor.copy(alpha = 0.22f) else Color.Transparent)
+                            .border(1.dp, if (active) accentColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.28f), RoundedCornerShape(18.dp))
+                            .clickable { selectedVideoFilters = if (active) selectedVideoFilters - category else selectedVideoFilters + category }
+                            .padding(horizontal = 11.dp, vertical = 6.dp)
+                            .testTag("home_video_filter_$category")
+                    ) {
+                        Text(category, fontSize = 10.sp, color = if (active) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
+            }
+
             // ==========================================
             // KONTEN UTAMA: Grid Video & Overlay Tirai Mengambang
             // ==========================================
@@ -595,6 +633,8 @@ fun HomeScreen(
                             ) {
                                 CloudStreamSearchPanel(
                                     viewModel, cloudStreamRepositories, searchQuery, cloudStreamSearchRequest,
+                                    selectedPluginFilter = selectedFilter,
+                                    selectedVideoFilters = selectedVideoFilters,
                                     handlePendingDetail = false
                                 )
                             }
@@ -854,6 +894,8 @@ fun HomeScreen(
                     repos = cloudStreamRepositories,
                     query = searchQuery,
                     searchRequest = cloudStreamSearchRequest,
+                    selectedPluginFilter = selectedFilter,
+                    selectedVideoFilters = selectedVideoFilters,
                     renderContent = false,
                     handlePendingDetail = true,
                     enableSearch = false
@@ -959,7 +1001,7 @@ fun HomeScreen(
                                                 }
                                             }
                                             IconButton(
-                                                enabled = searchQuery.isNotBlank() && cloudStreamPluginFilters.isNotEmpty(),
+                                                enabled = searchQuery.isNotBlank() && selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:"),
                                                 onClick = {
                                                     cloudStreamSearchRequest++
                                                     isSearchExpanded = false
@@ -968,8 +1010,8 @@ fun HomeScreen(
                                             ) {
                                                 Icon(
                                                     Icons.Default.Search,
-                                                    contentDescription = "Cari juga di CloudStream",
-                                                    tint = if (searchQuery.isNotBlank() && cloudStreamPluginFilters.isNotEmpty()) accentColor
+                                                    contentDescription = "Cari di plugin CloudStream terpilih",
+                                                    tint = if (searchQuery.isNotBlank() && selectedFilter.startsWith("CLOUDSTREAM_PLUGIN:")) accentColor
                                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
                                                     modifier = Modifier.size(19.dp)
                                                 )
@@ -1012,6 +1054,27 @@ fun HomeScreen(
                                         tint = accentColor,
                                         modifier = Modifier.size(24.dp)
                                     )
+                                }
+                            }
+
+                            // Filter kategori yang sama juga berlaku untuk hasil pencarian CloudStream.
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf("Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun", "NSFW").forEach { category ->
+                                    val active = category in selectedVideoFilters
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(if (active) accentColor.copy(alpha = 0.22f) else Color.Transparent)
+                                            .border(1.dp, if (active) accentColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.28f), RoundedCornerShape(18.dp))
+                                            .clickable { selectedVideoFilters = if (active) selectedVideoFilters - category else selectedVideoFilters + category }
+                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    ) {
+                                        Text(category, fontSize = 11.sp, color = if (active) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                                    }
                                 }
                             }
 

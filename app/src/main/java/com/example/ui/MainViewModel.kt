@@ -1326,6 +1326,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Each plugin is isolated; failed or empty responses leave its last saved catalog untouched.
      */
     fun refreshCloudStreamCatalogOnHome(selectedPluginId: String? = null) {
+        if (selectedPluginId.isNullOrBlank()) return
         val profileId = _activeProfile.value?.id ?: return
         if (cloudStreamHomeRefreshJob?.isActive == true) {
             if (selectedPluginId.isNullOrBlank()) return

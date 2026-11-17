@@ -838,6 +838,8 @@ private fun PluginRepoTab(
     var showPlaylistDialog by remember { mutableStateOf(false) }
     var showRepositoryDialog by remember { mutableStateOf(false) }
     var showPluginDialog by remember { mutableStateOf(false) }
+    var selectedPluginCategory by rememberSaveable { mutableStateOf("Semua") }
+    var expandedPluginDialog by rememberSaveable { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
@@ -845,7 +847,24 @@ private fun PluginRepoTab(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            CloudStreamCatalogManagerPanel(viewModel, repos)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("Semua", "Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun", "NSFW").forEach { category ->
+                    val active = selectedPluginCategory == category
+                    Box(
+                        modifier = Modifier.clip(RoundedCornerShape(18.dp))
+                            .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+                            .border(1.dp, if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.28f), RoundedCornerShape(18.dp))
+                            .clickable { selectedPluginCategory = category }
+                            .padding(horizontal = 11.dp, vertical = 7.dp)
+                    ) {
+                        Text(category, fontSize = 10.sp, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
+            }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1002,86 +1021,118 @@ private fun PluginRepoTab(
         )
     }
     if (showPluginDialog) {
-        val entries = repos.flatMap { it.plugins }.distinctBy { it.internalName to it.version }
-        AlertDialog(
-            onDismissRequest = { showPluginDialog = false },
-            title = { Text("Daftar Plugin (" + (entries.size + plugins.size) + ")") },
-            text = {
-                if (entries.isEmpty() && plugins.isEmpty()) Text("Belum ada plugin.")
-                else LazyColumn(modifier = Modifier.height(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(entries, key = { it.internalName + "-" + it.version }) { entry ->
-                        var installed by remember(entry.internalName, entry.version) { mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry)) }
-                        var busy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
-                        var confirmUninstall by remember(entry.internalName, entry.version) { mutableStateOf(false) }
-                        Column(modifier = Modifier.fillMaxWidth().padding(6.dp)) {
-                            Text(entry.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                entry.internalName + " • v" + entry.version + " • API " + entry.apiVersion + " • " +
-                                    viewModel.pluginManager.cloudStreamRepositoryName(entry) + " • " +
-                                    if (installed) "terpasang" else "belum dipasang",
-                                fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Button(
-                                    onClick = {
-                                        if (!busy && entry.status != 0) {
-                                            busy = true
-                                            scope.launch {
-                                                runCatching {
-                                                    if (!installed) viewModel.pluginManager.installCloudStreamPlugin(entry)
-                                                    viewModel.pluginManager.loadCloudStreamPlugin(entry)
-                                                }.onSuccess { installed = true }
-                                                 .onFailure { repoFeedback = it.message ?: "Gagal memasang plugin." }
-                                                busy = false
-                                            }
+        val allEntries = repos.flatMap { it.plugins }.distinctBy { it.internalName to it.version }
+        fun matchesPluginCategory(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
+            val types = entry.tvTypes.joinToString(" ").lowercase()
+            val language = entry.language.lowercase()
+            return when (selectedPluginCategory) {
+                "Semua" -> true
+                "Movie" -> types.contains("movie") || types.contains("film")
+                "Seri TV" -> types.contains("tv") || types.contains("series")
+                "Anime" -> types.contains("anime")
+                "Drama Asia" -> types.contains("asian") || types.contains("asia") || types.contains("drama")
+                "Dubb Indo" -> language == "id" || language.contains("indonesia") || language.contains("indonesian")
+                "Kartun" -> types.contains("cartoon") || types.contains("animation")
+                "NSFW" -> types.contains("nsfw") || types.contains("adult") || types.contains("18+")
+                else -> true
+            }
+        }
+        val entries = allEntries.filter(::matchesPluginCategory)
+        Dialog(
+            onDismissRequest = { showPluginDialog = false; expandedPluginDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = if (expandedPluginDialog) Modifier.fillMaxSize() else Modifier.fillMaxWidth(0.94f).height(590.dp),
+                shape = if (expandedPluginDialog) RoundedCornerShape(0.dp) else RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Daftar Plugin (${entries.size}/${allEntries.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("Filter berdasarkan jenis konten dan bahasa plugin.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = { expandedPluginDialog = !expandedPluginDialog }) {
+                            Text(if (expandedPluginDialog) "Perkecil" else "Perbesar", fontSize = 11.sp)
+                        }
+                        TextButton(onClick = { showPluginDialog = false; expandedPluginDialog = false }) { Text("Tutup") }
+                    }
+                    if (entries.isEmpty() && plugins.isEmpty()) {
+                        Text("Belum ada plugin.")
+                    } else {
+                        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(entries, key = { it.internalName + "-" + it.version }) { entry ->
+                                var installed by remember(entry.internalName, entry.version) { mutableStateOf(viewModel.pluginManager.isCloudStreamPluginInstalled(entry)) }
+                                var busy by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                                var confirmUninstall by remember(entry.internalName, entry.version) { mutableStateOf(false) }
+                                Column(modifier = Modifier.fillMaxWidth().padding(6.dp)) {
+                                    Text(entry.name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(entry.internalName + " • v" + entry.version + " • API " + entry.apiVersion + " • " + viewModel.pluginManager.cloudStreamRepositoryName(entry) + " • " + if (installed) "terpasang" else "belum dipasang", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Button(
+                                            onClick = {
+                                                if (!busy && entry.status != 0) {
+                                                    busy = true
+                                                    scope.launch {
+                                                        runCatching {
+                                                            if (!installed) viewModel.pluginManager.installCloudStreamPlugin(entry)
+                                                            viewModel.pluginManager.loadCloudStreamPlugin(entry)
+                                                        }.onSuccess {
+                                                            installed = true
+                                                            viewModel.selectFilter("CLOUDSTREAM_PLUGIN:" + viewModel.pluginManager.cloudStreamPluginId(entry))
+                                                            repoFeedback = "Plugin ${entry.name} aktif dan dipilih untuk Extension Home."
+                                                        }.onFailure { repoFeedback = it.message ?: "Gagal memasang plugin." }
+                                                        busy = false
+                                                    }
+                                                }
+                                            },
+                                            enabled = !busy && entry.status != 0,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                            else Text(if (installed) "Aktifkan & pilih" else "Pasang & aktifkan", fontSize = 10.sp)
                                         }
-                                    },
-                                    enabled = !busy && entry.status != 0,
-                                    modifier = Modifier.weight(1f)
-                                ) { if (busy) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp) else Text(if (installed) "Aktifkan" else "Pasang & aktifkan", fontSize = 10.sp) }
-                                if (installed) {
-                                    IconButton(onClick = { confirmUninstall = true }, enabled = !busy) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Copot plugin", tint = AccentRed)
+                                        if (installed) IconButton(onClick = { confirmUninstall = true }, enabled = !busy) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Copot plugin", tint = AccentRed)
+                                        }
+                                    }
+                                    if (confirmUninstall) {
+                                        AlertDialog(
+                                            onDismissRequest = { confirmUninstall = false },
+                                            title = { Text("Copot plugin?") },
+                                            text = { Text("File plugin ${entry.name} versi ${entry.version} dan cache runtime-nya akan dihapus dari perangkat.") },
+                                            confirmButton = {
+                                                TextButton(onClick = {
+                                                    confirmUninstall = false
+                                                    busy = true
+                                                    scope.launch {
+                                                        runCatching { viewModel.pluginManager.uninstallCloudStreamPlugin(entry) }
+                                                            .onSuccess { installed = false; repoFeedback = "Plugin ${entry.name} berhasil dicopot." }
+                                                            .onFailure { repoFeedback = it.message ?: "Gagal mencopot plugin." }
+                                                        busy = false
+                                                    }
+                                                }) { Text("Copot") }
+                                            },
+                                            dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text("Batal") } }
+                                        )
                                     }
                                 }
                             }
-                            if (confirmUninstall) {
-                                AlertDialog(
-                                    onDismissRequest = { confirmUninstall = false },
-                                    title = { Text("Copot plugin?") },
-                                    text = { Text("File plugin ${entry.name} versi ${entry.version} dan cache runtime-nya akan dihapus dari perangkat.") },
-                                    confirmButton = {
-                                        TextButton(onClick = {
-                                            confirmUninstall = false
-                                            busy = true
-                                            scope.launch {
-                                                runCatching { viewModel.pluginManager.uninstallCloudStreamPlugin(entry) }
-                                                    .onSuccess { installed = false; repoFeedback = "Plugin ${entry.name} berhasil dicopot." }
-                                                    .onFailure { repoFeedback = it.message ?: "Gagal mencopot plugin." }
-                                                busy = false
-                                            }
-                                        }) { Text("Copot") }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { confirmUninstall = false }) { Text("Batal") }
+                            items(plugins, key = { it.manifest?.name ?: it.filename }) { plugin ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(plugin.manifest?.name ?: plugin.filename.ifBlank { "Plugin internal NSiO" }, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(plugin.manifest?.description ?: "Plugin internal NSiO", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                )
+                                    IconButton(onClick = { viewModel.pluginManager.unloadPlugin(plugin) }) { Icon(Icons.Default.Delete, contentDescription = "Copot", tint = AccentRed) }
+                                }
                             }
-                        }
-                    }
-                    items(plugins, key = { it.manifest?.name ?: it.filename }) { plugin ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(plugin.manifest?.name ?: plugin.filename.ifBlank { "Plugin internal NSiO" }, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                Text(plugin.manifest?.description ?: "Plugin internal NSiO", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            IconButton(onClick = { viewModel.pluginManager.unloadPlugin(plugin) }) { Icon(Icons.Default.Delete, contentDescription = "Copot", tint = AccentRed) }
                         }
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showPluginDialog = false }) { Text("Tutup") } }
-        )
+            }
+        }
     }
     editingPlaylist?.let { playlist ->
         AlertDialog(
@@ -1245,6 +1296,8 @@ fun CloudStreamSearchPanel(
     repos: List<com.example.data.plugin.RepoManifest>,
     query: String,
     searchRequest: Int,
+    selectedPluginFilter: String = "ALL",
+    selectedVideoFilters: Set<String> = emptySet(),
     showCatalogControls: Boolean = false,
     renderContent: Boolean = true,
     handlePendingDetail: Boolean = true,
@@ -1342,8 +1395,10 @@ fun CloudStreamSearchPanel(
         }
     }
 
+    val selectedPluginId = selectedPluginFilter.takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }?.removePrefix("CLOUDSTREAM_PLUGIN:")
     val installedEntries = repos.flatMap { it.plugins }
         .filter { it.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(it) }
+        .filter { selectedPluginId != null && viewModel.pluginManager.cloudStreamPluginId(it) == selectedPluginId }
         .distinctBy { it.internalName to it.version }
 
     val pendingCloudStreamDetail by viewModel.pendingCloudStreamDetail.collectAsState()
@@ -1570,7 +1625,7 @@ fun CloudStreamSearchPanel(
                             "${sections.sumOf { it.second.items.size }} item dari ${sections.size} kategori; ${failures.size} plugin bermasalah."
                         sections.isNotEmpty() ->
                             "${sections.sumOf { it.second.items.size }} item dari ${sections.size} kategori."
-                        installedEntries.isEmpty() -> "Belum ada plugin .cs3 terpasang."
+                        installedEntries.isEmpty() -> "Pilih satu plugin CloudStream pada filter Home untuk mencari hanya dari plugin tersebut."
                         failures.isNotEmpty() -> failures.take(3).joinToString(" • ")
                         else -> "Plugin terpasang tidak menyediakan katalog utama (Main Page). Gunakan pencarian."
                     }
@@ -1718,7 +1773,7 @@ fun CloudStreamSearchPanel(
         if (searching) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text("Mencari di ${installedEntries.size} plugin .cs3...", fontSize = 10.sp)
+                Text("Mencari di plugin terpilih...", fontSize = 10.sp)
             }
         }
         if (searchMessage.isNotBlank()) {
@@ -1757,7 +1812,21 @@ fun CloudStreamSearchPanel(
                 else Text("Muat hasil pencarian lainnya", fontSize = 11.sp)
             }
         }
-        results.forEach { (entry, result) ->
+        results.filter { (_, result) ->
+            selectedVideoFilters.all { category ->
+                val metadata = "${result.contentType.orEmpty()} ${result.providerName} ${result.pluginName} ${result.title}".lowercase()
+                when (category) {
+                    "Movie" -> metadata.contains("movie") || metadata.contains("film")
+                    "Seri TV" -> metadata.contains("tv") || metadata.contains("series") || metadata.contains("serial")
+                    "Anime" -> metadata.contains("anime")
+                    "Drama Asia" -> metadata.contains("asian") || metadata.contains("asia") || metadata.contains("k-drama") || metadata.contains("cdrama") || metadata.contains("j-drama")
+                    "Dubb Indo" -> metadata.contains("dubb indo") || metadata.contains("dub indo") || metadata.contains("indonesia") || metadata.contains("indonesian")
+                    "Kartun" -> metadata.contains("cartoon") || metadata.contains("animation") || metadata.contains("kartun")
+                    "NSFW" -> metadata.contains("nsfw") || metadata.contains("adult") || metadata.contains("18+")
+                    else -> true
+                }
+            }
+        }.forEach { (entry, result) ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
