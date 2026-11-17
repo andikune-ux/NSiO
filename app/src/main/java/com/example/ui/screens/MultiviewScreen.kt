@@ -188,33 +188,6 @@ fun MultiviewScreen(
         }
     }
 
-    fun playPluginSearchResult(index: Int, result: MultiviewPluginSearchResult) {
-        val item = MediaItem(
-            id = "multiview-cloudstream:${java.util.UUID.randomUUID()}",
-            profileId = activeProfile?.id ?: "multiview",
-            title = result.item.title,
-            url = result.item.url,
-            thumbnailUrl = result.item.posterUrl.orEmpty(),
-            type = "CLOUDSTREAM",
-            sourceType = "CLOUDSTREAM",
-            category = "CloudStream",
-            sourceUrl = result.sourceUrl,
-            pluginId = result.pluginId,
-            repositoryId = result.repositoryId,
-            extraInfo = org.json.JSONObject().put("providerName", result.item.providerName).toString()
-        )
-        scope.launch {
-            resolveAndPlay(
-                index,
-                MultiviewSourceRequest(
-                    kind = MultiviewSourceKind.CLOUDSTREAM,
-                    mediaItem = item,
-                    displayName = item.title
-                )
-            )
-        }
-    }
-
     fun setAudioFocus(index: Int) {
         audioSlot = index
         players.forEachIndexed { playerIndex, player ->
@@ -260,6 +233,33 @@ fun MultiviewScreen(
         }
         busySlot = null
         pickerSlot = null
+    }
+
+    fun playPluginSearchResult(index: Int, result: MultiviewPluginSearchResult) {
+        val item = MediaItem(
+            id = "multiview-cloudstream:${java.util.UUID.randomUUID()}",
+            profileId = activeProfile?.id ?: "multiview",
+            title = result.item.title,
+            url = result.item.url,
+            thumbnailUrl = result.item.posterUrl.orEmpty(),
+            type = "CLOUDSTREAM",
+            sourceType = "CLOUDSTREAM",
+            category = "CloudStream",
+            sourceUrl = result.sourceUrl,
+            pluginId = result.pluginId,
+            repositoryId = result.repositoryId,
+            extraInfo = org.json.JSONObject().put("providerName", result.item.providerName).toString()
+        )
+        scope.launch {
+            resolveAndPlay(
+                index,
+                MultiviewSourceRequest(
+                    kind = MultiviewSourceKind.CLOUDSTREAM,
+                    mediaItem = item,
+                    displayName = item.title
+                )
+            )
+        }
     }
 
     val localPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
