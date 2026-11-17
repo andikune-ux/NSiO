@@ -195,7 +195,9 @@ jobs:
   release:
     name: 🏷️ Publish Verified Release
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/heads/') }}
+    # Explicit always() prevents GitHub's implicit success() from skipping this
+    # job due to unrelated lint/test jobs; only build + APK validation gate release.
+    if: ${{ always() && startsWith(github.ref, 'refs/heads/') && needs.build.result == 'success' && needs.apk_validation.result == 'success' }}
     # Publishing is gated by a successful build and APK integrity check.
     # Lint and unit tests remain independent checks and do not block delivery.
     concurrency:
