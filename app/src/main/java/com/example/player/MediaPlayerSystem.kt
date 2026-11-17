@@ -20,6 +20,14 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
+import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
+import androidx.media3.exoplayer.drm.DrmSessionManager
+import java.util.UUID
+import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -108,6 +116,7 @@ class CS3IPlayer(
     private var lastMimeType: String? = null
     private var lastExternalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
     private val userExternalSubtitles = mutableListOf<com.example.data.plugin.CloudStreamSubtitle>()
+    private var activeDrmSessionManager: DrmSessionManager? = null
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
@@ -179,7 +188,11 @@ class CS3IPlayer(
                 return DefaultDataSource.Factory(context, httpDataSourceFactory).createDataSource()
             }
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+            .setDrmSessionManagerProvider {
+                activeDrmSessionManager ?: DrmSessionManager.DRM_UNSUPPORTED
+            }
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
@@ -325,6 +338,34 @@ class CS3IPlayer(
                 })
             }
         startProgressTracking()
+    }
+
+    private fun createClearKeySessionManager(
+        drm: com.example.data.plugin.CloudStreamDrm
+    ): DrmSessionManager {
+        val kid = drm.keyId ?: throw IllegalArgumentException("ClearKey KID kosong.")
+        val key = drm.key ?: throw IllegalArgumentException("ClearKey KEY kosong.")
+        fun toBase64Url(value: String): String {
+            val decoded = runCatching { Base64.decode(value, Base64.DEFAULT) }
+                .getOrElse { throw IllegalArgumentException("Format KID/KEY ClearKey bukan Base64 yang valid.", it) }
+            return Base64.encodeToString(decoded, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        }
+        val response = JSONObject()
+            .put(
+                "keys",
+                JSONArray().put(
+                    JSONObject()
+                        .put("kty", drm.keyType?.takeIf { it.isNotBlank() } ?: "oct")
+                        .put("kid", toBase64Url(kid))
+                        .put("k", toBase64Url(key))
+                )
+            )
+            .put("type", "temporary")
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+        return DefaultDrmSessionManager.Builder()
+            .setUuidAndExoMediaDrmProvider(CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+            .build(LocalMediaDrmCallback(response))
     }
 
     private fun refreshTrackOptions() {
@@ -580,6 +621,8 @@ class CS3IPlayer(
             attemptedPluginStreamKeys.add(buildStreamAttemptKey(url, requestHeaders))
         }
         httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, mergedExternalSubtitles)
+        val drmInfo = pluginStreams.firstOrNull { it.url == url }?.drm
+        activeDrmSessionManager = drmInfo?.let(::createClearKeySessionManager)
 
         exoPlayer?.let { player ->
             try {
@@ -604,6 +647,19 @@ class CS3IPlayer(
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
+                if (drmInfo != null) {
+                    val drmUuid = runCatching { UUID.fromString(drmInfo.uuid) }.getOrNull()
+                        ?: throw IllegalArgumentException("UUID DRM dari plugin tidak valid.")
+                    if (drmUuid != CLEARKEY_UUID) {
+                        throw IllegalArgumentException("Sumber ini memakai DRM berlisensi ($drmUuid), tetapi plugin SDK yang terpasang tidak memberikan URL lisensi. NSiO hanya dapat memutar ClearKey lokal untuk saat ini.")
+                    }
+                    if (drmInfo.keyId.isNullOrBlank() || drmInfo.key.isNullOrBlank()) {
+                        throw IllegalArgumentException("Metadata ClearKey dari plugin tidak lengkap (KID/KEY kosong).")
+                    }
+                    mediaItemBuilder.setDrmConfiguration(
+                        ExoMediaItem.DrmConfiguration.Builder(drmUuid).build()
+                    )
+                }
                 val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
                     val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
                     val subtitleMime = when (subtitle.mimeType?.lowercase()) {
@@ -696,6 +752,7 @@ class CS3IPlayer(
         lastPluginStreams = emptyList()
         lastExternalSubtitles = emptyList()
         userExternalSubtitles.clear()
+        activeDrmSessionManager = null
         _playerState.value = PlayerState(audioDelayMs = audioDelayMs)
     }
 
