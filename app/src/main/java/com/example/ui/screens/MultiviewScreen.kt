@@ -398,6 +398,7 @@ fun MultiviewScreen(
                 onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                 onSwap = ::swapPanels,
                 panelBounds = panelBounds,
+                dragRootPosition = dragRootPosition,
                 onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                 modifier = Modifier.fillMaxSize().weight(1f)
             )
@@ -414,6 +415,7 @@ fun MultiviewScreen(
                     onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                     onSwap = ::swapPanels,
                     panelBounds = panelBounds,
+                    dragRootPosition = dragRootPosition,
                     onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                     modifier = Modifier.weight(2.15f).fillMaxWidth()
                 )
@@ -429,6 +431,7 @@ fun MultiviewScreen(
                             onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                             onSwap = ::swapPanels,
                             panelBounds = panelBounds,
+                            dragRootPosition = dragRootPosition,
                             onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
@@ -621,6 +624,7 @@ private fun MultiviewPanel(
     onRestoreGrid: () -> Unit,
     onSwap: (Int, Int) -> Unit,
     panelBounds: MutableMap<Int, Rect>,
+    dragRootPosition: Offset,
     onDragState: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
