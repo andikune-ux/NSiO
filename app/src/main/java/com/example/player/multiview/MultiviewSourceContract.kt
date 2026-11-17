@@ -2,6 +2,7 @@ package com.example.player.multiview
 
 import android.net.Uri
 import com.example.data.model.MediaItem
+import com.example.data.plugin.CloudStreamStream
 
 /**
  * Source contract for Multiview. Adapters resolve a source without owning a player;
@@ -32,7 +33,9 @@ data class MultiviewResolvedSource(
     val mimeType: String? = null,
     val requestHeaders: Map<String, String> = emptyMap(),
     val sourceKind: MultiviewSourceKind,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val cloudStream: CloudStreamStream? = null,
+    val pluginStreams: List<CloudStreamStream> = emptyList()
 )
 
 sealed interface MultiviewResolveResult {
