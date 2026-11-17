@@ -62,7 +62,12 @@ class MultiviewSourceContractTest {
             uri = Uri.parse("https://example.com/video.mp4")
         ))
         assertTrue(valid is MultiviewResolveResult.Success)
-        assertEquals(MultiviewSourceKind.GOOGLE_DRIVE, (valid as MultiviewResolveResult.Success).source.sourceKind)
+        val resolved = (valid as MultiviewResolveResult.Success).source
+        assertEquals(MultiviewSourceKind.GOOGLE_DRIVE, resolved.sourceKind)
+        assertEquals(
+            "https://drive.usercontent.google.com/download?id=example&export=download&confirm=t",
+            resolved.uri.toString()
+        )
         assertTrue(invalid is MultiviewResolveResult.Failure)
     }
 
@@ -110,3 +115,4 @@ class MultiviewSourceContractTest {
         assertTrue((result as MultiviewResolveResult.Failure).reason.contains("bukan konten CloudStream"))
     }
 }
+
