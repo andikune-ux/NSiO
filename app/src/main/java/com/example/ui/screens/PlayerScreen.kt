@@ -1198,7 +1198,7 @@ fun PlayerScreen(
                                 }
                                 "Bahasa audio" -> {
                                     Text("Bahasa ini menjadi prioritas saat sumber menyediakan beberapa track audio. Pilihan disimpan untuk pemutaran berikutnya.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                                    val languageOptions = listOf<String?>(null) + playerState.audioTracks.mapNotNull { it.language }.distinct()
+                                    val languageOptions = (listOf<String?>(null) + playerState.audioTracks.mapNotNull { it.language } + listOfNotNull(playerState.preferredAudioLanguage)).distinct()
                                     languageOptions.forEach { language ->
                                         val selected = playerState.preferredAudioLanguage == language
                                         val label = language?.let { "${Locale.forLanguageTag(it).getDisplayName(Locale.getDefault())} ($it)" } ?: "Otomatis"
@@ -1216,7 +1216,7 @@ fun PlayerScreen(
                                 }
                                 "Bahasa subtitle" -> {
                                     Text("Bahasa ini menjadi prioritas subtitle saat tersedia. Pilihan Otomatis mengikuti pemilihan track bawaan sumber.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                                    val languageOptions = listOf<String?>(null) + playerState.subtitleTracks.mapNotNull { it.language }.distinct()
+                                    val languageOptions = (listOf<String?>(null) + playerState.subtitleTracks.mapNotNull { it.language } + listOfNotNull(playerState.preferredSubtitleLanguage)).distinct()
                                     languageOptions.forEach { language ->
                                         val selected = playerState.preferredSubtitleLanguage == language
                                         val label = language?.let { "${Locale.forLanguageTag(it).getDisplayName(Locale.getDefault())} ($it)" } ?: "Otomatis"
