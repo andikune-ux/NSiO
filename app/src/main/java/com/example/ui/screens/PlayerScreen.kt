@@ -1034,7 +1034,7 @@ fun PlayerScreen(
                                     subtitleBottomPadding < 0.22f -> "Tengah bawah"
                                     else -> "Tengah"
                                 },
-                                "Timer tidur" to (if (sleepTimerRemainingSeconds > 0L) "${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, "0")}" else "Mati"),
+                                "Timer tidur" to (if (sleepTimerRemainingSeconds > 0L) "${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, '0')}" else "Mati"),
                                 "Orientasi layar" to selectedOrientation,
                                 "Kunci kontrol" to if (controlsLocked) "Aktif" else "Mati"
                             ).forEach { (label, current) ->
