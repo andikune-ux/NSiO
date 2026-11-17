@@ -878,6 +878,17 @@ fun PlayerScreen(
                                 )
                                 if (playerState.isLive) {
                                     Text("LIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF5A5A))
+                                    if (playerState.isSeekable) {
+                                        Text(
+                                            "KE LIVE",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = controlAccentColor,
+                                            modifier = Modifier.clip(RoundedCornerShape(5.dp)).clickable {
+                                                viewModel.player.seekToLive()
+                                            }.padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
