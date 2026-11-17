@@ -234,6 +234,32 @@ fun PlayerScreen(
     var subtitleEdgeType by remember(context) {
         mutableStateOf(playerPreferences.getInt("subtitle_edge_type", CaptionStyleCompat.EDGE_TYPE_OUTLINE))
     }
+    val externalAudioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                val displayName = context.contentResolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    ?: uri.lastPathSegment.orEmpty().substringAfterLast(':').substringAfterLast('/')
+                require(displayName.isNotBlank()) { "Nama file audio tidak ditemukan." }
+                viewModel.player.setExternalAudioTrack(uri, displayName)
+                selectedPlayerSetting = null
+                showTrackMenu = true
+            }.onFailure {
+                Toast.makeText(context, "Audio eksternal tidak dapat dibuka: ${it.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val externalSubtitlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -1047,6 +1073,7 @@ fun PlayerScreen(
                                 "Sumber" to (playerState.pluginStreams.firstOrNull { it.url == playerState.selectedPluginStreamUrl }?.name?.ifBlank { "Sumber aktif" } ?: "Default"),
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
+                                "Audio eksternal" to (playerState.externalAudioName ?: "Pilih file audio"),
                                 "Bahasa audio" to (playerState.preferredAudioLanguage ?: "Otomatis"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Subtitle Delay" to (if (playerState.subtitleDelayMs > 0) "+${playerState.subtitleDelayMs} ms" else "${playerState.subtitleDelayMs} ms"),
@@ -1229,6 +1256,53 @@ fun PlayerScreen(
                                                 selectedPlayerSetting = null
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
+                                    }
+                                }
+                                "Audio eksternal" -> {
+                                    Text(
+                                        "Tambahkan file audio dari perangkat sebagai track alternatif. Video tetap memakai sumber aktif; pilih track audio yang diinginkan setelah file dimuat.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    Text(
+                                        text = if (playerState.externalAudioName != null) "✓ ${playerState.externalAudioName}" else "Belum ada audio eksternal",
+                                        color = if (playerState.externalAudioName != null) controlAccentColor else controlMutedColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)
+                                    )
+                                    Text(
+                                        "＋ Pilih file audio dari perangkat",
+                                        color = controlAccentColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            externalAudioPicker.launch(arrayOf("audio/*", "application/octet-stream"))
+                                        }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
+                                    if (playerState.externalAudioName != null) {
+                                        Text(
+                                            "Gunakan audio bawaan video",
+                                            color = controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.clearExternalAudioTrack()
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                    if (playerState.audioTracks.isNotEmpty()) {
+                                        Text("Pilih track audio", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                        playerState.audioTracks.forEach { track ->
+                                            Text(
+                                                text = (if (track.selected) "✓ " else "") + track.label,
+                                                color = if (track.selected) controlAccentColor else controlTextColor,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                    viewModel.player.selectTrack(track)
+                                                    selectedPlayerSetting = null
+                                                }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                            )
+                                        }
                                     }
                                 }
                                 "Bahasa audio" -> {
