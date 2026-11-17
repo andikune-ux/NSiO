@@ -125,7 +125,8 @@ data class CloudStreamContent(
 data class CloudStreamSubtitle(
     val language: String,
     val url: String,
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val mimeType: String? = null
 )
 
 data class CloudStreamStream(
