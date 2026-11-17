@@ -14,6 +14,8 @@ import android.provider.Settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
+import android.util.Rational
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -37,6 +39,7 @@ import com.example.ui.components.AppText as Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,6 +76,7 @@ import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+    private var isPipMode by mutableStateOf(false)
     @Volatile private var coreStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,7 +138,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             } else {
-                MainApplicationContent(viewModel)
+                MainApplicationContent(viewModel, isPipMode)
             }
 
             secretMessage?.let { message ->
@@ -164,8 +168,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val media = viewModel.currentlyPlaying.value ?: return
+        if (media.type.equals("PHOTO", ignoreCase = true)) return
+        if (!viewModel.player.playerState.value.isPlaying) return
+        val uiMode = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
+        if (uiMode == Configuration.UI_MODE_TYPE_TELEVISION) return
+
+        val videoSize = viewModel.player.exoPlayer?.videoSize
+        val rawWidth = videoSize?.width?.takeIf { it > 0 } ?: 16
+        val rawHeight = videoSize?.height?.takeIf { it > 0 } ?: 9
+        val ratio = (rawWidth.toFloat() / rawHeight.toFloat()).coerceIn(0.42f, 2.35f)
+        val numerator = (ratio * 1000).toInt().coerceAtLeast(1)
+        val builder = android.app.PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(numerator, 1000))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(true)
+        }
+        runCatching { enterPictureInPictureMode(builder.build()) }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isPipMode = isInPictureInPictureMode
+    }
+
     override fun onPause() {
-        if (coreStarted) viewModel.pausePlaybackForBackground()
+        if (coreStarted && !isInPictureInPictureMode) viewModel.pausePlaybackForBackground()
         super.onPause()
     }
 
@@ -182,7 +216,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainApplicationContent(viewModel: MainViewModel) {
+private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val devMode by viewModel.devMode.collectAsState()
@@ -216,7 +250,7 @@ private fun MainApplicationContent(viewModel: MainViewModel) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
                 if (currentlyPlaying != null) {
-                    PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() })
+                    PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() }, isInPipMode = isPipMode)
                 } else {
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
