@@ -35,12 +35,14 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +68,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.data.model.MediaItem
 import com.example.data.model.MediaSourceClassifier
+import com.example.data.plugin.CloudStreamSearchItem
 import com.example.player.CS3IPlayer
 import com.example.player.multiview.CloudStreamMultiviewAdapter
 import com.example.player.multiview.GoogleDriveMultiviewAdapter
@@ -79,6 +82,13 @@ import com.example.player.multiview.MultiviewSourceRegistry
 import com.example.player.multiview.MultiviewSourceRequest
 import com.example.ui.MainViewModel
 import kotlinx.coroutines.launch
+
+private data class MultiviewPluginSearchResult(
+    val pluginId: String,
+    val repositoryId: String,
+    val sourceUrl: String,
+    val item: CloudStreamSearchItem
+)
 
 private data class MultiviewSlotUi(
     val source: MultiviewResolvedSource? = null,
@@ -94,6 +104,8 @@ fun MultiviewScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val mediaItems by viewModel.mediaList.collectAsState()
+    val activeProfile by viewModel.activeProfile.collectAsState()
+    val pluginRepositories by viewModel.pluginManager.repositories.collectAsState()
     val players = remember {
         List(4) { CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false) }
     }
@@ -103,6 +115,9 @@ fun MultiviewScreen(
     var pickerKind by remember { mutableStateOf(MultiviewSourceKind.GOOGLE_DRIVE) }
     var fullscreenSlot by remember { mutableStateOf<Int?>(null) }
     var busySlot by remember { mutableStateOf<Int?>(null) }
+    var pluginQuery by remember { mutableStateOf("") }
+    var pluginSearchLoading by remember { mutableStateOf(false) }
+    var pluginSearchResults by remember { mutableStateOf<List<MultiviewPluginSearchResult>>(emptyList()) }
 
     val registry = remember(viewModel) {
         MultiviewSourceRegistry(
@@ -146,6 +161,58 @@ fun MultiviewScreen(
                 }
             )
         )
+    }
+
+    fun searchCloudStreamPlugins() {
+        val query = pluginQuery.trim()
+        if (query.isBlank() || pluginSearchLoading) return
+        scope.launch {
+            pluginSearchLoading = true
+            pluginSearchResults = emptyList()
+            val results = mutableListOf<MultiviewPluginSearchResult>()
+            val entries = pluginRepositories.flatMap { repo ->
+                repo.plugins.filter { entry ->
+                    entry.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(entry)
+                }.map { entry ->
+                    Triple(entry, viewModel.pluginManager.cloudStreamPluginId(entry), viewModel.pluginManager.cloudStreamRepositoryId(entry))
+                }
+            }.distinctBy { it.second }
+            entries.forEach { (entry, pluginId, repositoryId) ->
+                runCatching { viewModel.pluginManager.searchCloudStreamPlugin(entry, query, 1) }
+                    .getOrNull()?.items.orEmpty().forEach { item ->
+                        results += MultiviewPluginSearchResult(pluginId, repositoryId, entry.url, item)
+                    }
+            }
+            pluginSearchResults = results
+            pluginSearchLoading = false
+        }
+    }
+
+    fun playPluginSearchResult(index: Int, result: MultiviewPluginSearchResult) {
+        val item = MediaItem(
+            id = "multiview-cloudstream:${java.util.UUID.randomUUID()}",
+            profileId = activeProfile?.id ?: "multiview",
+            title = result.item.title,
+            url = result.item.url,
+            thumbnailUrl = result.item.posterUrl.orEmpty(),
+            type = "CLOUDSTREAM",
+            sourceType = "CLOUDSTREAM",
+            category = "CloudStream",
+            sourceUrl = result.sourceUrl,
+            pluginId = result.pluginId,
+            repositoryId = result.repositoryId,
+            extraInfo = org.json.JSONObject().put("providerName", result.item.providerName).toString()
+        )
+        scope.launch {
+            resolveAndPlay(
+                index,
+                MultiviewSourceRequest(
+                    kind = MultiviewSourceKind.CLOUDSTREAM,
+                    mediaItem = item,
+                    displayName = item.title
+                )
+            )
+        }
     }
 
     fun setAudioFocus(index: Int) {
@@ -330,6 +397,50 @@ fun MultiviewScreen(
                             Icon(Icons.Default.FolderOpen, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Pilih file dari File Manager")
+                        }
+                    }
+                    if (pickerKind == MultiviewSourceKind.CLOUDSTREAM) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = pluginQuery,
+                                onValueChange = { pluginQuery = it },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                label = { Text("Cari di plugin terpasang") }
+                            )
+                            IconButton(onClick = { searchCloudStreamPlugins() }, enabled = pluginQuery.isNotBlank() && !pluginSearchLoading) {
+                                Icon(Icons.Default.Search, contentDescription = "Cari plugin")
+                            }
+                        }
+                        if (pluginSearchLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                        if (pluginSearchResults.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.heightIn(max = 190.dp).verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                pluginSearchResults.take(25).forEach { result ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().clickable(enabled = busySlot == null) {
+                                            playPluginSearchResult(selectedIndex, result)
+                                        },
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                                            Text(result.item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(
+                                                "${result.item.pluginName} • ${result.item.providerName}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     if (kindItems.isEmpty()) {
