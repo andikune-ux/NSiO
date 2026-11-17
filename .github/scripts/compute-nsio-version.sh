@@ -49,6 +49,43 @@ major = base_major + month_delta + overhaul_count
 day = today.day
 day_of_year = today.timetuple().tm_yday
 commit = int(commit_text)
+
+# Keep published release versions monotonic even when the main-branch commit
+# ordinal is lower than a release previously published from another branch.
+# Re-runs of the exact same source commit reuse its existing release version.
+import subprocess
+tags = subprocess.run(
+    ["git", "tag", "--list", "v.*"],
+    check=True, capture_output=True, text=True
+).stdout.splitlines()
+
+def parse_tag(tag):
+    value = tag.strip()
+    if value.startswith(("v.", "V.")):
+        value = value[2:]
+    elif value.startswith(("v", "V")):
+        value = value[1:]
+    parts = value.split(".")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(map(int, parts))
+
+source_tags = subprocess.run(
+    ["git", "tag", "--points-at", source_sha],
+    check=True, capture_output=True, text=True
+).stdout.splitlines()
+source_versions = [parse_tag(tag) for tag in source_tags]
+source_versions = [v for v in source_versions if v and v[0] == major and v[1] == day]
+if source_versions:
+    commit = max(source_versions)[2]
+else:
+    existing_ordinals = [
+        parsed[2] for tag in tags
+        if (parsed := parse_tag(tag)) is not None
+        and parsed[0] == major and parsed[1] == day
+    ]
+    commit = max(commit, max(existing_ordinals, default=0) + 1)
+
 # Collision-safe monotonic Android encoding:
 # MAJOR block (50M) + day-of-year block (100K) + repository commit ordinal.
 version_code = major * 50_000_000 + day_of_year * 100_000 + commit
