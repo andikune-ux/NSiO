@@ -233,7 +233,7 @@ fun HomeScreen(
                 item.title.contains(searchQuery, ignoreCase = true) ||
                 item.category.contains(searchQuery, ignoreCase = true)
         val matchesExpandedSource = expandedSourceType == null || item.sourceType.equals(expandedSourceType, ignoreCase = true)
-        val matchesVideoCategories = selectedVideoFilters.all { category -> matchesVideoCategory(category, "${item.type} ${item.category} ${item.title}") }
+        val matchesVideoCategories = selectedVideoFilters.isEmpty() || selectedVideoFilters.any { category -> matchesVideoCategory(category, "${item.type} ${item.category} ${item.title}") }
         val isDriveMedia = MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
         val matchesFilter = when (selectedFilter) {
             "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"

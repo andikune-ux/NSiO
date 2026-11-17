@@ -1520,7 +1520,7 @@ fun CloudStreamSearchPanel(
             }
         }
         results.filter { (entry, result) ->
-            selectedVideoFilters.all { category ->
+            selectedVideoFilters.isEmpty() || selectedVideoFilters.any { category ->
                 val metadata = "${result.contentType.orEmpty()} ${result.providerName} ${result.pluginName} ${result.title} ${entry.language}".lowercase()
                 when (category) {
                     "Movie" -> metadata.contains("movie") || metadata.contains("film")
