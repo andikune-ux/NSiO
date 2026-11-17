@@ -97,6 +97,7 @@ private data class MultiviewSlotUi(
     val error: String? = null
 )
 
+@UnstableApi
 @Composable
 fun MultiviewScreen(
     viewModel: MainViewModel,
