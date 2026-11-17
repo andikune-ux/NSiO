@@ -1779,7 +1779,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sourceUrl = entry.url,
                     pluginId = pluginId,
                     repositoryId = repositoryId,
-                    progressMs = previous?.progressMs ?: 0L,
+                    // A completed episode starts from zero when the user chooses to watch it again.
+                    progressMs = previous?.let { saved ->
+                        if (saved.durationMs > 0L && saved.progressMs >= (saved.durationMs * 0.95).toLong()) 0L
+                        else saved.progressMs.coerceAtLeast(0L)
+                    } ?: 0L,
                     durationMs = maxOf(previous?.durationMs ?: 0L, durationMs.coerceAtLeast(0L)),
                     lastWatchedAt = previous?.lastWatchedAt ?: 0L,
                     isFavorite = previous?.isFavorite ?: false,
