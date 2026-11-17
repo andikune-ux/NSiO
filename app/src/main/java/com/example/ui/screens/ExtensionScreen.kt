@@ -1251,6 +1251,8 @@ fun CloudStreamSearchPanel(
     enableSearch: Boolean = true
 ) {
     val trailerContext = LocalContext.current
+    val cloudStreamHistoryItems by viewModel.mediaList.collectAsState()
+    val activeCloudStreamProfile by viewModel.activeProfile.collectAsState()
     var loadingHomeCatalog by remember { mutableStateOf(false) }
     var savingHomeCatalog by remember { mutableStateOf(false) }
     var homeCatalogMessage by remember { mutableStateOf("") }
@@ -2137,12 +2139,30 @@ fun CloudStreamSearchPanel(
                     )
                 }
                 visibleEpisodes.forEachIndexed { index, episode ->
+                    val episodeHistoryId = activeCloudStreamProfile?.id?.let { profileId ->
+                        val pluginId = viewModel.pluginManager.cloudStreamPluginId(entry)
+                        val stableKey = "$profileId|$pluginId|${content.providerName}|${content.url}|${episode.data}"
+                        java.util.UUID.nameUUIDFromBytes(stableKey.toByteArray(Charsets.UTF_8)).toString()
+                    }
+                    val episodeHistory = episodeHistoryId?.let { id -> cloudStreamHistoryItems.firstOrNull { it.id == id } }
+                    val watchedProgress = episodeHistory?.progressMs?.coerceAtLeast(0L) ?: 0L
+                    val watchedDuration = maxOf(episodeHistory?.durationMs ?: 0L, (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L)
+                    val isEpisodeComplete = watchedDuration > 0L && watchedProgress >= (watchedDuration * 0.95).toLong()
+                    val progressPercent = if (watchedDuration > 0L) ((watchedProgress * 100L) / watchedDuration).toInt().coerceIn(0, 100) else 0
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(episode.posterUrl), contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                             listOfNotNull(episode.dubStatus?.let { if (it.equals("Subbed", true)) "Subbed" else if (it.equals("Dubbed", true)) "Dubbed" else it }, episode.runtimeSeconds?.takeIf { it > 0 }?.let { "${it / 60} menit" }, episode.rating?.takeIf { it > 0 }?.let { "Rating " + String.format("%.1f", it / 1000f) }, episode.date?.let { java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if (watchedProgress > 0L) {
+                                Text(
+                                    if (isEpisodeComplete) "✓ Selesai ditonton" else "Sedang ditonton • $progressPercent%",
+                                    fontSize = 8.sp,
+                                    color = if (isEpisodeComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                         TextButton(
                             enabled = !resolvingLinks,
@@ -2162,7 +2182,7 @@ fun CloudStreamSearchPanel(
                                     (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L
                                 )
                             }
-                        ) { Text("Link", fontSize = 10.sp) }
+                        ) { Text(if (isEpisodeComplete) "Putar ulang" else if (watchedProgress > 0L) "Lanjutkan" else "Link", fontSize = 10.sp) }
                     }
                 }
             }
