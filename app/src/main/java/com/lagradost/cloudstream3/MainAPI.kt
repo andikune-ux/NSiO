@@ -733,6 +733,21 @@ data class SubtitleFile @Deprecated("Use newSubtitleFile", level = DeprecationLe
     var headers: Map<String, String>? = null
 )
 
+/** Separate audio file supplied by a CloudStream extractor link. */
+data class AudioFile internal constructor(
+    @JsonProperty("url") var url: String,
+    @JsonProperty("headers") var headers: Map<String, String>? = null
+)
+
+suspend fun newAudioFile(
+    url: String,
+    initializer: suspend AudioFile.() -> Unit = {}
+): AudioFile {
+    val builder = AudioFile(url)
+    builder.initializer()
+    return builder
+}
+
 suspend fun newSubtitleFile(
     lang: String,
     url: String,

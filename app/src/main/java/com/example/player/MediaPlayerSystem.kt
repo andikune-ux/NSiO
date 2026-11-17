@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
@@ -181,7 +182,6 @@ class CS3IPlayer(
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private var externalAudioUri: Uri? = null
     private var externalAudioName: String? = null
-    private var pendingExternalAudioAutoSelect = false
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
     private var bufferingStartedAtMs: Long = 0L
     private var bufferingFallbackRequestedForUrl: String? = null
@@ -228,7 +228,8 @@ class CS3IPlayer(
 
     private fun createHttpDataSourceFactory(
         interceptor: okhttp3.Interceptor?,
-        subtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+        subtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
+        additionalHeaders: Map<String, String> = emptyMap()
     ): HttpDataSource.Factory {
         val baseHeaders = mapOf(
             "Accept" to "*/*",
@@ -261,9 +262,15 @@ class CS3IPlayer(
 
         // CloudStream uses OkHttpDataSource for online playback even when a plugin
         // does not supply a custom video interceptor. Keep the same behavior here.
+        val requestProperties = baseHeaders.toMutableMap().apply {
+            additionalHeaders.forEach { (name, value) ->
+                keys.filter { it.equals(name, ignoreCase = true) }.forEach(::remove)
+                put(name, value)
+            }
+        }
         return OkHttpDataSource.Factory(client)
             .setUserAgent(STANDARD_USER_AGENT)
-            .setDefaultRequestProperties(baseHeaders)
+            .setDefaultRequestProperties(requestProperties)
     }
 
     private fun ensureMediaSessionServiceStarted() {
@@ -506,26 +513,6 @@ class CS3IPlayer(
                     C.TRACK_TYPE_AUDIO -> audio += option
                     C.TRACK_TYPE_TEXT -> subtitles += option
                     C.TRACK_TYPE_VIDEO -> video += option
-                }
-            }
-        }
-        val externalAudioGroupIndex = if (externalAudioUri != null) audio.maxOfOrNull { it.groupIndex } else null
-        if (externalAudioGroupIndex != null) {
-            audio.indices.forEach { index ->
-                if (audio[index].groupIndex == externalAudioGroupIndex) {
-                    audio[index] = audio[index].copy(label = "Audio eksternal · ${audio[index].label}")
-                }
-            }
-            if (pendingExternalAudioAutoSelect) {
-                val externalTrack = audio.firstOrNull { it.groupIndex == externalAudioGroupIndex }
-                val group = externalTrack?.let { player.currentTracks.groups.getOrNull(it.groupIndex) }
-                if (externalTrack != null && group != null) {
-                    pendingExternalAudioAutoSelect = false
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                        .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(externalTrack.trackIndex)))
-                        .build()
                 }
             }
         }
@@ -790,6 +777,72 @@ class CS3IPlayer(
                 .build()
         }
 
+    private fun resolvePluginAudioMimeType(url: String): String? = when (
+        Uri.parse(url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase()
+    ) {
+        "m3u8" -> "application/x-mpegURL"
+        "mpd" -> "application/dash+xml"
+        "mp3" -> "audio/mpeg"
+        "m4a", "mp4" -> "audio/mp4"
+        "aac" -> "audio/aac"
+        "ogg", "oga" -> "audio/ogg"
+        "opus" -> "audio/opus"
+        "flac" -> "audio/flac"
+        "wav" -> "audio/wav"
+        "weba", "webm" -> "audio/webm"
+        else -> null
+    }
+
+    /**
+     * Mirrors CloudStream's getAudioSources(): each plugin-provided audio file
+     * gets its own HTTP factory so its headers are not replaced by video headers.
+     */
+    private fun createPluginAudioSources(
+        videoUrl: String,
+        videoHeaders: Map<String, String>,
+        interceptor: okhttp3.Interceptor?,
+        pluginStreams: List<com.example.data.plugin.CloudStreamStream>
+    ): List<MediaSource> {
+        val activeStream = pluginStreams.firstOrNull {
+            normalizePlaybackUrl(it.url) == normalizePlaybackUrl(videoUrl) &&
+                buildStreamHeaders(it).all { (name, value) ->
+                    videoHeaders.entries.any { entry -> entry.key.equals(name, true) && entry.value == value }
+                }
+        } ?: pluginStreams.firstOrNull {
+            normalizePlaybackUrl(it.url) == normalizePlaybackUrl(videoUrl)
+        } ?: return emptyList()
+
+        return activeStream.audioTracks.mapIndexedNotNull { index, audio ->
+            if (audio.url.isBlank()) return@mapIndexedNotNull null
+            runCatching {
+                val audioHeaders = videoHeaders.toMutableMap().apply {
+                    audio.headers.forEach { (name, value) ->
+                        keys.filter { it.equals(name, ignoreCase = true) }.forEach(::remove)
+                        put(name, value)
+                    }
+                }
+                val audioHttpFactory = createHttpDataSourceFactory(
+                    interceptor = interceptor,
+                    additionalHeaders = audioHeaders
+                )
+                val audioDataSourceFactory = DefaultDataSource.Factory(context, audioHttpFactory)
+                val audioSourceFactory = DefaultMediaSourceFactory(context)
+                    .setDataSourceFactory(audioDataSourceFactory)
+                val audioItemBuilder = ExoMediaItem.Builder()
+                    .setUri(audio.url)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle("Audio tambahan ${index + 1}")
+                            .build()
+                    )
+                resolvePluginAudioMimeType(audio.url)?.let(audioItemBuilder::setMimeType)
+                audioSourceFactory.createMediaSource(audioItemBuilder.build())
+            }.onFailure { error ->
+                Log.w("NSiOPlayer", "Unable to create CloudStream audio track ${index + 1}", error)
+            }.getOrNull()
+        }
+    }
+
     private fun playInternal(
         url: String,
         title: String,
@@ -873,19 +926,26 @@ class CS3IPlayer(
                     mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
                 }
                 val videoMediaItem = mediaItemBuilder.build()
-                val selectedExternalAudio = externalAudioUri
-                if (selectedExternalAudio != null) {
-                    val videoSource = mediaSourceFactory.createMediaSource(videoMediaItem)
-                    val audioMediaItemBuilder = ExoMediaItem.Builder()
-                        .setUri(selectedExternalAudio)
-                        .setMediaMetadata(MediaMetadata.Builder().setTitle(externalAudioName ?: "Audio eksternal").build())
-                    val audioMimeType = context.contentResolver.getType(selectedExternalAudio)
-                        ?: resolveExternalAudioMimeType(externalAudioName.orEmpty())
-                    audioMimeType?.let(audioMediaItemBuilder::setMimeType)
-                    val audioMediaItem = audioMediaItemBuilder.build()
-                    val externalAudioSource = mediaSourceFactory.createMediaSource(audioMediaItem)
-                    pendingExternalAudioAutoSelect = true
-                    player.setMediaSource(MergingMediaSource(videoSource, externalAudioSource))
+                val mergedSources = mutableListOf<MediaSource>()
+                val pluginAudioSources = createPluginAudioSources(
+                    videoUrl = url,
+                    videoHeaders = requestHeaders,
+                    interceptor = videoInterceptor,
+                    pluginStreams = pluginStreams
+                )
+                if (pluginAudioSources.isNotEmpty() || externalAudioUri != null) {
+                    mergedSources += mediaSourceFactory.createMediaSource(videoMediaItem)
+                    mergedSources += pluginAudioSources
+                    externalAudioUri?.let { selectedExternalAudio ->
+                        val audioMediaItemBuilder = ExoMediaItem.Builder()
+                            .setUri(selectedExternalAudio)
+                            .setMediaMetadata(MediaMetadata.Builder().setTitle(externalAudioName ?: "Audio eksternal").build())
+                        val audioMimeType = context.contentResolver.getType(selectedExternalAudio)
+                            ?: resolveExternalAudioMimeType(externalAudioName.orEmpty())
+                        audioMimeType?.let(audioMediaItemBuilder::setMimeType)
+                        mergedSources += mediaSourceFactory.createMediaSource(audioMediaItemBuilder.build())
+                    }
+                    player.setMediaSource(MergingMediaSource(*mergedSources.toTypedArray()))
                 } else {
                     player.setMediaItem(videoMediaItem)
                 }
@@ -920,7 +980,6 @@ class CS3IPlayer(
     override fun clearExternalAudioTrack() {
         externalAudioUri = null
         externalAudioName = null
-        pendingExternalAudioAutoSelect = false
         if (lastUrl.isNotBlank()) {
             val position = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
             playInternal(lastUrl, lastTitle, position.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
@@ -985,7 +1044,6 @@ class CS3IPlayer(
         userExternalSubtitles.clear()
         externalAudioUri = null
         externalAudioName = null
-        pendingExternalAudioAutoSelect = false
         activeDrmSessionManager = null
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         _playerState.value = PlayerState(

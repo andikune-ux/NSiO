@@ -1,6 +1,8 @@
 package com.lagradost.cloudstream3.utils
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.lagradost.cloudstream3.AudioFile
 import com.lagradost.cloudstream3.IDownloadableMinimum
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT
@@ -489,6 +491,10 @@ open class ExtractorLink constructor(
     open var extractorData: String? = null,
     open var type: ExtractorLinkType,
 ) : IDownloadableMinimum {
+    /** Extra audio-only sources merged into this video by the player. */
+    @JsonProperty("audioTracks")
+    open var audioTracks: List<AudioFile> = emptyList()
+
     val isM3u8: Boolean get() = type == ExtractorLinkType.M3U8
     val isDash: Boolean get() = type == ExtractorLinkType.DASH
 

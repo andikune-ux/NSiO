@@ -140,6 +140,11 @@ data class CloudStreamDrm(
     val keyRequestParameters: Map<String, String> = emptyMap()
 )
 
+data class CloudStreamAudioTrack(
+    val url: String,
+    val headers: Map<String, String> = emptyMap()
+)
+
 data class CloudStreamStream(
     val pluginName: String,
     val providerName: String,
@@ -151,6 +156,7 @@ data class CloudStreamStream(
     val quality: Int,
     val streamType: String,
     val subtitles: List<CloudStreamSubtitle> = emptyList(),
+    val audioTracks: List<CloudStreamAudioTrack> = emptyList(),
     val extractorData: String? = null,
     val videoInterceptor: okhttp3.Interceptor? = null,
     val drm: CloudStreamDrm? = null
@@ -453,6 +459,9 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 quality = link.quality,
                 streamType = link.type.toString(),
                 subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
+                audioTracks = link.audioTracks.mapNotNull { audio ->
+                    audio.url.takeIf { it.isNotBlank() }?.let { CloudStreamAudioTrack(it, audio.headers.orEmpty()) }
+                },
                 extractorData = link.extractorData,
                 videoInterceptor = runCatching { api.getVideoInterceptor(link) }.getOrNull(),
                 drm = (link as? DrmExtractorLink)?.let { drmLink ->
@@ -543,6 +552,9 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 quality = link.quality,
                 streamType = link.type.toString(),
                 subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
+                audioTracks = link.audioTracks.mapNotNull { audio ->
+                    audio.url.takeIf { it.isNotBlank() }?.let { CloudStreamAudioTrack(it, audio.headers.orEmpty()) }
+                },
                 extractorData = link.extractorData,
                 videoInterceptor = runCatching { api?.getVideoInterceptor(link) }.getOrNull()
             )
