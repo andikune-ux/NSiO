@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
@@ -111,6 +112,7 @@ import com.example.ui.theme.CyanPrimary
 fun HomeScreen(
     viewModel: MainViewModel,
     onNavigateToExtension: () -> Unit,
+    onNavigateToMultiview: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val mediaList by viewModel.mediaList.collectAsState()
@@ -1176,6 +1178,24 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.padding(end = 8.dp, bottom = if (isPhoneLayout) 72.dp else 12.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF17364A).copy(alpha = 0.88f) else Color(0xFFE4F7FF))
+                                .border(1.dp, Color(0xFF66D9FF).copy(alpha = 0.65f), CircleShape)
+                                .clickable(onClick = onNavigateToMultiview)
+                                .liquidGlassTvFocusable(shape = CircleShape)
+                                .testTag("floating_multiview_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.GridView,
+                                contentDescription = "Buka Multiview",
+                                tint = if (isDark) Color(0xFF9CEBFF) else Color(0xFF087EAD),
+                                modifier = Modifier.size(25.dp)
+                            )
+                        }
                         androidx.compose.animation.AnimatedVisibility(
                             visible = showPlaylistPicker,
                             enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
