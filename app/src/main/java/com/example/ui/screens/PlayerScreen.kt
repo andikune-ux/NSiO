@@ -1285,7 +1285,7 @@ fun PlayerScreen(
                                     val repeatB = playerState.repeatB
                                     Text(
                                         text = if (repeatA == null) "＋ Tandai titik A" else "✓ A · ${formatMs(repeatA)}",
-                                        color = if (playerState.repeatA == null) controlAccentColor else controlTextColor,
+                                        color = if (repeatA == null) controlAccentColor else controlTextColor,
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                             viewModel.player.setRepeatPointA()
@@ -1293,10 +1293,10 @@ fun PlayerScreen(
                                     )
                                     Text(
                                         text = if (repeatB == null) "＋ Tandai titik B" else "✓ B · ${formatMs(repeatB)}",
-                                        color = if (playerState.repeatB == null) controlAccentColor else controlTextColor,
+                                        color = if (repeatB == null) controlAccentColor else controlTextColor,
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                            .clickable(enabled = playerState.repeatA != null) { viewModel.player.setRepeatPointB() }
+                                            .clickable(enabled = repeatA != null) { viewModel.player.setRepeatPointB() }
                                             .padding(horizontal = 10.dp, vertical = 10.dp)
                                     )
                                     if (repeatA != null && repeatB != null) {
