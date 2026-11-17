@@ -7,6 +7,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.focusGroup
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1445,37 +1448,41 @@ fun CloudStreamSearchPanel(
         LaunchedEffect(searchRequest, enableSearch, selectedPluginFilter) {
             if (!enableSearch || searchRequest <= 0 || query.isBlank()) return@LaunchedEffect
             searching = true
-            results = emptyList()
-            searchNextPages = emptyMap()
-            selectedContent = null
-            streams = emptyList()
-            searchMessage = ""
-            val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
-            val nextPages = mutableMapOf<String, Int>()
-            val failures = mutableListOf<String>()
-            installedEntries.forEach { entry ->
-                runCatching {
-                    // searchCloudStreamPlugin obtains the installed artifact and the runtime
-                    // loads/activates it before invoking the provider search method.
-                    viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), 1)
-                }.onSuccess { page ->
-                    page.items.forEach { found.add(entry to it) }
-                    if (page.hasNext) nextPages[viewModel.pluginManager.cloudStreamPluginId(entry)] = 2
-                }.onFailure { error ->
-                    failures.add("${entry.name}: ${error.message ?: "gagal"}")
+            try {
+                results = emptyList()
+                searchNextPages = emptyMap()
+                selectedContent = null
+                streams = emptyList()
+                searchMessage = ""
+                val found = mutableListOf<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamSearchItem>>()
+                val nextPages = mutableMapOf<String, Int>()
+                val failures = mutableListOf<String>()
+                installedEntries.forEach { entry ->
+                    currentCoroutineContext().ensureActive()
+                    try {
+                        // Search only the selected provider; its runtime is activated on demand.
+                        val page = viewModel.pluginManager.searchCloudStreamPlugin(entry, query.trim(), 1)
+                        page.items.forEach { found.add(entry to it) }
+                        if (page.hasNext) nextPages[viewModel.pluginManager.cloudStreamPluginId(entry)] = 2
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        failures.add("${entry.name}: ${error.message ?: "gagal"}")
+                    }
                 }
+                results = found
+                searchNextPages = nextPages
+                searchMessage = when {
+                    found.isNotEmpty() && failures.isNotEmpty() ->
+                        "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
+                    found.isNotEmpty() -> "Ditemukan ${found.size} hasil dari pencarian CloudStream."
+                    installedEntries.isEmpty() -> "Pilih satu plugin CloudStream pada filter Home untuk mencari hanya dari plugin tersebut."
+                    failures.isNotEmpty() -> failures.take(2).joinToString(" • ")
+                    else -> "Tidak ada hasil CloudStream untuk kata kunci ini."
+                }
+            } finally {
+                searching = false
             }
-            results = found
-            searchNextPages = nextPages
-            searchMessage = when {
-                found.isNotEmpty() && failures.isNotEmpty() ->
-                    "Ditemukan ${found.size} hasil. ${failures.size} plugin gagal merespons."
-                found.isNotEmpty() -> "Ditemukan ${found.size} hasil dari pencarian CloudStream."
-                installedEntries.isEmpty() -> "Pilih satu plugin CloudStream pada filter Home untuk mencari hanya dari plugin tersebut."
-                failures.isNotEmpty() -> failures.take(2).joinToString(" • ")
-                else -> "Tidak ada hasil CloudStream untuk kata kunci ini."
-            }
-            searching = false
         }
         if (searching) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
