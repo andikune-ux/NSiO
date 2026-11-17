@@ -2,7 +2,7 @@ name: 🚀 NSiO • Build, Test & Release
 
 on:
   push:
-    branches: [ main, feature/multiview-integration ]
+    branches: [ main, feature/multiview-integration, optimization/safe-dependency-cleanup ]
   workflow_dispatch:
 
 permissions:
