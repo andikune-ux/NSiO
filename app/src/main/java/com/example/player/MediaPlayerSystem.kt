@@ -76,6 +76,8 @@ data class PlayerState(
     val selectedPluginStreamUrl: String? = null,
     val audioDelayMs: Int = 0,
     val subtitleDelayMs: Int = 0,
+    val repeatA: Long? = null,
+    val repeatB: Long? = null,
     val audioCompressorEnabled: Boolean = false,
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
@@ -95,6 +97,9 @@ interface IPlayer {
     fun setPlaybackSpeed(speed: Float)
     fun setAudioDelay(delayMs: Int)
     fun setSubtitleDelay(delayMs: Int)
+    fun setRepeatPointA()
+    fun setRepeatPointB()
+    fun clearABRepeat()
     fun setAudioCompressorEnabled(enabled: Boolean)
     fun setPreferredAudioLanguage(language: String?)
     fun setPreferredSubtitleLanguage(language: String?)
@@ -167,6 +172,8 @@ class CS3IPlayer(
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
     private var subtitleDelayMs: Int = 0
+    private var repeatPointA: Long? = null
+    private var repeatPointB: Long? = null
     private var audioCompressorEnabled: Boolean = false
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
@@ -615,6 +622,16 @@ class CS3IPlayer(
                         bufferingStartedAtMs = 0L
                         bufferingFallbackRequestedForUrl = null
                     }
+                    // A-B repeat: seek back to A as soon as playback reaches B.
+                    val pointA = repeatPointA
+                    val pointB = repeatPointB
+                    if (player.isPlaying && pointA != null && pointB != null &&
+                        player.currentPosition >= pointB
+                    ) {
+                        player.seekTo(pointA)
+                        lastPositionMs = pointA
+                        _playerState.value = _playerState.value.copy(currentPositionMs = pointA)
+                    }
                     // Duration is available at READY even while paused.
                     if (player.playbackState == Player.STATE_READY) {
                         _playerState.value = _playerState.value.copy(
@@ -718,6 +735,9 @@ class CS3IPlayer(
         if (lastTitle.isNotBlank() && title != lastTitle) userExternalSubtitles.clear()
         lastUrl = url
         lastTitle = title
+        repeatPointA = null
+        repeatPointB = null
+        _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
         lastPositionMs = startPositionMs
         lastHeaders = requestHeaders
         lastMimeType = mimeType
@@ -893,6 +913,30 @@ class CS3IPlayer(
             lastPositionMs = target
             _playerState.value = _playerState.value.copy(currentPositionMs = target)
         }
+    }
+
+    override fun setRepeatPointA() {
+        val player = exoPlayer ?: return
+        if (!player.isCurrentMediaItemSeekable) return
+        repeatPointA = player.currentPosition.coerceAtLeast(0L)
+        repeatPointB = null
+        _playerState.value = _playerState.value.copy(repeatA = repeatPointA, repeatB = null)
+    }
+
+    override fun setRepeatPointB() {
+        val player = exoPlayer ?: return
+        if (!player.isCurrentMediaItemSeekable) return
+        val pointA = repeatPointA ?: return
+        val pointB = player.currentPosition.coerceAtLeast(0L)
+        if (pointB - pointA < 500L) return
+        repeatPointB = pointB
+        _playerState.value = _playerState.value.copy(repeatB = pointB)
+    }
+
+    override fun clearABRepeat() {
+        repeatPointA = null
+        repeatPointB = null
+        _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
     }
 
     override fun setPlaybackSpeed(speed: Float) {
