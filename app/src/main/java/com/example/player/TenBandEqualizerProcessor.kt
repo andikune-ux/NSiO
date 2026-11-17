@@ -39,7 +39,7 @@ class TenBandEqualizerProcessor(initialGainsDb: FloatArray = FloatArray(10)) : B
         updateCoefficients()
     }
 
-    fun reset() {
+    override fun reset() {
         gainsDb = FloatArray(10)
         updateCoefficients()
         clearFilterState()
