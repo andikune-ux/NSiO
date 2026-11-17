@@ -146,7 +146,8 @@ import java.util.Locale
 fun PlayerScreen(
     media: MediaItem,
     viewModel: MainViewModel,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    isInPipMode: Boolean = false
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
     val playbackPreparationMessage by viewModel.playbackPreparationMessage.collectAsState()
@@ -748,7 +749,7 @@ fun PlayerScreen(
 
         // Custom iOS 26 Liquid Glass Player Controls Overlay
         AnimatedVisibility(
-            visible = showControls && playerState.error == null,
+            visible = showControls && playerState.error == null && !isInPipMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
