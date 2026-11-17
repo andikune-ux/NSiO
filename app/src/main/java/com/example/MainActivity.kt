@@ -225,21 +225,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
     val statusMessage by viewModel.statusMessage.collectAsState()
     var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
     var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
-    var startupUpdate by remember { mutableStateOf<com.example.update.AppUpdateManager.Release?>(null) }
-    var showStartupUpdateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // CloudStreamXR reference behavior: check for a newer release asynchronously
-    // when the main app session starts, without blocking the home screen.
-    LaunchedEffect(Unit) {
-        runCatching { com.example.update.AppUpdateManager.checkLatest() }
-            .onSuccess { release ->
-                if (release.available) {
-                    startupUpdate = release
-                    showStartupUpdateDialog = true
-                }
-            }
-    }
 
     LaunchedEffect(settings.displayMode) {
         (context as? Activity)?.requestedOrientation = when (settings.displayMode) {
@@ -263,30 +249,6 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
             Box(Modifier.fillMaxSize()) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
-                if (showStartupUpdateDialog && startupUpdate != null && currentlyPlaying == null) {
-                    val release = startupUpdate!!
-                    AlertDialog(
-                        onDismissRequest = { showStartupUpdateDialog = false },
-                        title = { Text("Pembaruan NSiO tersedia") },
-                        text = {
-                            Column {
-                                Text("Versi ${release.latestVersion} tersedia (saat ini ${release.currentVersion}).")
-                                if (release.notes.isNotBlank()) {
-                                    Text(release.notes, modifier = Modifier.padding(top = 8.dp))
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            Button(onClick = {
-                                showStartupUpdateDialog = false
-                                currentNav = NavDestination.SETTINGS
-                            }) { Text("Lihat pembaruan") }
-                        },
-                        dismissButton = {
-                            Button(onClick = { showStartupUpdateDialog = false }) { Text("Nanti") }
-                        }
-                    )
-                }
                 if (currentlyPlaying != null) {
                     PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() }, isInPipMode = isPipMode)
                 } else {
