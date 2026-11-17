@@ -237,19 +237,36 @@ fun MultiviewScreen(
     }
 
     suspend fun resolveAndPlay(index: Int, request: MultiviewSourceRequest) {
-        players[index].stop()
-        slots[index] = MultiviewSlotUi(status = MultiviewSlotStatus.RESOLVING)
-        setAudioFocus(audioSlot)
+        if (index !in 0..3 || busySlot != null) return
+        val previousSlot = slots[index]
         busySlot = index
-        when (val result = registry.resolve(request)) {
-            is MultiviewResolveResult.Success -> startResolvedSource(index, result.source)
-            is MultiviewResolveResult.Failure -> {
-                slots[index] = MultiviewSlotUi(status = MultiviewSlotStatus.ERROR, error = result.reason)
-                setAudioFocus(audioSlot)
+        slots[index] = previousSlot.copy(status = MultiviewSlotStatus.RESOLVING, error = null)
+        try {
+            when (val result = registry.resolve(request)) {
+                is MultiviewResolveResult.Success -> {
+                    // Keep the previous stream alive while the new source resolves.
+                    // Replace it only after resolution succeeds, so a failed source
+                    // selection does not destroy a video that was already playing.
+                    players[index].stop()
+                    startResolvedSource(index, result.source)
+                    pickerSlot = null
+                }
+                is MultiviewResolveResult.Failure -> {
+                    slots[index] = if (previousSlot.source != null) previousSlot else {
+                        MultiviewSlotUi(status = MultiviewSlotStatus.ERROR, error = result.reason)
+                    }
+                    if (previousSlot.source == null) {
+                        slots[index] = slots[index].copy(error = result.reason)
+                    }
+                    setAudioFocus(audioSlot)
+                }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            slots[index] = previousSlot
+            throw cancelled
+        } finally {
+            if (busySlot == index) busySlot = null
         }
-        busySlot = null
-        pickerSlot = null
     }
 
     fun playPluginSearchResult(index: Int, result: MultiviewPluginSearchResult) {
