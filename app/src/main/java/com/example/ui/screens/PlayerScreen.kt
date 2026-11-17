@@ -1031,6 +1031,7 @@ fun PlayerScreen(
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
+                                "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
                                 "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%",
                                 "Warna subtitle" to when (subtitleTextColor) {
@@ -1188,6 +1189,25 @@ fun PlayerScreen(
                                             fontSize = 12.sp,
                                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                                 viewModel.player.selectTrack(track)
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Kompresor audio" -> {
+                                    Text(
+                                        "Mengurangi lonjakan suara keras dan membantu dialog lebih terdengar. Efek bekerja pada audio PCM; format passthrough/encoded tidak diproses.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    listOf(false, true).forEach { enabled ->
+                                        Text(
+                                            text = (if (playerState.audioCompressorEnabled == enabled) "✓ " else "") + if (enabled) "Aktif" else "Mati",
+                                            color = if (playerState.audioCompressorEnabled == enabled) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                viewModel.player.setAudioCompressorEnabled(enabled)
                                                 selectedPlayerSetting = null
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
