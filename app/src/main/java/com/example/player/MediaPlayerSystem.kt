@@ -451,11 +451,14 @@ class CS3IPlayer(
                 }
             }
         }
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         _playerState.value = _playerState.value.copy(
             audioTracks = audio,
             subtitleTracks = subtitles,
             videoTracks = video,
-            subtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+            subtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT),
+            preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
+            preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
         )
     }
 
@@ -803,7 +806,13 @@ class CS3IPlayer(
         lastExternalSubtitles = emptyList()
         userExternalSubtitles.clear()
         activeDrmSessionManager = null
-        _playerState.value = PlayerState(audioDelayMs = audioDelayMs)
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        _playerState.value = PlayerState(
+            audioDelayMs = audioDelayMs,
+            audioCompressorEnabled = audioCompressorEnabled,
+            preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
+            preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
+        )
     }
 
     override fun seekTo(positionMs: Long) {
