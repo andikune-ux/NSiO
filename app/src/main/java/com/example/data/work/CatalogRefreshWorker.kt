@@ -164,13 +164,6 @@ class CatalogRefreshWorker(
                 }
             }
         } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        failures++
-                    }
-                }
-            }
-        } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             failures++
