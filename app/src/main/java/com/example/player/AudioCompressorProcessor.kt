@@ -7,7 +7,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Lightweight dialogue-oriented dynamic range compressor for decoded PCM.
@@ -45,7 +44,7 @@ class AudioCompressorProcessor(
         val sampleCount = inputBuffer.remaining() / bytesPerSample
         if (sampleCount <= 0 || channels <= 0 || sampleRate <= 0) return
 
-        val output = replaceOutputBuffer(sampleCount * bytesPerSample)
+        val output = replaceOutputBuffer(sampleCount * bytesPerSample).order(ByteOrder.LITTLE_ENDIAN)
         val data = inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
         val attack = 1f - kotlin.math.exp(-1f / (sampleRate * 0.008f))
         val release = 1f - kotlin.math.exp(-1f / (sampleRate * 0.120f))
