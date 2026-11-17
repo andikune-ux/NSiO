@@ -181,15 +181,26 @@ fun PlayerScreen(
     var subtitleScale by remember(context) {
         mutableStateOf(playerPreferences.getFloat("subtitle_scale", 1f).coerceIn(0.75f, 1.5f))
     }
+    var subtitleTextColor by remember(context) {
+        mutableStateOf(playerPreferences.getInt("subtitle_text_color", android.graphics.Color.WHITE))
+    }
+    var subtitleBackgroundColor by remember(context) {
+        mutableStateOf(playerPreferences.getInt("subtitle_background_color", android.graphics.Color.TRANSPARENT))
+    }
+    var subtitleBottomPadding by remember(context) {
+        mutableStateOf(playerPreferences.getFloat("subtitle_bottom_padding", 0.08f).coerceIn(0.02f, 0.35f))
+    }
     val externalSubtitlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
                 val mime = context.contentResolver.getType(uri)
                 val label = uri.lastPathSegment.orEmpty()
                     .substringAfterLast(':')
@@ -230,20 +241,24 @@ fun PlayerScreen(
         activeGesture = null
     }
 
-    LaunchedEffect(subtitleScale, playerViewRef) {
-        playerPreferences.edit().putFloat("subtitle_scale", subtitleScale).apply()
+    LaunchedEffect(subtitleScale, subtitleTextColor, subtitleBackgroundColor, subtitleBottomPadding, playerViewRef) {
+        playerPreferences.edit()
+            .putFloat("subtitle_scale", subtitleScale)
+            .putInt("subtitle_text_color", subtitleTextColor)
+            .putInt("subtitle_background_color", subtitleBackgroundColor)
+            .putFloat("subtitle_bottom_padding", subtitleBottomPadding)
+            .apply()
         playerViewRef?.subtitleView?.apply {
-            setStyle(
-                CaptionStyleCompat(
-                    android.graphics.Color.WHITE,
-                    android.graphics.Color.TRANSPARENT,
-                    android.graphics.Color.TRANSPARENT,
-                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                    android.graphics.Color.BLACK,
-                    null
-                )
-            )
+            setStyle(CaptionStyleCompat(
+                subtitleTextColor,
+                subtitleBackgroundColor,
+                android.graphics.Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                android.graphics.Color.BLACK,
+                null
+            ))
             setFractionalTextSize(0.055f * subtitleScale)
+            setBottomPaddingFraction(subtitleBottomPadding)
         }
     }
 
@@ -478,8 +493,8 @@ fun PlayerScreen(
                             playerViewRef = this
                             subtitleView?.apply {
                                 setStyle(CaptionStyleCompat(
-                                    android.graphics.Color.WHITE,
-                                    android.graphics.Color.TRANSPARENT,
+                                    subtitleTextColor,
+                                    subtitleBackgroundColor,
                                     android.graphics.Color.TRANSPARENT,
                                     CaptionStyleCompat.EDGE_TYPE_OUTLINE,
                                     android.graphics.Color.BLACK,
@@ -497,8 +512,8 @@ fun PlayerScreen(
                         playerViewRef = view
                         view.subtitleView?.apply {
                             setStyle(CaptionStyleCompat(
-                                android.graphics.Color.WHITE,
-                                android.graphics.Color.TRANSPARENT,
+                                subtitleTextColor,
+                                subtitleBackgroundColor,
                                 android.graphics.Color.TRANSPARENT,
                                 CaptionStyleCompat.EDGE_TYPE_OUTLINE,
                                 android.graphics.Color.BLACK,
@@ -928,7 +943,20 @@ fun PlayerScreen(
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
-                                "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%"
+                                "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%",
+                                "Warna subtitle" to when (subtitleTextColor) {
+                                    android.graphics.Color.YELLOW -> "Kuning"
+                                    android.graphics.Color.CYAN -> "Cyan"
+                                    android.graphics.Color.GREEN -> "Hijau"
+                                    else -> "Putih"
+                                },
+                                "Latar subtitle" to if (subtitleBackgroundColor == android.graphics.Color.TRANSPARENT) "Transparan" else "Gelap",
+                                "Posisi subtitle" to when {
+                                    subtitleBottomPadding < 0.07f -> "Bawah"
+                                    subtitleBottomPadding < 0.14f -> "Agak naik"
+                                    subtitleBottomPadding < 0.22f -> "Tengah bawah"
+                                    else -> "Tengah"
+                                }
                             ).forEach { (label, current) ->
                                 Text(
                                     text = "$label  ·  $current  ›",
@@ -1093,6 +1121,49 @@ fun PlayerScreen(
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
+                                }
+                                "Warna subtitle" -> listOf(
+                                    "Putih" to android.graphics.Color.WHITE,
+                                    "Kuning" to android.graphics.Color.YELLOW,
+                                    "Cyan" to android.graphics.Color.CYAN,
+                                    "Hijau" to android.graphics.Color.GREEN
+                                ).forEach { (label, color) ->
+                                    Text(
+                                        text = (if (subtitleTextColor == color) "✓ " else "") + label,
+                                        color = if (subtitleTextColor == color) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            subtitleTextColor = color
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Latar subtitle" -> listOf(
+                                    "Transparan" to android.graphics.Color.TRANSPARENT,
+                                    "Gelap" to android.graphics.Color.argb(165, 0, 0, 0)
+                                ).forEach { (label, color) ->
+                                    Text(
+                                        text = (if (subtitleBackgroundColor == color) "✓ " else "") + label,
+                                        color = if (subtitleBackgroundColor == color) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            subtitleBackgroundColor = color
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Posisi subtitle" -> listOf(
+                                    "Bawah" to 0.04f,
+                                    "Agak naik" to 0.10f,
+                                    "Tengah bawah" to 0.18f,
+                                    "Tengah" to 0.27f
+                                ).forEach { (label, padding) ->
+                                    Text(
+                                        text = (if (kotlin.math.abs(subtitleBottomPadding - padding) < 0.01f) "✓ " else "") + label,
+                                        color = if (kotlin.math.abs(subtitleBottomPadding - padding) < 0.01f) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            subtitleBottomPadding = padding
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
                                 }
                             }
                         }
