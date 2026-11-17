@@ -185,6 +185,7 @@ class CS3IPlayer(
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
     private var bufferingStartedAtMs: Long = 0L
     private var bufferingFallbackRequestedForUrl: String? = null
+    @Volatile private var mediaSessionServiceStartRequested = false
     @Volatile private var cloudStreamRefreshInProgress = false
 
     /** Called when resolved plugin URLs fail with an expired-link HTTP response. */
@@ -372,6 +373,11 @@ class CS3IPlayer(
                     }
 
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        // Start only after playback begins; buffering must not hold a foreground-service start open.
+                        if (isPlaying && !mediaSessionServiceStartRequested) {
+                            mediaSessionServiceStartRequested = true
+
+                        }
                         val position = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
                         if (!isPlaying) lastPositionMs = position
                         _playerState.value = _playerState.value.copy(
