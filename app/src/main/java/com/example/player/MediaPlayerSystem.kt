@@ -140,9 +140,12 @@ class CS3IPlayer(
 
     init {
         // Keep audio synchronization preference across app launches and player recreation.
-        audioDelayMs = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
-            .getInt("audio_delay_ms", 0)
-            .coerceIn(-2000, 2000)
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        audioDelayMs = preferences.getInt("audio_delay_ms", 0).coerceIn(-2000, 2000)
+        logicalRepeatMode = preferences.getInt("playback_repeat_mode", Player.REPEAT_MODE_OFF)
+            .takeIf { it in Player.REPEAT_MODE_OFF..Player.REPEAT_MODE_ALL }
+            ?: Player.REPEAT_MODE_OFF
+        logicalShuffleEnabled = preferences.getBoolean("playback_shuffle_enabled", false)
         initExoPlayer()
     }
 
@@ -860,12 +863,16 @@ class CS3IPlayer(
         }
         // The app queue owns repeat behavior; ExoPlayer has only the active resolved stream.
         exoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putInt("playback_repeat_mode", logicalRepeatMode).apply()
         _playerState.value = _playerState.value.copy(repeatMode = logicalRepeatMode)
     }
     override fun toggleShuffle() {
         logicalShuffleEnabled = !logicalShuffleEnabled
         // The app queue owns shuffle order; the single-item ExoPlayer playlist stays unshuffled.
         exoPlayer?.shuffleModeEnabled = false
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putBoolean("playback_shuffle_enabled", logicalShuffleEnabled).apply()
         _playerState.value = _playerState.value.copy(shuffleEnabled = logicalShuffleEnabled)
     }
     override fun setVolume(volume: Float) {
