@@ -1289,6 +1289,7 @@ fun CloudStreamSearchPanel(
     var resolvedPlaybackContentUrl by remember { mutableStateOf("") }
     var resolvedPlaybackProvider by remember { mutableStateOf("") }
     var resolvedPlaybackEntry by remember { mutableStateOf<com.example.data.plugin.CloudStreamPluginEntry?>(null) }
+    var resolvedPlaybackSkipMetadata by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var streams by remember {
         mutableStateOf<List<Pair<com.example.data.plugin.CloudStreamPluginEntry, com.example.data.plugin.CloudStreamStream>>>(emptyList())
     }
@@ -1427,7 +1428,8 @@ fun CloudStreamSearchPanel(
         contentUrl: String = selectedContent?.second?.url.orEmpty(),
         posterUrl: String? = selectedContent?.second?.posterUrl,
         durationMs: Long = if (target == "Film") (selectedContent?.second?.durationMinutes?.toLong() ?: 0L) * 60_000L else 0L,
-        autoPlay: Boolean = false
+        autoPlay: Boolean = false,
+        skipMetadata: Map<String, String> = selectedContent?.second?.externalIds.orEmpty()
     ) {
         resolvingLinks = true
         linkTarget = target
@@ -1438,6 +1440,7 @@ fun CloudStreamSearchPanel(
             else listOf(selectedContent?.second?.title, target).filterNotNull().filter { it.isNotBlank() }.joinToString(" • ")
         resolvedPlaybackPoster = posterUrl
         resolvedPlaybackDurationMs = durationMs.coerceAtLeast(0L)
+        resolvedPlaybackSkipMetadata = skipMetadata.filterValues { it.isNotBlank() }
         resolvedPlaybackContentUrl = contentUrl
         linkMessage = ""
         streams = emptyList()
@@ -1503,7 +1506,8 @@ fun CloudStreamSearchPanel(
                             extractorData = selectedStream.extractorData,
                             videoInterceptor = selectedStream.videoInterceptor,
                             availablePluginStreams = playable,
-                            category = "CloudStream • Film"
+                            category = "CloudStream • Film",
+                            skipMetadata = resolvedPlaybackSkipMetadata
                         )
                         linkMessage = "Memutar film melalui ${selectedStream.name.ifBlank { selectedStream.source }}."
                     }
@@ -2194,7 +2198,11 @@ fun CloudStreamSearchPanel(
                                     episodeLabel,
                                     content.url,
                                     episode.posterUrl ?: content.posterUrl,
-                                    (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L
+                                    (episode.runtimeSeconds?.toLong() ?: 0L) * 1_000L,
+                                    skipMetadata = content.externalIds + buildMap {
+                                        episode.season?.let { put("season", it.toString()) }
+                                        episode.episode?.let { put("episode", it.toString()) }
+                                    }
                                 )
                             }
                         ) { Text(if (isEpisodeComplete) "Putar ulang" else if (watchedProgress > 0L) "Lanjutkan" else "Link", fontSize = 10.sp) }
@@ -2284,7 +2292,8 @@ fun CloudStreamSearchPanel(
                                 externalSubtitles = stream.subtitles,
                                 extractorData = stream.extractorData,
                                 videoInterceptor = stream.videoInterceptor,
-                                availablePluginStreams = streams.map { it.second }
+                                availablePluginStreams = streams.map { it.second },
+                                skipMetadata = resolvedPlaybackSkipMetadata
                             )
                         }
                     }

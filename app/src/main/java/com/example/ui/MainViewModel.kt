@@ -1735,7 +1735,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         extractorData: String? = null,
         videoInterceptor: okhttp3.Interceptor? = null,
         availablePluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
-        category: String = "CloudStream • Episode"
+        category: String = "CloudStream • Episode",
+        skipMetadata: Map<String, String> = emptyMap()
     ) {
         val profileId = _activeProfile.value?.id ?: run {
             _currentlyPlaying.value = null
@@ -1766,6 +1767,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .put("kind", "cloudstream_episode")
                     .put("providerName", providerName)
                     .put("playbackData", playbackData)
+                    .put("skipMetadata", org.json.JSONObject(skipMetadata.filterValues { it.isNotBlank() }))
                     .toString()
                 val item = MediaItem(
                     id = mediaId,

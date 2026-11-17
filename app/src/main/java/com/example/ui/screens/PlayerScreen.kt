@@ -135,6 +135,8 @@ import androidx.media3.ui.CaptionStyleCompat
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.MediaItem
+import com.example.player.VideoSkipRepository
+import com.example.player.VideoSkipStamp
 import com.example.player.adjacentMedia
 import com.example.player.normalizePlaybackUrl
 import com.example.ui.MainViewModel
@@ -206,6 +208,8 @@ fun PlayerScreen(
     var isRewindingHeld by remember { mutableStateOf(false) }
     var isFastForwardHeld by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
+    var skipStamps by remember(media.id) { mutableStateOf<List<VideoSkipStamp>>(emptyList()) }
+    var skipStampLoadFinished by remember(media.id) { mutableStateOf(false) }
     var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
     var sleepTimerRemainingSeconds by remember { mutableStateOf(0L) }
     var sleepTimerDurationMinutes by remember { mutableStateOf(0) }
@@ -351,6 +355,17 @@ fun PlayerScreen(
             setFractionalTextSize(0.055f * subtitleScale)
             setBottomPaddingFraction(subtitleBottomPadding)
         }
+    }
+
+    // Resolve OP/ED/recap markers from the same public databases used by CloudStream.
+    // IDs and episode coordinates are passed through the plugin detail -> stream picker -> history.
+    LaunchedEffect(media.id, media.extraInfo, playerState.durationMs) {
+        skipStamps = emptyList()
+        skipStampLoadFinished = false
+        if (usesNativePlayer && playerState.durationMs > 0L && media.extraInfo.isNotBlank()) {
+            skipStamps = VideoSkipRepository.findStamps(media.extraInfo, playerState.durationMs)
+        }
+        skipStampLoadFinished = true
     }
 
     // Keep the scrubber in sync with playback, but never overwrite the user's drag preview.
@@ -1686,6 +1701,37 @@ fun PlayerScreen(
                     }
 
 
+                }
+
+                // CloudStream-style manual skip prompt: only appears while the playhead is inside a known segment.
+                val activeSkipStamp = if (skipStampLoadFinished && usesNativePlayer && !playerState.isLive) {
+                    skipStamps.firstOrNull { stamp ->
+                        playerState.currentPositionMs >= stamp.startMs &&
+                            playerState.currentPositionMs < (stamp.endMs - 1_000L).coerceAtLeast(stamp.startMs + 1L)
+                    }
+                } else null
+                if (activeSkipStamp != null && showControls && !controlsLocked) {
+                    Button(
+                        onClick = {
+                            viewModel.player.seekTo(activeSkipStamp.endMs.coerceAtMost(playerState.durationMs))
+                            revealControls()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 22.dp, bottom = 164.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.94f),
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            "Lewati ${activeSkipStamp.label}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
                 }
 
                 // Floating frame preview: extract the actual video frame at the seek timestamp.
