@@ -163,7 +163,8 @@ private fun resolveExternalAudioMimeType(displayName: String): String? = when (d
 @OptIn(UnstableApi::class)
 class CS3IPlayer(
     private val context: Context,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val manageMediaSessionService: Boolean = true
 ) : IPlayer {
 
     var exoPlayer: ExoPlayer? = null
@@ -389,7 +390,7 @@ class CS3IPlayer(
                         // Start the MediaSessionService only when playback is actually active.
                         // Calling startForegroundService while resolving/preparing a stream can
                         // exceed Android's foreground-service promotion deadline.
-                        if (isPlaying) ensureMediaSessionServiceStarted()
+                        if (isPlaying && manageMediaSessionService) ensureMediaSessionServiceStarted()
                         val position = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
                         if (!isPlaying) lastPositionMs = position
                         _playerState.value = _playerState.value.copy(
