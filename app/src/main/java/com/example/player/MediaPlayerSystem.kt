@@ -106,6 +106,7 @@ class CS3IPlayer(
     private var lastHeaders: Map<String, String> = emptyMap()
     private var lastMimeType: String? = null
     private var lastExternalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList()
+    private val userExternalSubtitles = mutableListOf<com.example.data.plugin.CloudStreamSubtitle>()
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
@@ -424,7 +425,9 @@ class CS3IPlayer(
             url = uri.toString(),
             mimeType = mimeType
         )
-        val updatedSubtitles = lastExternalSubtitles.filterNot { it.url == subtitle.url } + subtitle
+        userExternalSubtitles.removeAll { it.url == subtitle.url }
+        userExternalSubtitles.add(subtitle)
+        val updatedSubtitles = (lastExternalSubtitles + subtitle).distinctBy { it.url }
         val currentPosition = player.currentPosition.coerceAtLeast(0L)
         val wasPlaying = player.isPlaying
         lastExternalSubtitles = updatedSubtitles
@@ -564,7 +567,9 @@ class CS3IPlayer(
         lastPositionMs = startPositionMs
         lastHeaders = requestHeaders
         lastMimeType = mimeType
-        lastExternalSubtitles = externalSubtitles
+        if (lastTitle.isNotBlank() && title != lastTitle) userExternalSubtitles.clear()
+        val mergedExternalSubtitles = (externalSubtitles + userExternalSubtitles).distinctBy { it.url }
+        lastExternalSubtitles = mergedExternalSubtitles
         lastVideoInterceptor = videoInterceptor
         lastPluginStreams = pluginStreams
         bufferingStartedAtMs = 0L
@@ -572,7 +577,7 @@ class CS3IPlayer(
         if (url.isNotBlank()) {
             attemptedPluginStreamKeys.add(buildStreamAttemptKey(url, requestHeaders))
         }
-        httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, externalSubtitles)
+        httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, mergedExternalSubtitles)
 
         exoPlayer?.let { player ->
             try {
@@ -597,7 +602,7 @@ class CS3IPlayer(
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
-                val subtitleConfigurations = externalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
+                val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
                     val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
                     val subtitleMime = subtitle.mimeType ?: when (extension) {
                         "vtt" -> "text/vtt"
@@ -684,6 +689,8 @@ class CS3IPlayer(
         lastMimeType = null
         attemptedPluginStreamKeys.clear()
         lastPluginStreams = emptyList()
+        lastExternalSubtitles = emptyList()
+        userExternalSubtitles.clear()
         _playerState.value = PlayerState(audioDelayMs = audioDelayMs)
     }
 
