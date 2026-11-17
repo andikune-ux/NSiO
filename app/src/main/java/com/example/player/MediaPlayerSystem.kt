@@ -228,6 +228,9 @@ class CS3IPlayer(
                     ?.takeIf { it.isNotBlank() }
                     ?.let(preferredParameters::setPreferredTextLanguage)
                 trackSelectionParameters = preferredParameters.build()
+                val restoredVolume = preferences.getFloat("preferred_volume", 1f).coerceIn(0f, 1f)
+                lastNonZeroVolume = preferences.getFloat("last_non_zero_volume", 1f).coerceIn(0.05f, 1f)
+                volume = restoredVolume
                 preferences.getFloat("preferred_playback_speed", 1f)
                     .takeIf { it.isFinite() && it in 0.25f..4f }
                     ?.let(::setPlaybackSpeed)
@@ -879,6 +882,11 @@ class CS3IPlayer(
         val safeVolume = volume.coerceIn(0f, 1f)
         exoPlayer?.volume = safeVolume
         if (safeVolume > 0f) lastNonZeroVolume = safeVolume
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .putFloat("preferred_volume", safeVolume)
+            .putFloat("last_non_zero_volume", lastNonZeroVolume)
+            .apply()
         _playerState.value = _playerState.value.copy(volume = safeVolume)
     }
     override fun toggleMute() {
@@ -887,6 +895,11 @@ class CS3IPlayer(
             lastNonZeroVolume = player.volume
             player.volume = 0f
         } else player.volume = lastNonZeroVolume.coerceIn(0.05f, 1f)
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .putFloat("preferred_volume", player.volume)
+            .putFloat("last_non_zero_volume", lastNonZeroVolume)
+            .apply()
         _playerState.value = _playerState.value.copy(volume = player.volume)
     }
 
