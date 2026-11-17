@@ -1608,9 +1608,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val entry = pluginManager.findCloudStreamPlugin(item.pluginId)
             ?: throw IllegalStateException("Plugin asal tidak ditemukan atau belum terpasang.")
         val metadata = runCatching { org.json.JSONObject(item.extraInfo) }.getOrNull()
-        val providerName = metadata?.optString("providerName")
+        val providerName: String = metadata?.optString("providerName")
             ?.takeIf { it.isNotBlank() }
-            ?: if (metadata == null) item.extraInfo.takeIf { it.isNotBlank() } else null
+            ?: item.extraInfo.takeIf { metadata == null && it.isNotBlank() }
             ?: throw IllegalStateException("Nama provider CloudStream tidak tersedia.")
         val playbackData = metadata?.optString("playbackData")
             ?.takeIf { it.isNotBlank() }
