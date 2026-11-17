@@ -144,6 +144,18 @@ internal fun resolveSubtitleMimeType(url: String, declaredMimeType: String?): St
     }
 }
 
+private fun resolveExternalAudioMimeType(displayName: String): String? = when (displayName.substringAfterLast('.', "").lowercase()) {
+    "mp3" -> "audio/mpeg"
+    "m4a", "mp4" -> "audio/mp4"
+    "aac" -> "audio/aac"
+    "ogg", "oga" -> "audio/ogg"
+    "opus" -> "audio/opus"
+    "flac" -> "audio/flac"
+    "wav" -> "audio/wav"
+    "weba", "webm" -> "audio/webm"
+    else -> null
+}
+
 @OptIn(UnstableApi::class)
 class CS3IPlayer(
     private val context: Context,
@@ -169,6 +181,7 @@ class CS3IPlayer(
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private var externalAudioUri: Uri? = null
     private var externalAudioName: String? = null
+    private var pendingExternalAudioAutoSelect = false
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
     private var bufferingStartedAtMs: Long = 0L
     private var bufferingFallbackRequestedForUrl: String? = null
@@ -493,6 +506,26 @@ class CS3IPlayer(
                     C.TRACK_TYPE_AUDIO -> audio += option
                     C.TRACK_TYPE_TEXT -> subtitles += option
                     C.TRACK_TYPE_VIDEO -> video += option
+                }
+            }
+        }
+        val externalAudioGroupIndex = if (externalAudioUri != null) audio.maxOfOrNull { it.groupIndex } else null
+        if (externalAudioGroupIndex != null) {
+            audio.indices.forEach { index ->
+                if (audio[index].groupIndex == externalAudioGroupIndex) {
+                    audio[index] = audio[index].copy(label = "Audio eksternal · ${audio[index].label}")
+                }
+            }
+            if (pendingExternalAudioAutoSelect) {
+                val externalTrack = audio.firstOrNull { it.groupIndex == externalAudioGroupIndex }
+                val group = externalTrack?.let { player.currentTracks.groups.getOrNull(it.groupIndex) }
+                if (externalTrack != null && group != null) {
+                    pendingExternalAudioAutoSelect = false
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                        .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(externalTrack.trackIndex)))
+                        .build()
                 }
             }
         }
@@ -843,11 +876,15 @@ class CS3IPlayer(
                 val selectedExternalAudio = externalAudioUri
                 if (selectedExternalAudio != null) {
                     val videoSource = mediaSourceFactory.createMediaSource(videoMediaItem)
-                    val audioMediaItem = ExoMediaItem.Builder()
+                    val audioMediaItemBuilder = ExoMediaItem.Builder()
                         .setUri(selectedExternalAudio)
                         .setMediaMetadata(MediaMetadata.Builder().setTitle(externalAudioName ?: "Audio eksternal").build())
-                        .build()
+                    val audioMimeType = context.contentResolver.getType(selectedExternalAudio)
+                        ?: resolveExternalAudioMimeType(externalAudioName.orEmpty())
+                    audioMimeType?.let(audioMediaItemBuilder::setMimeType)
+                    val audioMediaItem = audioMediaItemBuilder.build()
                     val externalAudioSource = mediaSourceFactory.createMediaSource(audioMediaItem)
+                    pendingExternalAudioAutoSelect = true
                     player.setMediaSource(MergingMediaSource(videoSource, externalAudioSource))
                 } else {
                     player.setMediaItem(videoMediaItem)
@@ -883,6 +920,7 @@ class CS3IPlayer(
     override fun clearExternalAudioTrack() {
         externalAudioUri = null
         externalAudioName = null
+        pendingExternalAudioAutoSelect = false
         if (lastUrl.isNotBlank()) {
             val position = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
             playInternal(lastUrl, lastTitle, position.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
@@ -947,6 +985,7 @@ class CS3IPlayer(
         userExternalSubtitles.clear()
         externalAudioUri = null
         externalAudioName = null
+        pendingExternalAudioAutoSelect = false
         activeDrmSessionManager = null
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         _playerState.value = PlayerState(
