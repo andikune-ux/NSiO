@@ -115,7 +115,7 @@ fun MultiviewScreen(
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
     var pickerKind by remember { mutableStateOf(MultiviewSourceKind.GOOGLE_DRIVE) }
     var fullscreenSlot by remember { mutableStateOf<Int?>(null) }
-    var busySlot by remember { mutableStateOf<Int?>(null) }
+    val busySlots = remember { mutableStateListOf<Int>() }
     var pluginQuery by remember { mutableStateOf("") }
     var pluginSearchLoading by remember { mutableStateOf(false) }
     var pluginSearchResults by remember { mutableStateOf<List<MultiviewPluginSearchResult>>(emptyList()) }
@@ -237,9 +237,9 @@ fun MultiviewScreen(
     }
 
     suspend fun resolveAndPlay(index: Int, request: MultiviewSourceRequest) {
-        if (index !in 0..3 || busySlot != null) return
+        if (index !in 0..3 || index in busySlots) return
         val previousSlot = slots[index]
-        busySlot = index
+        busySlots.add(index)
         slots[index] = previousSlot.copy(status = MultiviewSlotStatus.RESOLVING, error = null)
         try {
             when (val result = registry.resolve(request)) {
@@ -265,7 +265,7 @@ fun MultiviewScreen(
             slots[index] = previousSlot
             throw cancelled
         } finally {
-            if (busySlot == index) busySlot = null
+            busySlots.remove(index)
         }
     }
 
@@ -456,7 +456,7 @@ fun MultiviewScreen(
                             ) {
                                 pluginSearchResults.take(25).forEach { result ->
                                     Surface(
-                                        modifier = Modifier.fillMaxWidth().clickable(enabled = busySlot == null) {
+                                        modifier = Modifier.fillMaxWidth().clickable(enabled = selectedIndex !in busySlots) {
                                             playPluginSearchResult(selectedIndex, result)
                                         },
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
@@ -495,7 +495,7 @@ fun MultiviewScreen(
                         ) {
                             kindItems.forEach { item ->
                                 Surface(
-                                    modifier = Modifier.fillMaxWidth().clickable(enabled = busySlot == null) {
+                                    modifier = Modifier.fillMaxWidth().clickable(enabled = selectedIndex !in busySlots) {
                                         scope.launch {
                                             resolveAndPlay(
                                                 selectedIndex,
@@ -522,7 +522,7 @@ fun MultiviewScreen(
                                         )
                                         Spacer(Modifier.width(10.dp))
                                         Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                        if (busySlot == selectedIndex) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        if (selectedIndex in busySlots) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                     }
                                 }
                             }
