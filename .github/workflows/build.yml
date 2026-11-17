@@ -2,7 +2,7 @@ name: 🚀 NSiO • Build, Test & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/multiview-final ]
   workflow_dispatch:
 
 permissions:
