@@ -240,7 +240,7 @@ fun MultiviewScreen(
             MultiviewPanel(
                 index = focusedSlot,
                 slot = slots[focusedSlot],
-                player = players[focusedSlot],
+                runtime = players[focusedSlot],
                 isAudioActive = audioSlot == focusedSlot,
                 onChoose = { pickerSlot = focusedSlot },
                 onClose = { players[focusedSlot].stop(); slots[focusedSlot] = MultiviewSlotUi(); if (audioSlot == focusedSlot) setAudioFocus(0) },
@@ -253,7 +253,7 @@ fun MultiviewScreen(
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     (0..1).forEach { index ->
                         MultiviewPanel(
-                            index = index, slot = slots[index], player = players[index],
+                            index = index, slot = slots[index], runtime = players[index],
                             isAudioActive = audioSlot == index,
                             onChoose = { pickerSlot = index },
                             onClose = { players[index].stop(); slots[index] = MultiviewSlotUi(); if (audioSlot == index) setAudioFocus(0) },
@@ -380,7 +380,7 @@ fun MultiviewScreen(
 private fun MultiviewPanel(
     index: Int,
     slot: MultiviewSlotUi,
-    player: CS3IPlayer,
+    runtime: CS3IPlayer,
     isAudioActive: Boolean,
     onChoose: () -> Unit,
     onClose: () -> Unit,
@@ -388,7 +388,7 @@ private fun MultiviewPanel(
     onFullscreen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val playerState by player.playerState.collectAsState()
+    val playerState by runtime.playerState.collectAsState()
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(17.dp))
@@ -437,10 +437,10 @@ private fun MultiviewPanel(
                             useController = false
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             setShutterBackgroundColor(android.graphics.Color.BLACK)
-                            player = player.exoPlayer
+                            this.player = runtime.exoPlayer
                         }
                     },
-                    update = { view -> view.player = player.exoPlayer }
+                    update = { view -> view.player = runtime.exoPlayer }
                 )
                 if (playerState.isBuffering || slot.status == MultiviewSlotStatus.RESOLVING) {
                     CircularProgressIndicator(color = Color(0xFF8DE7FF), modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -476,7 +476,7 @@ private fun MultiviewPanel(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (slot.source != null) {
                     IconButton(
-                        onClick = { player.togglePlayPause() },
+                        onClick = { runtime.togglePlayPause() },
                         modifier = Modifier.size(30.dp)
                     ) {
                         Icon(
