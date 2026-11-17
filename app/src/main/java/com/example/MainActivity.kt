@@ -266,13 +266,13 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
                             if (isLandscape) {
                                 Box(Modifier.fillMaxSize()) {
-                                    AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                    AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
                                     VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize()) {
                                     Box(Modifier.fillMaxSize().padding(bottom = 48.05.dp)) {
-                                        AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                        AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
                                     }
                                     BottomNavSafeAreaGlass(Modifier.align(Alignment.BottomCenter))
                                     BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter))
@@ -424,7 +424,8 @@ private fun AppNavContent(
     destination: NavDestination,
     viewModel: MainViewModel,
     devMode: Boolean,
-    onNavigate: (NavDestination) -> Unit
+    onNavigate: (NavDestination) -> Unit,
+    onNavigateToMultiview: () -> Unit
 ) {
     AnimatedContent(
         targetState = destination,
@@ -436,7 +437,7 @@ private fun AppNavContent(
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
                 onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) },
-                onNavigateToMultiview = { showMultiview = true }
+                onNavigateToMultiview = onNavigateToMultiview
             )
             NavDestination.EXTENSION -> ExtensionScreen(
                 viewModel = viewModel,
