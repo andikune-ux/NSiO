@@ -623,7 +623,7 @@ class CS3IPlayer(
         }
         httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, mergedExternalSubtitles)
         val drmInfo = pluginStreams.firstOrNull { it.url == url }?.drm
-        activeDrmSessionManager = drmInfo?.let(::createClearKeySessionManager)
+        activeDrmSessionManager = null
 
         exoPlayer?.let { player ->
             try {
@@ -657,6 +657,7 @@ class CS3IPlayer(
                     if (drmInfo.keyId.isNullOrBlank() || drmInfo.key.isNullOrBlank()) {
                         throw IllegalArgumentException("Metadata ClearKey dari plugin tidak lengkap (KID/KEY kosong).")
                     }
+                    activeDrmSessionManager = createClearKeySessionManager(drmInfo)
                     mediaItemBuilder.setDrmConfiguration(
                         ExoMediaItem.DrmConfiguration.Builder(drmUuid).build()
                     )
