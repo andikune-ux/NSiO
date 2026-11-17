@@ -75,6 +75,7 @@ data class PlayerState(
     val pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
     val selectedPluginStreamUrl: String? = null,
     val audioDelayMs: Int = 0,
+    val subtitleDelayMs: Int = 0,
     val audioCompressorEnabled: Boolean = false,
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
@@ -93,6 +94,7 @@ interface IPlayer {
     fun seekBackward(offsetMs: Long = 10000L)
     fun setPlaybackSpeed(speed: Float)
     fun setAudioDelay(delayMs: Int)
+    fun setSubtitleDelay(delayMs: Int)
     fun setAudioCompressorEnabled(enabled: Boolean)
     fun setPreferredAudioLanguage(language: String?)
     fun setPreferredSubtitleLanguage(language: String?)
@@ -164,6 +166,7 @@ class CS3IPlayer(
     var onCloudStreamRefreshRequested: (suspend (Long) -> Boolean)? = null
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
+    private var subtitleDelayMs: Int = 0
     private var audioCompressorEnabled: Boolean = false
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
@@ -179,9 +182,11 @@ class CS3IPlayer(
         // Keep audio synchronization preference across app launches and player recreation.
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         audioDelayMs = preferences.getInt("audio_delay_ms", 0).coerceIn(-2000, 2000)
+        subtitleDelayMs = preferences.getInt("subtitle_delay_ms", 0).coerceIn(-5000, 5000)
         audioCompressorEnabled = preferences.getBoolean("audio_compressor_enabled", false)
         _playerState.value = _playerState.value.copy(
             audioDelayMs = audioDelayMs,
+            subtitleDelayMs = subtitleDelayMs,
             audioCompressorEnabled = audioCompressorEnabled,
             preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
             preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
@@ -684,6 +689,22 @@ class CS3IPlayer(
         playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams)
     }
 
+    private fun buildSubtitleConfigurations(
+        subtitles: List<com.example.data.plugin.CloudStreamSubtitle>,
+        delayMs: Int
+    ): List<ExoMediaItem.SubtitleConfiguration> = subtitles
+        .filter { it.url.isNotBlank() }
+        .map { subtitle ->
+            val subtitleMime = resolveSubtitleMimeType(subtitle.url, subtitle.mimeType)
+            ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
+                .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
+                .setLabel(subtitle.displayName?.takeIf { it.isNotBlank() } ?: subtitle.language.ifBlank { "Subtitle" })
+                .setSelectionFlags(if (subtitle.isExternal) C.SELECTION_FLAG_DEFAULT else 0)
+                .setTimeOffsetUs(delayMs.toLong() * 1_000L)
+                .apply { subtitleMime?.let(::setMimeType) }
+                .build()
+        }
+
     private fun playInternal(
         url: String,
         title: String,
@@ -733,6 +754,7 @@ class CS3IPlayer(
                     pluginStreams = pluginStreams,
                     selectedPluginStreamUrl = url,
                     audioDelayMs = audioDelayMs,
+                    subtitleDelayMs = subtitleDelayMs,
                     audioCompressorEnabled = audioCompressorEnabled
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
@@ -753,15 +775,7 @@ class CS3IPlayer(
                         ExoMediaItem.DrmConfiguration.Builder(drmUuid).build()
                     )
                 }
-                val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
-                    val subtitleMime = resolveSubtitleMimeType(subtitle.url, subtitle.mimeType)
-                    ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
-                        .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
-                        .setLabel(subtitle.displayName?.takeIf { it.isNotBlank() } ?: subtitle.language.ifBlank { "Subtitle" })
-                        .setSelectionFlags(if (subtitle.isExternal) C.SELECTION_FLAG_DEFAULT else 0)
-                        .apply { subtitleMime?.let(::setMimeType) }
-                        .build()
-                }
+                val subtitleConfigurations = buildSubtitleConfigurations(mergedExternalSubtitles, subtitleDelayMs)
                 if (subtitleConfigurations.isNotEmpty()) {
                     mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
                 }
@@ -839,6 +853,7 @@ class CS3IPlayer(
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         _playerState.value = PlayerState(
             audioDelayMs = audioDelayMs,
+            subtitleDelayMs = subtitleDelayMs,
             audioCompressorEnabled = audioCompressorEnabled,
             preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
             preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
@@ -966,6 +981,37 @@ class CS3IPlayer(
             audioDelayMs = audioDelayMs
         )
     }
+    override fun setSubtitleDelay(delayMs: Int) {
+        val safeDelay = delayMs.coerceIn(-5000, 5000)
+        if (safeDelay == subtitleDelayMs) return
+        subtitleDelayMs = safeDelay
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit().putInt("subtitle_delay_ms", safeDelay).apply()
+
+        val player = exoPlayer
+        val itemIndex = player?.currentMediaItemIndex ?: C.INDEX_UNSET
+        val currentItem = player?.currentMediaItem
+        if (player != null && currentItem != null && itemIndex != C.INDEX_UNSET && lastExternalSubtitles.isNotEmpty()) {
+            val updatedItem = currentItem.buildUpon()
+                .setSubtitleConfigurations(buildSubtitleConfigurations(lastExternalSubtitles, safeDelay))
+                .build()
+            val previousSelection = player.trackSelectionParameters
+            val textWasDisabled = C.TRACK_TYPE_TEXT in previousSelection.disabledTrackTypes
+            // Media3 1.12 updates sideloaded subtitle timestamps in-place. Re-select
+            // the text renderer so a cue already visible is recalculated immediately.
+            player.replaceMediaItem(itemIndex, updatedItem)
+            if (!textWasDisabled) {
+                player.trackSelectionParameters = previousSelection.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
+                player.trackSelectionParameters = previousSelection.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .build()
+            }
+        }
+        _playerState.value = _playerState.value.copy(subtitleDelayMs = subtitleDelayMs)
+    }
+
     override fun setAudioCompressorEnabled(enabled: Boolean) {
         if (audioCompressorEnabled == enabled) return
         audioCompressorEnabled = enabled
