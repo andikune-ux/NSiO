@@ -423,7 +423,8 @@ class CS3IPlayer(
         val subtitle = com.example.data.plugin.CloudStreamSubtitle(
             language = label.ifBlank { "Subtitle eksternal" },
             url = uri.toString(),
-            mimeType = mimeType
+            mimeType = mimeType,
+            isExternal = true
         )
         userExternalSubtitles.removeAll { it.url == subtitle.url }
         userExternalSubtitles.add(subtitle)
@@ -617,7 +618,7 @@ class CS3IPlayer(
                     ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
                         .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
                         .setLabel(subtitle.language.ifBlank { "Subtitle" })
-                        .setSelectionFlags(0)
+                        .setSelectionFlags(if (subtitle.isExternal) C.SELECTION_FLAG_DEFAULT else 0)
                         .apply { subtitleMime?.let(::setMimeType) }
                         .build()
                 }
