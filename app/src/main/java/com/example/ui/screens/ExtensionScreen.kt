@@ -2162,6 +2162,21 @@ fun CloudStreamSearchPanel(
                                     color = if (isEpisodeComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
                                     fontWeight = FontWeight.SemiBold
                                 )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progressPercent / 100f)
+                                            .height(3.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                }
                             }
                         }
                         TextButton(
