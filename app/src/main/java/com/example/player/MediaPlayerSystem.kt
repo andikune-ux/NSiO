@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
 import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
@@ -82,7 +83,8 @@ data class PlayerState(
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
     val isLive: Boolean = false,
-    val playbackDiagnostics: List<String> = emptyList()
+    val playbackDiagnostics: List<String> = emptyList(),
+    val externalAudioName: String? = null
 )
 
 interface IPlayer {
@@ -103,6 +105,8 @@ interface IPlayer {
     fun clearABRepeat()
     fun setAudioCompressorEnabled(enabled: Boolean)
     fun setPreferredAudioLanguage(language: String?)
+    fun setExternalAudioTrack(uri: Uri, displayName: String)
+    fun clearExternalAudioTrack()
     fun setPreferredSubtitleLanguage(language: String?)
     fun toggleRepeatMode()
     fun toggleShuffle()
@@ -163,6 +167,8 @@ class CS3IPlayer(
     private var activeDrmSessionManager: DrmSessionManager? = null
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
+    private var externalAudioUri: Uri? = null
+    private var externalAudioName: String? = null
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
     private var bufferingStartedAtMs: Long = 0L
     private var bufferingFallbackRequestedForUrl: String? = null
@@ -179,6 +185,7 @@ class CS3IPlayer(
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
+    private lateinit var mediaSourceFactory: DefaultMediaSourceFactory
 
     companion object {
         private val CLEARKEY_UUID: UUID = UUID.fromString("e2719d58-a985-b3c9-781a-b030af78d30e")
@@ -266,7 +273,7 @@ class CS3IPlayer(
                 return DefaultDataSource.Factory(context, httpDataSourceFactory).createDataSource()
             }
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+        mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
             .setDrmSessionManagerProvider {
                 activeDrmSessionManager ?: DrmSessionManager.DRM_UNSUPPORTED
@@ -760,7 +767,11 @@ class CS3IPlayer(
         videoInterceptor: okhttp3.Interceptor? = null,
         pluginStreams: List<com.example.data.plugin.CloudStreamStream> = lastPluginStreams
     ) {
-        if (lastTitle.isNotBlank() && title != lastTitle) userExternalSubtitles.clear()
+        if (lastTitle.isNotBlank() && title != lastTitle) {
+            userExternalSubtitles.clear()
+            externalAudioUri = null
+            externalAudioName = null
+        }
         lastUrl = url
         lastTitle = title
         repeatPointA = null
@@ -803,7 +814,8 @@ class CS3IPlayer(
                     selectedPluginStreamUrl = url,
                     audioDelayMs = audioDelayMs,
                     subtitleDelayMs = subtitleDelayMs,
-                    audioCompressorEnabled = audioCompressorEnabled
+                    audioCompressorEnabled = audioCompressorEnabled,
+                    externalAudioName = externalAudioName
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
@@ -827,7 +839,19 @@ class CS3IPlayer(
                 if (subtitleConfigurations.isNotEmpty()) {
                     mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
                 }
-                player.setMediaItem(mediaItemBuilder.build())
+                val videoMediaItem = mediaItemBuilder.build()
+                val selectedExternalAudio = externalAudioUri
+                if (selectedExternalAudio != null) {
+                    val videoSource = mediaSourceFactory.createMediaSource(videoMediaItem)
+                    val audioMediaItem = ExoMediaItem.Builder()
+                        .setUri(selectedExternalAudio)
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(externalAudioName ?: "Audio eksternal").build())
+                        .build()
+                    val externalAudioSource = mediaSourceFactory.createMediaSource(audioMediaItem)
+                    player.setMediaSource(MergingMediaSource(videoSource, externalAudioSource))
+                } else {
+                    player.setMediaItem(videoMediaItem)
+                }
                 if (startPositionMs > 0) {
                     player.seekTo(startPositionMs)
                 }
@@ -840,6 +864,30 @@ class CS3IPlayer(
                     error = "URL media tidak valid atau tidak didukung: ${e.localizedMessage ?: "periksa sumber video"}"
                 )
             }
+        }
+    }
+
+    override fun setExternalAudioTrack(uri: Uri, displayName: String) {
+        require(uri.scheme == "content" || uri.scheme == "file") { "File audio harus berasal dari penyimpanan perangkat." }
+        require(displayName.isNotBlank()) { "Nama file audio kosong." }
+        externalAudioUri = uri
+        externalAudioName = displayName
+        if (lastUrl.isNotBlank()) {
+            val position = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
+            playInternal(lastUrl, lastTitle, position.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
+        } else {
+            _playerState.value = _playerState.value.copy(externalAudioName = displayName)
+        }
+    }
+
+    override fun clearExternalAudioTrack() {
+        externalAudioUri = null
+        externalAudioName = null
+        if (lastUrl.isNotBlank()) {
+            val position = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
+            playInternal(lastUrl, lastTitle, position.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
+        } else {
+            _playerState.value = _playerState.value.copy(externalAudioName = null)
         }
     }
 
@@ -897,6 +945,8 @@ class CS3IPlayer(
         lastPluginStreams = emptyList()
         lastExternalSubtitles = emptyList()
         userExternalSubtitles.clear()
+        externalAudioUri = null
+        externalAudioName = null
         activeDrmSessionManager = null
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         _playerState.value = PlayerState(
