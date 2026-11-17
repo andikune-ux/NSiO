@@ -208,6 +208,12 @@ fun PlayerScreen(
     var isRewindingHeld by remember { mutableStateOf(false) }
     var isFastForwardHeld by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
+    var swipeSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_seek_enabled", false)) }
+    var swipeBrightnessEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_brightness_enabled", true)) }
+    var swipeVolumeEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_volume_enabled", true)) }
+    var doubleTapSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_seek_enabled", false)) }
+    var doubleTapPauseEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_pause_enabled", false)) }
+    var doubleTapSeekSeconds by remember(context) { mutableStateOf(playerPreferences.getInt("gesture_double_tap_seek_seconds", 10).coerceIn(5, 30)) }
     var skipStamps by remember(media.id) { mutableStateOf<List<VideoSkipStamp>>(emptyList()) }
     var skipStampLoadFinished by remember(media.id) { mutableStateOf(false) }
     var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
@@ -355,6 +361,17 @@ fun PlayerScreen(
             setFractionalTextSize(0.055f * subtitleScale)
             setBottomPaddingFraction(subtitleBottomPadding)
         }
+    }
+
+    LaunchedEffect(swipeSeekEnabled, swipeBrightnessEnabled, swipeVolumeEnabled, doubleTapSeekEnabled, doubleTapPauseEnabled, doubleTapSeekSeconds) {
+        playerPreferences.edit()
+            .putBoolean("gesture_swipe_seek_enabled", swipeSeekEnabled)
+            .putBoolean("gesture_swipe_brightness_enabled", swipeBrightnessEnabled)
+            .putBoolean("gesture_swipe_volume_enabled", swipeVolumeEnabled)
+            .putBoolean("gesture_double_tap_seek_enabled", doubleTapSeekEnabled)
+            .putBoolean("gesture_double_tap_pause_enabled", doubleTapPauseEnabled)
+            .putInt("gesture_double_tap_seek_seconds", doubleTapSeekSeconds)
+            .apply()
     }
 
     // Resolve OP/ED/recap markers from the same public databases used by CloudStream.
@@ -583,32 +600,54 @@ fun PlayerScreen(
             .background(Color.Black)
             .testTag("player_screen")
     ) {
-        // Swipe kiri/kanan pada area media untuk berpindah item dalam daftar,
-        // termasuk perpindahan video <-> foto. Kontrol overlay tetap menerima sentuhan sendiri.
+        // Swipe horizontal bisa dipakai untuk seek seperti CloudStream. Jika dimatikan,
+        // perilaku lama berpindah item dalam antrean tetap dipertahankan.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(media.id, mediaList) {
+                .pointerInput(media.id, mediaList, swipeSeekEnabled, playerState.durationMs) {
                     var horizontalDistance = 0f
+                    var seekingByGesture = false
                     detectHorizontalDragGestures(
-                        onHorizontalDrag = { _, delta -> horizontalDistance += delta },
-                        onDragEnd = {
-                            val direction = when {
-                                horizontalDistance <= -72f -> 1
-                                horizontalDistance >= 72f -> -1
-                                else -> 0
-                            }
-                            if (direction != 0) {
-                                if (media.type.equals("PHOTO", ignoreCase = true)) {
-                                    adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
-                                } else {
-                                    viewModel.skipPlayback(direction)
-                                }
+                        onHorizontalDrag = { _, delta ->
+                            horizontalDistance += delta
+                            if (usesNativePlayer && swipeSeekEnabled && playerState.isSeekable && playerState.durationMs > 0L) {
+                                seekingByGesture = true
+                                isSeeking = true
+                                val seekDelta = (delta / size.width.toFloat() * playerState.durationMs * 2f).toLong()
+                                seekPreviewMs = (seekPreviewMs + seekDelta).coerceIn(0L, playerState.durationMs)
                                 showControls = true
                             }
-                            horizontalDistance = 0f
                         },
-                        onDragCancel = { horizontalDistance = 0f }
+                        onDragEnd = {
+                            if (seekingByGesture) {
+                                if (kotlin.math.abs(horizontalDistance) >= size.height * 0.02f) {
+                                    viewModel.player.seekTo(seekPreviewMs)
+                                }
+                                isSeeking = false
+                            } else {
+                                val direction = when {
+                                    horizontalDistance <= -72f -> 1
+                                    horizontalDistance >= 72f -> -1
+                                    else -> 0
+                                }
+                                if (direction != 0) {
+                                    if (media.type.equals("PHOTO", ignoreCase = true)) {
+                                        adjacentMedia(mediaList, media.id, direction)?.let(viewModel::playMedia)
+                                    } else {
+                                        viewModel.skipPlayback(direction)
+                                    }
+                                    showControls = true
+                                }
+                            }
+                            horizontalDistance = 0f
+                            seekingByGesture = false
+                        },
+                        onDragCancel = {
+                            horizontalDistance = 0f
+                            if (seekingByGesture) isSeeking = false
+                            seekingByGesture = false
+                        }
                     )
                 }
         ) {
@@ -682,22 +721,24 @@ fun PlayerScreen(
                             }
                         }
                     }
-                    .pointerInput(media.id) {
-                        var currentBrightness = brightnessLevel
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                change.consume()
-                                currentBrightness = (currentBrightness - dragAmount / size.height.toFloat()).coerceIn(0.05f, 1f)
-                                brightnessLevel = currentBrightness
-                                activity?.window?.let { window ->
-                                    val attributes = window.attributes
-                                    attributes.screenBrightness = currentBrightness
-                                    window.attributes = attributes
+                    .pointerInput(media.id, swipeBrightnessEnabled) {
+                        if (swipeBrightnessEnabled) {
+                            var currentBrightness = brightnessLevel
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    currentBrightness = (currentBrightness - dragAmount / size.height.toFloat()).coerceIn(0.05f, 1f)
+                                    brightnessLevel = currentBrightness
+                                    activity?.window?.let { window ->
+                                        val attributes = window.attributes
+                                        attributes.screenBrightness = currentBrightness
+                                        window.attributes = attributes
+                                    }
+                                    activeGesture = "brightness"
+                                    showControls = true
                                 }
-                                activeGesture = "brightness"
-                                showControls = true
-                            }
-                        )
+                            )
+                        }
                     }
             )
             Box(
@@ -714,17 +755,19 @@ fun PlayerScreen(
                             }
                         }
                     }
-                    .pointerInput(media.id) {
-                        var currentVolume = viewModel.player.exoPlayer?.volume ?: playerState.volume
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                change.consume()
-                                currentVolume = (currentVolume - dragAmount / size.height.toFloat()).coerceIn(0f, 1f)
-                                viewModel.player.setVolume(currentVolume)
-                                activeGesture = "volume"
-                                showControls = true
-                            }
-                        )
+                    .pointerInput(media.id, swipeVolumeEnabled, playerState.volume) {
+                        if (swipeVolumeEnabled) {
+                            var currentVolume = viewModel.player.exoPlayer?.volume ?: playerState.volume
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    currentVolume = (currentVolume - dragAmount / size.height.toFloat()).coerceIn(0f, 1f)
+                                    viewModel.player.setVolume(currentVolume)
+                                    activeGesture = "volume"
+                                    showControls = true
+                                }
+                            )
+                        }
                     }
             )
         }
@@ -739,6 +782,12 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
                         detectTapGestures(
                             onTap = { revealControls() },
+                            onDoubleTap = {
+                                if (doubleTapSeekEnabled && playerState.isSeekable) {
+                                    viewModel.player.seekBackward(doubleTapSeekSeconds * 1_000L)
+                                    revealControls()
+                                }
+                            },
                             onPress = {
                                 val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
@@ -762,6 +811,12 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(media.id) {
                         detectTapGestures(
                             onTap = { revealControls() },
+                            onDoubleTap = {
+                                if (doubleTapSeekEnabled && playerState.isSeekable) {
+                                    viewModel.player.seekForward(doubleTapSeekSeconds * 1_000L)
+                                    revealControls()
+                                }
+                            },
                             onPress = {
                                 val releasedBeforeLongPress = kotlinx.coroutines.withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                                     tryAwaitRelease()
@@ -780,6 +835,23 @@ fun PlayerScreen(
                             }
                         )
                     }
+                )
+            }
+            if (doubleTapPauseEnabled) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth(0.15f)
+                        .fillMaxHeight()
+                        .pointerInput(media.id, doubleTapPauseEnabled) {
+                            detectTapGestures(
+                                onTap = { revealControls() },
+                                onDoubleTap = {
+                                    viewModel.player.togglePlayPause()
+                                    revealControls()
+                                }
+                            )
+                        }
                 )
             }
         }
@@ -1103,6 +1175,7 @@ fun PlayerScreen(
                                 },
                                 "Info Pemutaran" to (playerState.playbackDiagnostics.firstOrNull() ?: "Menunggu data"),
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
+                                "Kontrol gesture" to "Swipe & double tap",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
                                 "Bahasa subtitle" to (playerState.preferredSubtitleLanguage ?: "Otomatis"),
                                 "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%",
@@ -1150,6 +1223,45 @@ fun PlayerScreen(
                                     .padding(horizontal = 8.dp, vertical = 9.dp)
                             )
                             when (selectedPlayerSetting) {
+                                "Kontrol gesture" -> {
+                                    Text("Atur swipe dan ketukan seperti pada CloudStream. Swipe horizontal aktif akan menggantikan fungsi pindah video sebelumnya.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    val gestureOptions = listOf(
+                                        "Swipe horizontal untuk seek" to swipeSeekEnabled,
+                                        "Swipe kiri untuk kecerahan" to swipeBrightnessEnabled,
+                                        "Swipe kanan untuk volume" to swipeVolumeEnabled,
+                                        "Double tap kiri/kanan untuk seek" to doubleTapSeekEnabled,
+                                        "Double tap tengah untuk jeda" to doubleTapPauseEnabled
+                                    )
+                                    gestureOptions.forEach { (label, enabled) ->
+                                        Text(
+                                            text = (if (enabled) "✓ " else "○ ") + label,
+                                            color = if (enabled) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                when (label) {
+                                                    "Swipe horizontal untuk seek" -> swipeSeekEnabled = !swipeSeekEnabled
+                                                    "Swipe kiri untuk kecerahan" -> swipeBrightnessEnabled = !swipeBrightnessEnabled
+                                                    "Swipe kanan untuk volume" -> swipeVolumeEnabled = !swipeVolumeEnabled
+                                                    "Double tap kiri/kanan untuk seek" -> doubleTapSeekEnabled = !doubleTapSeekEnabled
+                                                    "Double tap tengah untuk jeda" -> doubleTapPauseEnabled = !doubleTapPauseEnabled
+                                                }
+                                            }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                        )
+                                    }
+                                    if (doubleTapSeekEnabled) {
+                                        Text("Jarak double tap", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                        listOf(5, 10, 15, 20, 30).forEach { seconds ->
+                                            Text(
+                                                text = (if (doubleTapSeekSeconds == seconds) "✓ " else "") + "$seconds detik",
+                                                color = if (doubleTapSeekSeconds == seconds) controlAccentColor else controlTextColor,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                    doubleTapSeekSeconds = seconds
+                                                }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                            )
+                                        }
+                                    }
+                                }
                                 "Timer tidur" -> {
                                     Text("Pemutaran akan dijeda otomatis saat waktu habis.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                                     listOf(0, 15, 30, 45, 60, 90, 120).forEach { minutes ->
