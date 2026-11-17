@@ -139,6 +139,10 @@ class CS3IPlayer(
     }
 
     init {
+        // Keep audio synchronization preference across app launches and player recreation.
+        audioDelayMs = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .getInt("audio_delay_ms", 0)
+            .coerceIn(-2000, 2000)
         initExoPlayer()
     }
 
@@ -804,6 +808,10 @@ class CS3IPlayer(
         val safeDelay = delayMs.coerceIn(-2000, 2000)
         if (safeDelay == audioDelayMs) return
         audioDelayMs = safeDelay
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("audio_delay_ms", safeDelay)
+            .apply()
         val player = exoPlayer
         val currentPosition = player?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
         val wasPlaying = player?.isPlaying ?: false
