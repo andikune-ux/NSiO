@@ -1055,6 +1055,7 @@ fun PlayerScreen(
                                         else -> "Mati"
                                     }
                                 },
+                                "Info Pemutaran" to (playerState.playbackDiagnostics.firstOrNull() ?: "Menunggu data"),
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
                                 "Bahasa subtitle" to (playerState.preferredSubtitleLanguage ?: "Otomatis"),
@@ -1271,6 +1272,22 @@ fun PlayerScreen(
                                                 viewModel.player.setAudioCompressorEnabled(enabled)
                                                 selectedPlayerSetting = null
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Info Pemutaran" -> {
+                                    Text(
+                                        "Informasi teknis stream yang sedang diputar. Nilai bergantung pada metadata sumber dan decoder; tidak semua provider menyediakan bitrate atau frame rate.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    (playerState.playbackDiagnostics.ifEmpty { listOf("Informasi belum tersedia. Tunggu sampai video selesai dimuat.") }).forEach { detail ->
+                                        Text(
+                                            detail,
+                                            color = controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp)
                                         )
                                     }
                                 }
