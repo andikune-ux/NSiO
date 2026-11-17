@@ -207,6 +207,7 @@ fun PlayerScreen(
     var controlsLocked by remember { mutableStateOf(false) }
     var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
     var sleepTimerRemainingSeconds by remember { mutableStateOf(0L) }
+    var sleepTimerDurationMinutes by remember { mutableStateOf(0) }
     var selectedOrientation by remember { mutableStateOf("Otomatis") }
     val context = LocalContext.current
     val playerPreferences = remember(context) {
@@ -360,6 +361,7 @@ fun PlayerScreen(
     LaunchedEffect(sleepTimerEndAtMs) {
         val deadline = sleepTimerEndAtMs ?: run {
             sleepTimerRemainingSeconds = 0L
+            sleepTimerDurationMinutes = 0
             return@LaunchedEffect
         }
         while (true) {
@@ -368,6 +370,7 @@ fun PlayerScreen(
             if (remaining <= 0L) {
                 if (viewModel.player.playerState.value.isPlaying) viewModel.player.togglePlayPause()
                 sleepTimerEndAtMs = null
+                sleepTimerDurationMinutes = 0
                 break
             }
             delay(1000L)
@@ -1058,12 +1061,13 @@ fun PlayerScreen(
                                 "Timer tidur" -> {
                                     Text("Pemutaran akan dijeda otomatis saat waktu habis.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                                     listOf(0, 15, 30, 45, 60, 90, 120).forEach { minutes ->
-                                        val isSelected = if (minutes == 0) sleepTimerEndAtMs == null else sleepTimerRemainingSeconds in (minutes * 60L - 59L)..(minutes * 60L)
+                                        val isSelected = sleepTimerDurationMinutes == minutes
                                         Text(
                                             text = (if (isSelected) "✓ " else "") + if (minutes == 0) "Mati" else "$minutes menit",
                                             color = if (isSelected) controlAccentColor else controlTextColor,
                                             fontSize = 12.sp,
                                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                sleepTimerDurationMinutes = minutes
                                                 sleepTimerEndAtMs = if (minutes == 0) null else System.currentTimeMillis() + minutes * 60_000L
                                                 selectedPlayerSetting = null
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
