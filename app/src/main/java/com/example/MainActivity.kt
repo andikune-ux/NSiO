@@ -69,6 +69,7 @@ import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
 import com.example.ui.screens.ExtensionScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SettingsScreen
@@ -225,6 +226,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
     val statusMessage by viewModel.statusMessage.collectAsState()
     var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
     var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
+    var showMultiview by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(settings.displayMode) {
@@ -249,7 +251,9 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
             Box(Modifier.fillMaxSize()) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
-                if (currentlyPlaying != null) {
+                if (showMultiview) {
+                    MultiviewScreen(viewModel = viewModel, onClose = { showMultiview = false })
+                } else if (currentlyPlaying != null) {
                     PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() }, isInPipMode = isPipMode)
                 } else {
                     Scaffold(
@@ -431,7 +435,8 @@ private fun AppNavContent(
         when (targetDest) {
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
-                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) }
+                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) },
+                onNavigateToMultiview = { showMultiview = true }
             )
             NavDestination.EXTENSION -> ExtensionScreen(
                 viewModel = viewModel,
