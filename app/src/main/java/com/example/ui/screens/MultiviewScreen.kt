@@ -114,6 +114,7 @@ fun MultiviewScreen(
     var audioSlot by remember { mutableStateOf(0) }
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
     var pickerKind by remember { mutableStateOf(MultiviewSourceKind.GOOGLE_DRIVE) }
+    var expandedSlot by remember { mutableStateOf<Int?>(null) }
     var fullscreenSlot by remember { mutableStateOf<Int?>(null) }
     val busySlots = remember { mutableStateListOf<Int>() }
     var pluginQuery by remember { mutableStateOf("") }
@@ -322,11 +323,19 @@ fun MultiviewScreen(
 
     BackHandler(enabled = true) {
         if (fullscreenSlot != null) fullscreenSlot = null
+        else if (expandedSlot != null) expandedSlot = null
         else if (pickerSlot != null) pickerSlot = null
         else onClose()
     }
 
     val focusedSlot = fullscreenSlot
+    fun cycleMagnification(index: Int) {
+        when {
+            fullscreenSlot == index -> fullscreenSlot = null
+            expandedSlot == index -> fullscreenSlot = index
+            else -> expandedSlot = index
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -360,9 +369,35 @@ fun MultiviewScreen(
                 onChoose = { pickerSlot = focusedSlot },
                 onClose = { clearSlot(focusedSlot) },
                 onAudio = { setAudioFocus(focusedSlot) },
-                onFullscreen = { fullscreenSlot = null },
+                onFullscreen = { cycleMagnification(focusedSlot) },
                 modifier = Modifier.fillMaxSize().weight(1f)
             )
+        } else if (expandedSlot != null) {
+            Column(modifier = Modifier.fillMaxSize().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val mainIndex = expandedSlot!!
+                MultiviewPanel(
+                    index = mainIndex, slot = slots[mainIndex], runtime = players[mainIndex],
+                    isAudioActive = audioSlot == mainIndex,
+                    onChoose = { pickerSlot = mainIndex },
+                    onClose = { clearSlot(mainIndex) },
+                    onAudio = { setAudioFocus(mainIndex) },
+                    onFullscreen = { cycleMagnification(mainIndex) },
+                    modifier = Modifier.weight(2.15f).fillMaxWidth()
+                )
+                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (0..3).filter { it != mainIndex }.forEach { index ->
+                        MultiviewPanel(
+                            index = index, slot = slots[index], runtime = players[index],
+                            isAudioActive = audioSlot == index,
+                            onChoose = { pickerSlot = index },
+                            onClose = { clearSlot(index) },
+                            onAudio = { setAudioFocus(index) },
+                            onFullscreen = { cycleMagnification(index) },
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                    }
+                }
+            }
         } else {
             Column(modifier = Modifier.fillMaxSize().weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -373,7 +408,7 @@ fun MultiviewScreen(
                             onChoose = { pickerSlot = index },
                             onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
-                            onFullscreen = { fullscreenSlot = index },
+                            onFullscreen = { cycleMagnification(index) },
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
@@ -386,7 +421,7 @@ fun MultiviewScreen(
                             onChoose = { pickerSlot = index },
                             onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
-                            onFullscreen = { fullscreenSlot = index },
+                            onFullscreen = { cycleMagnification(index) },
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
