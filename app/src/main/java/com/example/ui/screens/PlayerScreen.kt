@@ -69,6 +69,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -202,6 +204,10 @@ fun PlayerScreen(
     var activeGesture by remember { mutableStateOf<String?>(null) }
     var isRewindingHeld by remember { mutableStateOf(false) }
     var isFastForwardHeld by remember { mutableStateOf(false) }
+    var controlsLocked by remember { mutableStateOf(false) }
+    var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
+    var sleepTimerRemainingSeconds by remember { mutableStateOf(0L) }
+    var selectedOrientation by remember { mutableStateOf("Otomatis") }
     val context = LocalContext.current
     val playerPreferences = remember(context) {
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
@@ -263,6 +269,7 @@ fun PlayerScreen(
         showControls = true
         showQueue = false
         showTrackMenu = false
+        controlsLocked = false
         isSeeking = false
         seekPreviewMs = media.progressMs.coerceAtLeast(0L)
         previewFrame = null
@@ -347,6 +354,23 @@ fun PlayerScreen(
                     previewFrame = extracted
                 }
             }
+        }
+    }
+
+    LaunchedEffect(sleepTimerEndAtMs) {
+        val deadline = sleepTimerEndAtMs ?: run {
+            sleepTimerRemainingSeconds = 0L
+            return@LaunchedEffect
+        }
+        while (true) {
+            val remaining = ((deadline - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L)
+            sleepTimerRemainingSeconds = remaining
+            if (remaining <= 0L) {
+                if (viewModel.player.playerState.value.isPlaying) viewModel.player.togglePlayPause()
+                sleepTimerEndAtMs = null
+                break
+            }
+            delay(1000L)
         }
     }
 
@@ -1006,7 +1030,10 @@ fun PlayerScreen(
                                     subtitleBottomPadding < 0.14f -> "Agak naik"
                                     subtitleBottomPadding < 0.22f -> "Tengah bawah"
                                     else -> "Tengah"
-                                }
+                                },
+                                "Timer tidur" to (if (sleepTimerRemainingSeconds > 0L) "${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, "0")}" else "Mati"),
+                                "Orientasi layar" to selectedOrientation,
+                                "Kunci kontrol" to if (controlsLocked) "Aktif" else "Mati"
                             ).forEach { (label, current) ->
                                 Text(
                                     text = "$label  ·  $current  ›",
@@ -1028,6 +1055,50 @@ fun PlayerScreen(
                                     .padding(horizontal = 8.dp, vertical = 9.dp)
                             )
                             when (selectedPlayerSetting) {
+                                "Timer tidur" -> {
+                                    Text("Pemutaran akan dijeda otomatis saat waktu habis.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    listOf(0, 15, 30, 45, 60, 90, 120).forEach { minutes ->
+                                        val isSelected = if (minutes == 0) sleepTimerEndAtMs == null else sleepTimerRemainingSeconds in (minutes * 60L - 59L)..(minutes * 60L)
+                                        Text(
+                                            text = (if (isSelected) "✓ " else "") + if (minutes == 0) "Mati" else "$minutes menit",
+                                            color = if (isSelected) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                sleepTimerEndAtMs = if (minutes == 0) null else System.currentTimeMillis() + minutes * 60_000L
+                                                selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Orientasi layar" -> listOf("Otomatis", "Potret", "Lanskap").forEach { orientation ->
+                                    Text(
+                                        text = (if (selectedOrientation == orientation) "✓ " else "") + orientation,
+                                        color = if (selectedOrientation == orientation) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            selectedOrientation = orientation
+                                            activity?.requestedOrientation = when (orientation) {
+                                                "Potret" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                                "Lanskap" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                                else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                                            }
+                                            selectedPlayerSetting = null
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Kunci kontrol" -> {
+                                    Text("Saat aktif, sentuhan pada video tidak mengubah pemutaran. Ketuk layar untuk membuka kunci.", color = controlMutedColor, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                    Text(
+                                        text = if (controlsLocked) "Buka kunci kontrol" else "Kunci semua kontrol",
+                                        color = controlAccentColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            controlsLocked = !controlsLocked
+                                            selectedPlayerSetting = null
+                                            showTrackMenu = false
+                                        }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
+                                }
                                 "Kecepatan pemutaran" -> listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).forEach { speed ->
                                     Text(
                                         text = (if (kotlin.math.abs(playerState.playbackSpeed - speed) < 0.01f) "✓ " else "") + "${speed}×",
@@ -1472,6 +1543,23 @@ fun PlayerScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Locked overlay blocks accidental touches while keeping a one-tap unlock affordance.
+        if (controlsLocked && usesNativePlayer) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.16f)).clickable { controlsLocked = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier.playerLiquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.34f, borderAlpha = 0.28f, elevation = 8.dp).padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = "Kontrol terkunci", tint = Color.White, modifier = Modifier.size(24.dp))
+                    Text("Kontrol terkunci · ketuk untuk membuka", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
