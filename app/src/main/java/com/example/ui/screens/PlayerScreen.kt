@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.util.LruCache
 import android.view.ViewGroup
 import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
@@ -141,6 +142,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+private object PlayerFramePreviewCache {
+    private val cache = object : LruCache<String, Bitmap>(12 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
+    }
+
+    fun get(key: String): Bitmap? = cache.get(key)
+
+    fun put(key: String, bitmap: Bitmap) {
+        cache.put(key, bitmap)
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -150,6 +163,21 @@ fun PlayerScreen(
     isInPipMode: Boolean = false
 ) {
     val playerState by viewModel.player.playerState.collectAsState()
+    val previewUrl = playerState.selectedPluginStreamUrl?.takeIf { it.isNotBlank() } ?: media.url
+    val previewHeaders = remember(playerState.selectedPluginStreamUrl, playerState.pluginStreams) {
+        playerState.pluginStreams.firstOrNull { it.url == playerState.selectedPluginStreamUrl }
+            ?.let { stream ->
+                stream.headers.toMutableMap().apply {
+                    if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", ignoreCase = true) }) {
+                        put("Referer", stream.referer)
+                    }
+                    if (keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+                        put("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36 NetStream/2.0")
+                    }
+                }
+            }
+            ?: mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36 NetStream/2.0")
+    }
     val playbackPreparationMessage by viewModel.playbackPreparationMessage.collectAsState()
     // Cast callbacks can outlive a playback-position update; always read the latest state.
     val latestCastPlayerState by rememberUpdatedState(playerState)
@@ -283,31 +311,42 @@ fun PlayerScreen(
     // Extract a real frame near the requested seek timestamp off the UI thread.
     // Some protected/HLS sources do not expose frames through MediaMetadataRetriever;
     // in that case the UI falls back to the media poster when available.
-    LaunchedEffect(isSeeking, seekPreviewMs, media.url, playerState.isLive) {
+    LaunchedEffect(isSeeking, seekPreviewMs, previewUrl, previewHeaders, playerState.isLive) {
         if (!isSeeking || !usesNativePlayer || playerState.isLive) {
             previewFrame = null
         } else {
-            // Clear immediately on every drag update; never display a frame from
-            // the previous timestamp while the next frame is being extracted.
+            // Never leave a frame from the previous drag timestamp on screen.
             previewFrame = null
             delay(220)
-            val extracted = withContext(Dispatchers.IO) {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    val uri = Uri.parse(media.url)
-                    if (uri.scheme == "content" || uri.scheme == "file" || uri.scheme == "android.resource") {
-                        retriever.setDataSource(context, uri)
-                    } else {
-                        retriever.setDataSource(normalizePlaybackUrl(media.url), mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36 NetStream/2.0"))
+            val cacheKey = "${normalizePlaybackUrl(previewUrl)}|${previewHeaders.hashCode()}|${seekPreviewMs.coerceAtLeast(0L) / 500L}"
+            val cachedFrame = PlayerFramePreviewCache.get(cacheKey)
+            if (cachedFrame != null) {
+                previewFrame = cachedFrame
+            } else {
+                val extracted = withContext(Dispatchers.IO) {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        val uri = Uri.parse(previewUrl)
+                        if (uri.scheme == "content" || uri.scheme == "file" || uri.scheme == "android.resource") {
+                            retriever.setDataSource(context, uri)
+                        } else {
+                            retriever.setDataSource(normalizePlaybackUrl(previewUrl), previewHeaders)
+                        }
+                        retriever.getFrameAtTime(
+                            seekPreviewMs.coerceAtLeast(0L) * 1_000L,
+                            MediaMetadataRetriever.OPTION_CLOSEST
+                        )
+                    } catch (_: Exception) {
+                        null
+                    } finally {
+                        try { retriever.release() } catch (_: Exception) { }
                     }
-                    retriever.getFrameAtTime(seekPreviewMs.coerceAtLeast(0L) * 1_000L, MediaMetadataRetriever.OPTION_CLOSEST)
-                } catch (_: Exception) {
-                    null
-                } finally {
-                    try { retriever.release() } catch (_: Exception) { }
+                }
+                if (extracted != null) {
+                    PlayerFramePreviewCache.put(cacheKey, extracted)
+                    previewFrame = extracted
                 }
             }
-            if (extracted != null) previewFrame = extracted
         }
     }
 
@@ -1326,9 +1365,10 @@ fun PlayerScreen(
                     }
                 }
 
+                // Live sources without a seekable DVR window have no meaningful timeline.
                 // Minimal timeline: a 1.5dp glass rail with a tiny red scrubber dot.
                 // Keep the full 48dp interaction target without enlarging the visible control.
-                if (usesNativePlayer) Box(
+                if (usesNativePlayer && (!playerState.isLive || playerState.isSeekable)) Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
