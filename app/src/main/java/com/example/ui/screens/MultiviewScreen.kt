@@ -155,6 +155,15 @@ fun MultiviewScreen(
         }
     }
 
+    fun clearSlot(index: Int) {
+        players[index].stop()
+        slots[index] = MultiviewSlotUi()
+        if (audioSlot == index) {
+            val nextAudio = slots.indices.firstOrNull { slots[it].source != null } ?: 0
+            setAudioFocus(nextAudio)
+        }
+    }
+
     fun startResolvedSource(index: Int, source: MultiviewResolvedSource) {
         slots[index] = MultiviewSlotUi(source = source, status = MultiviewSlotStatus.READY)
         val plugin = source.cloudStream
@@ -171,11 +180,16 @@ fun MultiviewScreen(
     }
 
     suspend fun resolveAndPlay(index: Int, request: MultiviewSourceRequest) {
+        players[index].stop()
         slots[index] = MultiviewSlotUi(status = MultiviewSlotStatus.RESOLVING)
+        setAudioFocus(audioSlot)
         busySlot = index
         when (val result = registry.resolve(request)) {
             is MultiviewResolveResult.Success -> startResolvedSource(index, result.source)
-            is MultiviewResolveResult.Failure -> slots[index] = MultiviewSlotUi(status = MultiviewSlotStatus.ERROR, error = result.reason)
+            is MultiviewResolveResult.Failure -> {
+                slots[index] = MultiviewSlotUi(status = MultiviewSlotStatus.ERROR, error = result.reason)
+                setAudioFocus(audioSlot)
+            }
         }
         busySlot = null
         pickerSlot = null
@@ -243,7 +257,7 @@ fun MultiviewScreen(
                 runtime = players[focusedSlot],
                 isAudioActive = audioSlot == focusedSlot,
                 onChoose = { pickerSlot = focusedSlot },
-                onClose = { players[focusedSlot].stop(); slots[focusedSlot] = MultiviewSlotUi(); if (audioSlot == focusedSlot) setAudioFocus(0) },
+                onClose = { clearSlot(focusedSlot) },
                 onAudio = { setAudioFocus(focusedSlot) },
                 onFullscreen = { fullscreenSlot = null },
                 modifier = Modifier.fillMaxSize().weight(1f)
@@ -256,7 +270,7 @@ fun MultiviewScreen(
                             index = index, slot = slots[index], runtime = players[index],
                             isAudioActive = audioSlot == index,
                             onChoose = { pickerSlot = index },
-                            onClose = { players[index].stop(); slots[index] = MultiviewSlotUi(); if (audioSlot == index) setAudioFocus(0) },
+                            onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
                             onFullscreen = { fullscreenSlot = index },
                             modifier = Modifier.weight(1f).fillMaxHeight()
