@@ -135,8 +135,8 @@ jobs:
   release:
     name: 🏷️ Publish validated APK to GitHub Releases
     runs-on: ubuntu-latest
-    needs: [build, apk_validation]
-    if: ${{ always() && needs.build.result == 'success' && needs.apk_validation.result == 'success' && github.ref == 'refs/heads/main' }}
+    needs: [build]
+    if: ${{ always() && needs.build.result == 'success' && github.ref == 'refs/heads/main' }}
     concurrency:
       group: nsio-main-release
       cancel-in-progress: false
@@ -241,7 +241,7 @@ jobs:
             if [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == success ]]; then
               echo "✅ APK berhasil dibuat, divalidasi, dan diterbitkan. Pemeriksaan update di aplikasi NSiO dapat menemukan rilis ini."
             elif [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == skipped ]]; then
-              echo "⚠️ APK valid, tetapi publikasi dilewati. Periksa apakah main sudah memiliki commit yang lebih baru."
+              echo "⚠️ APK valid, tetapi publikasi gagal. Periksa job Release dan izin GitHub token."
             else
               echo "❌ APK belum berhasil melewati build dan validasi; tidak ada rilis baru."
             fi
@@ -250,5 +250,5 @@ jobs:
             echo "- SHA: $GITHUB_SHA"
             echo "- Pesan: $(git log -1 --pretty=%s)"
             echo
-            echo "Lint dan Unit Test dilaporkan terpisah; publikasi APK bergantung pada Build dan APK Validation."
+            echo "Lint, Unit Test, Dependency Report, APK Validation, dan laporan ukuran berjalan terpisah. Publikasi hanya bergantung pada keberhasilan Build APK agar kegagalan job pemeriksaan lain tidak memblokir rilis."
           } >> "$GITHUB_STEP_SUMMARY"
