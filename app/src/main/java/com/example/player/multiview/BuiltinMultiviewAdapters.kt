@@ -9,8 +9,13 @@ class GoogleDriveMultiviewAdapter : MultiviewSourceAdapter {
     override val kind = MultiviewSourceKind.GOOGLE_DRIVE
 
     override suspend fun resolve(request: MultiviewSourceRequest): MultiviewResolveResult {
-        val raw = request.mediaItem?.url ?: request.uri?.toString().orEmpty()
-        if (raw.isBlank() || !isGoogleDriveUri(raw)) {
+        val candidates = listOfNotNull(
+            request.mediaItem?.url,
+            request.mediaItem?.sourceUrl,
+            request.uri?.toString()
+        ).filter { it.isNotBlank() }
+        val raw = candidates.firstOrNull(::isGoogleDriveUri).orEmpty()
+        if (raw.isBlank()) {
             return MultiviewResolveResult.Failure("Pilih tautan atau item Google Drive yang valid.")
         }
         val normalized = normalizePlaybackUrl(raw)
@@ -28,7 +33,8 @@ class GoogleDriveMultiviewAdapter : MultiviewSourceAdapter {
         val host = runCatching { Uri.parse(value).host?.lowercase() }.getOrNull()
         return host == "drive.google.com" ||
             host == "docs.google.com" ||
-            host == "drive.usercontent.google.com"
+            host == "drive.usercontent.google.com" ||
+            host == "drive.googleusercontent.com"
     }
 }
 
