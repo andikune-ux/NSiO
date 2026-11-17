@@ -604,18 +604,21 @@ class CS3IPlayer(
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
                 val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
                     val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
-                    val subtitleMime = subtitle.mimeType ?: when (extension) {
-                        "vtt" -> "text/vtt"
-                        "srt" -> "application/x-subrip"
-                        "ttml", "xml" -> "application/ttml+xml"
-                        "ass", "ssa" -> "text/x-ssa"
-                        else -> null
+                    val subtitleMime = when (subtitle.mimeType?.lowercase()) {
+                        "text/vtt", "application/x-subrip", "application/ttml+xml", "text/x-ssa" -> subtitle.mimeType
+                        else -> when (extension) {
+                            "vtt" -> "text/vtt"
+                            "srt" -> "application/x-subrip"
+                            "ttml", "xml" -> "application/ttml+xml"
+                            "ass", "ssa" -> "text/x-ssa"
+                            else -> null
+                        }
                     }
                     ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
                         .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
                         .setLabel(subtitle.language.ifBlank { "Subtitle" })
                         .setSelectionFlags(0)
-                        .apply { (subtitle.mimeType ?: subtitleMime)?.let(::setMimeType) }
+                        .apply { subtitleMime?.let(::setMimeType) }
                         .build()
                 }
                 if (subtitleConfigurations.isNotEmpty()) {
