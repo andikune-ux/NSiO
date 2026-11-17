@@ -562,12 +562,12 @@ class CS3IPlayer(
         videoInterceptor: okhttp3.Interceptor? = null,
         pluginStreams: List<com.example.data.plugin.CloudStreamStream> = lastPluginStreams
     ) {
+        if (lastTitle.isNotBlank() && title != lastTitle) userExternalSubtitles.clear()
         lastUrl = url
         lastTitle = title
         lastPositionMs = startPositionMs
         lastHeaders = requestHeaders
         lastMimeType = mimeType
-        if (lastTitle.isNotBlank() && title != lastTitle) userExternalSubtitles.clear()
         val mergedExternalSubtitles = (externalSubtitles + userExternalSubtitles).distinctBy { it.url }
         lastExternalSubtitles = mergedExternalSubtitles
         lastVideoInterceptor = videoInterceptor
