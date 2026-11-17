@@ -729,9 +729,21 @@ class CS3IPlayer(
                     )
                 }
                 val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
-                    val extension = runCatching { Uri.parse(subtitle.url).lastPathSegment.orEmpty().substringAfterLast('.', "").lowercase() }.getOrDefault("")
-                    val subtitleMime = when (subtitle.mimeType?.lowercase()) {
-                        "text/vtt", "application/x-subrip", "application/ttml+xml", "text/x-ssa" -> subtitle.mimeType
+                    val extension = runCatching {
+                        Uri.parse(subtitle.url).lastPathSegment.orEmpty()
+                            .substringAfterLast('.', "")
+                            .lowercase()
+                    }.getOrDefault("")
+                    // CloudStream providers do not always agree on subtitle MIME aliases.
+                    // Normalize common ASS/SSA aliases to Media3's SSA decoder MIME type.
+                    val declaredMime = subtitle.mimeType
+                        ?.substringBefore(';')
+                        ?.trim()
+                        ?.lowercase()
+                    val subtitleMime = when (declaredMime) {
+                        "text/vtt", "application/x-subrip", "application/ttml+xml" -> declaredMime
+                        "text/x-ssa", "text/x-ass", "application/x-ssa", "application/x-ass" -> "text/x-ssa"
+                        "text/srt", "application/srt" -> "application/x-subrip"
                         else -> when (extension) {
                             "vtt" -> "text/vtt"
                             "srt" -> "application/x-subrip"
