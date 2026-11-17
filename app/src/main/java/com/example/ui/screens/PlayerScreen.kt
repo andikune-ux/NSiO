@@ -231,6 +231,9 @@ fun PlayerScreen(
     var subtitleBottomPadding by remember(context) {
         mutableStateOf(playerPreferences.getFloat("subtitle_bottom_padding", 0.08f).coerceIn(0.02f, 0.35f))
     }
+    var subtitleEdgeType by remember(context) {
+        mutableStateOf(playerPreferences.getInt("subtitle_edge_type", CaptionStyleCompat.EDGE_TYPE_OUTLINE))
+    }
     val externalSubtitlePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -302,19 +305,20 @@ fun PlayerScreen(
         activeGesture = null
     }
 
-    LaunchedEffect(subtitleScale, subtitleTextColor, subtitleBackgroundColor, subtitleBottomPadding, playerViewRef) {
+    LaunchedEffect(subtitleScale, subtitleTextColor, subtitleBackgroundColor, subtitleBottomPadding, subtitleEdgeType, playerViewRef) {
         playerPreferences.edit()
             .putFloat("subtitle_scale", subtitleScale)
             .putInt("subtitle_text_color", subtitleTextColor)
             .putInt("subtitle_background_color", subtitleBackgroundColor)
             .putFloat("subtitle_bottom_padding", subtitleBottomPadding)
+            .putInt("subtitle_edge_type", subtitleEdgeType)
             .apply()
         playerViewRef?.subtitleView?.apply {
             setStyle(CaptionStyleCompat(
                 subtitleTextColor,
                 subtitleBackgroundColor,
                 android.graphics.Color.TRANSPARENT,
-                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                subtitleEdgeType,
                 android.graphics.Color.BLACK,
                 null
             ))
@@ -1073,6 +1077,13 @@ fun PlayerScreen(
                                     subtitleBottomPadding < 0.22f -> "Tengah bawah"
                                     else -> "Tengah"
                                 },
+                                "Efek tepi subtitle" to when (subtitleEdgeType) {
+                                    CaptionStyleCompat.EDGE_TYPE_NONE -> "Tanpa efek"
+                                    CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW -> "Bayangan"
+                                    CaptionStyleCompat.EDGE_TYPE_RAISED -> "Timbul"
+                                    CaptionStyleCompat.EDGE_TYPE_DEPRESSED -> "Cekung"
+                                    else -> "Outline"
+                                },
                                 "Timer tidur" to (if (sleepTimerRemainingSeconds > 0L) "${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, '0')}" else "Mati"),
                                 "Orientasi layar" to selectedOrientation,
                                 "Kunci kontrol" to if (controlsLocked) "Aktif" else "Mati"
@@ -1470,6 +1481,22 @@ fun PlayerScreen(
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                             subtitleBottomPadding = padding
+                                        }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                                "Efek tepi subtitle" -> listOf(
+                                    "Outline" to CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                    "Bayangan" to CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                                    "Timbul" to CaptionStyleCompat.EDGE_TYPE_RAISED,
+                                    "Cekung" to CaptionStyleCompat.EDGE_TYPE_DEPRESSED,
+                                    "Tanpa efek" to CaptionStyleCompat.EDGE_TYPE_NONE
+                                ).forEach { (label, edgeType) ->
+                                    Text(
+                                        text = (if (subtitleEdgeType == edgeType) "✓ " else "") + label,
+                                        color = if (subtitleEdgeType == edgeType) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            subtitleEdgeType = edgeType
                                         }.padding(horizontal = 10.dp, vertical = 9.dp)
                                     )
                                 }
