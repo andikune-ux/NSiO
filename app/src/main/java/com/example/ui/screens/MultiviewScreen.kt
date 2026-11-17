@@ -170,22 +170,30 @@ fun MultiviewScreen(
         scope.launch {
             pluginSearchLoading = true
             pluginSearchResults = emptyList()
-            val results = mutableListOf<MultiviewPluginSearchResult>()
-            val entries = pluginRepositories.flatMap { repo ->
-                repo.plugins.filter { entry ->
-                    entry.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(entry)
-                }.map { entry ->
-                    Triple(entry, viewModel.pluginManager.cloudStreamPluginId(entry), viewModel.pluginManager.cloudStreamRepositoryId(entry))
-                }
-            }.distinctBy { it.second }
-            entries.forEach { (entry, pluginId, repositoryId) ->
-                runCatching { viewModel.pluginManager.searchCloudStreamPlugin(entry, query, 1) }
-                    .getOrNull()?.items.orEmpty().forEach { item ->
-                        results += MultiviewPluginSearchResult(pluginId, repositoryId, entry.url, item)
+            try {
+                val results = mutableListOf<MultiviewPluginSearchResult>()
+                val entries = pluginRepositories.flatMap { repo ->
+                    repo.plugins.filter { entry ->
+                        entry.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(entry)
+                    }.map { entry ->
+                        Triple(entry, viewModel.pluginManager.cloudStreamPluginId(entry), viewModel.pluginManager.cloudStreamRepositoryId(entry))
                     }
+                }.distinctBy { it.second }
+                entries.forEach { (entry, pluginId, repositoryId) ->
+                    try {
+                        viewModel.pluginManager.searchCloudStreamPlugin(entry, query, 1).items.forEach { item ->
+                            results += MultiviewPluginSearchResult(pluginId, repositoryId, entry.url, item)
+                        }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // One unavailable provider must not prevent searching other installed plugins.
+                    }
+                }
+                pluginSearchResults = results
+            } finally {
+                pluginSearchLoading = false
             }
-            pluginSearchResults = results
-            pluginSearchLoading = false
         }
     }
 
