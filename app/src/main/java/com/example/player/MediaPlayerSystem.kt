@@ -76,6 +76,8 @@ data class PlayerState(
     val selectedPluginStreamUrl: String? = null,
     val audioDelayMs: Int = 0,
     val audioCompressorEnabled: Boolean = false,
+    val preferredAudioLanguage: String? = null,
+    val preferredSubtitleLanguage: String? = null,
     val isLive: Boolean = false
 )
 
@@ -92,6 +94,8 @@ interface IPlayer {
     fun setPlaybackSpeed(speed: Float)
     fun setAudioDelay(delayMs: Int)
     fun setAudioCompressorEnabled(enabled: Boolean)
+    fun setPreferredAudioLanguage(language: String?)
+    fun setPreferredSubtitleLanguage(language: String?)
     fun toggleRepeatMode()
     fun toggleShuffle()
     fun setVolume(volume: Float)
@@ -151,6 +155,12 @@ class CS3IPlayer(
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
         audioDelayMs = preferences.getInt("audio_delay_ms", 0).coerceIn(-2000, 2000)
         audioCompressorEnabled = preferences.getBoolean("audio_compressor_enabled", false)
+        _playerState.value = _playerState.value.copy(
+            audioDelayMs = audioDelayMs,
+            audioCompressorEnabled = audioCompressorEnabled,
+            preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
+            preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
+        )
         logicalRepeatMode = preferences.getInt("playback_repeat_mode", Player.REPEAT_MODE_OFF)
             .takeIf { it in Player.REPEAT_MODE_OFF..Player.REPEAT_MODE_ALL }
             ?: Player.REPEAT_MODE_OFF
@@ -840,6 +850,40 @@ class CS3IPlayer(
             .putFloat("preferred_playback_speed", speed)
             .apply()
         _playerState.value = _playerState.value.copy(playbackSpeed = speed)
+    }
+
+    override fun setPreferredAudioLanguage(language: String?) {
+        val normalized = language?.trim()?.takeIf { it.isNotEmpty() }
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        preferences.edit().apply {
+            if (normalized == null) remove("preferred_audio_language") else putString("preferred_audio_language", normalized)
+        }.apply()
+        exoPlayer?.let { player ->
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                .setPreferredAudioLanguage(normalized)
+                .build()
+            refreshTrackOptions()
+        }
+        _playerState.value = _playerState.value.copy(preferredAudioLanguage = normalized)
+    }
+
+    override fun setPreferredSubtitleLanguage(language: String?) {
+        val normalized = language?.trim()?.takeIf { it.isNotEmpty() }
+        val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        preferences.edit().apply {
+            if (normalized == null) remove("preferred_subtitle_language") else putString("preferred_subtitle_language", normalized)
+        }.apply()
+        exoPlayer?.let { player ->
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage(normalized)
+                .build()
+            refreshTrackOptions()
+        }
+        _playerState.value = _playerState.value.copy(preferredSubtitleLanguage = normalized, subtitlesDisabled = false)
     }
 
     override fun setAudioDelay(delayMs: Int) {
