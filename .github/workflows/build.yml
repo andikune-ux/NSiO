@@ -245,6 +245,88 @@ jobs:
             --title "NSiO $NSIO_VERSION_TAG" \
             --generate-notes
 
+  workflow_summary:
+    name: "📝 Rangkuman Hasil Workflow"
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [lint, unit_tests, dependency_report, build, apk_validation, size_report, release, artifact_cleanup]
+    steps:
+      - name: 📚 Checkout commit details
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: 📝 Buat rangkuman dalam bahasa Indonesia
+        uses: actions/github-script@v7
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const results = JSON.parse(process.env.JOB_RESULTS);
+            const labels = {
+              lint: "Pemeriksaan kualitas aplikasi",
+              unit_tests: "Pengujian fungsi aplikasi",
+              dependency_report: "Pemeriksaan pustaka pendukung",
+              build: "Pembuatan file APK",
+              apk_validation: "Pemeriksaan keamanan dan keutuhan APK",
+              size_report: "Pemeriksaan ukuran APK",
+              release: "Penerbitan pembaruan aplikasi",
+              artifact_cleanup: "Pembersihan file build lama"
+            };
+            const statusText = {
+              success: "✅ Berhasil",
+              failure: "❌ Bermasalah",
+              cancelled: "⏹️ Dibatalkan",
+              skipped: "⏭️ Dilewati",
+              '': "⏳ Belum selesai"
+            };
+            const lines = [
+              "## 📝 Rangkuman hasil NSiO",
+              "",
+              "Berikut laporan otomatis dengan bahasa sederhana. Rangkuman ini tetap dibuat meskipun ada pemeriksaan yang gagal atau dilewati.",
+              "",
+              "### Hasil setiap bagian"
+            ];
+            for (const [key, label] of Object.entries(labels)) {
+              const result = results[key]?.result || "";
+              lines.push(`- ${statusText[result] || "⚠️ Perlu diperiksa"} — **${label}**`);
+            }
+            const buildOK = results.build?.result === "success";
+            const apkOK = results.apk_validation?.result === "success";
+            const release = results.release?.result;
+            lines.push("", "### Status pembaruan");
+            if (buildOK && apkOK && release === "success") {
+              lines.push("- ✅ APK berhasil dibuat, diperiksa, dan diterbitkan di halaman Releases.");
+            } else if (buildOK && apkOK && release === "skipped") {
+              lines.push("- ⚠️ APK berhasil dibuat dan diperiksa, tetapi penerbitan rilis dilewati. Periksa apakah ada proses rilis yang lebih baru atau kondisi rilis yang belum terpenuhi.");
+            } else if (buildOK && apkOK) {
+              lines.push("- ⚠️ APK berhasil dibuat dan lolos pemeriksaan, tetapi penerbitan rilis belum berhasil dipastikan.");
+            } else {
+              lines.push("- ❌ APK belum berhasil melewati seluruh tahap pembuatan dan pemeriksaan, sehingga pembaruan belum diterbitkan.");
+            }
+            lines.push("", "### Fitur dan perubahan pada versi ini");
+            const commit = await github.rest.repos.getCommit({
+              owner: context.repo.owner, repo: context.repo.repo, ref: context.sha
+            });
+            const message = commit.data.commit.message.trim();
+            lines.push(`- Perubahan yang tercatat: **${message.split("\n")[0]}**`);
+            const body = message.split("\n").slice(1).join("\n").trim();
+            if (body) lines.push("", body);
+            const files = commit.data.files || [];
+            const groups = new Set();
+            for (const file of files) {
+              const p = file.filename;
+              if (p.startsWith("app/src/")) groups.add("Ada perubahan pada aplikasi (tampilan, fitur, atau cara kerja).");
+              if (p.startsWith(".github/workflows/")) groups.add("Ada pembaruan pada proses build, pemeriksaan, atau penerbitan aplikasi.");
+              if (p.startsWith(".github/scripts/")) groups.add("Ada pembaruan pada proses otomatis dan pengelolaan versi aplikasi.");
+              if (p.startsWith("gradle") || p.endsWith(".gradle") || p.endsWith(".gradle.kts")) groups.add("Ada perubahan pada konfigurasi dan pustaka pendukung aplikasi.");
+            }
+            for (const item of groups) lines.push(`- ${item}`);
+            if (!groups.size && !body) lines.push("- Detail fitur tambahan belum dijelaskan pada pesan perubahan commit ini.");
+            lines.push("", "### Catatan");
+            lines.push("- Jika ada bagian bertanda bermasalah, buka bagian job terkait untuk melihat penyebabnya.");
+            lines.push("- Pemeriksaan kualitas dan pengujian tetap dilaporkan terpisah dari proses penerbitan APK.");
+            await core.summary.addRaw(lines.join("\n")).write();
+
   artifact_cleanup:
     name: 🧹 Retain 3 Newest Artifacts
     runs-on: ubuntu-latest
