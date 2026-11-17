@@ -2,6 +2,7 @@ package com.example.player
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.PlaybackException
@@ -105,9 +106,11 @@ class CS3IPlayer(
     private var lastVideoInterceptor: okhttp3.Interceptor? = null
     private var lastPluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
     private val attemptedPluginStreamKeys = mutableSetOf<String>()
+    private var bufferingStartedAtMs: Long = 0L
+    private var bufferingFallbackRequestedForUrl: String? = null
     @Volatile private var cloudStreamRefreshInProgress = false
 
-    /** Called after existing plugin URLs fail with HTTP 403/404. */
+    /** Called when resolved plugin URLs fail with an expired-link HTTP response. */
     var onCloudStreamRefreshRequested: (suspend (Long) -> Boolean)? = null
     private var lastNonZeroVolume: Float = 1f
     private var audioDelayMs: Int = 0
@@ -198,12 +201,15 @@ class CS3IPlayer(
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
                             Player.STATE_BUFFERING -> {
+                                if (bufferingStartedAtMs == 0L) bufferingStartedAtMs = SystemClock.elapsedRealtime()
                                 _playerState.value = _playerState.value.copy(
                                     isBuffering = true,
                                     error = null
                                 )
                             }
                             Player.STATE_READY -> {
+                                bufferingStartedAtMs = 0L
+                                bufferingFallbackRequestedForUrl = null
                                 _playerState.value = _playerState.value.copy(
                                     isBuffering = false,
                                     durationMs = duration.coerceAtLeast(0L),
@@ -220,6 +226,7 @@ class CS3IPlayer(
                                 )
                             }
                             Player.STATE_IDLE -> {
+                                bufferingStartedAtMs = 0L
                                 _playerState.value = _playerState.value.copy(isBuffering = false, isSeekable = false)
                             }
                         }
@@ -235,30 +242,18 @@ class CS3IPlayer(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        // Media3 may wrap the HTTP exception more than one level deep
-                        // (for example through a playlist/chunk source error).
-                        val httpError = generateSequence(error.cause) { it.cause }
-                            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
-                            .firstOrNull()
+                        // Media3 wraps extractor, manifest, decoder and HTTP failures in
+                        // PlaybackException. Try another CloudStream link for any source failure.
+                        val causes = generateSequence<Throwable>(error) { it.cause }.toList()
+                        val httpError = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
                         val cause = httpError ?: error.cause
                         val responseCode = httpError?.responseCode
 
-                        // Try other streams first. If all resolved URLs are stale, ask the
-                        // CloudStream provider for a fresh set of links (one refresh per play).
-                        if (responseCode == 403 || responseCode == 404) {
-                            val alternative = lastPluginStreams
-                                .asSequence()
-                                .filter { it.url.isNotBlank() }
-                                .filter { stream ->
-                                    val key = "${stream.url}|${stream.referer}"
-                                    key !in attemptedPluginStreamKeys
-                                }
-                                .sortedByDescending { it.quality }
-                                .firstOrNull()
-                            if (alternative != null) {
-                                selectPluginStream(alternative)
-                                return
-                            }
+                        if (tryNextPluginStream()) return
+
+                        // Expired/session-bound links can be refreshed by asking the provider
+                        // to resolve the source again, but never start concurrent refreshes.
+                        if (responseCode == 401 || responseCode == 403 || responseCode == 404) {
                             val refreshHandler = onCloudStreamRefreshRequested
                             if (refreshHandler != null && !cloudStreamRefreshInProgress) {
                                 cloudStreamRefreshInProgress = true
@@ -270,7 +265,7 @@ class CS3IPlayer(
                                         _playerState.value = _playerState.value.copy(
                                             isBuffering = false,
                                             isPlaying = false,
-                                            error = "Link video lama tidak berlaku (HTTP $responseCode). Provider gagal memberikan link baru. Coba pilih sumber lain atau putar ulang.",
+                                            error = "Link video tidak berlaku (HTTP $responseCode) dan provider gagal memberikan link baru. Coba sumber lain atau putar ulang.",
                                             isFallbackAvailable = true
                                         )
                                     }
@@ -278,31 +273,35 @@ class CS3IPlayer(
                                 return
                             }
                         }
+
+                        val causeName = cause?.javaClass?.simpleName.orEmpty()
                         val errorDesc = when {
                             cause is HttpDataSource.InvalidResponseCodeException -> {
                                 when (cause.responseCode) {
-                                    403 -> "Akses ditolak (HTTP 403 Forbidden). Server sumber video membatasi akses streaming langsung atau link membutuhkan izin khusus/token baru."
+                                    401, 403 -> "Akses ke sumber video ditolak (HTTP ${cause.responseCode}). Link mungkin memerlukan sesi atau token baru."
                                     404 -> "Video tidak ditemukan di server sumber (HTTP 404 Not Found)."
                                     500, 502, 503 -> "Server penyedia video sedang mengalami kendala (HTTP ${cause.responseCode})."
                                     else -> "Gagal memuat video dari server (Kode HTTP: ${cause.responseCode})."
                                 }
                             }
-                            cause is HttpDataSource.HttpDataSourceException -> {
-                                "Koneksi ke server video terputus atau tidak stabil. Periksa koneksi internet Anda."
-                            }
+                            cause is HttpDataSource.HttpDataSourceException ->
+                                "Koneksi ke server video gagal atau terputus. Periksa koneksi internet dan coba sumber lain."
                             else -> {
-                                error.message?.takeIf { it.isNotBlank() }
-                                    ?: "Terjadi kendala saat memproses pemutaran video."
+                                val detail = error.message?.takeIf { it.isNotBlank() }
+                                    ?: cause?.message?.takeIf { it.isNotBlank() }
+                                if (detail != null) "Format atau sumber video gagal diproses ($causeName): $detail"
+                                else "Format atau sumber video tidak dapat diproses ($causeName, ${error.errorCodeName})."
                             }
                         }
 
+                        bufferingStartedAtMs = 0L
                         _playerState.value = _playerState.value.copy(
                             isBuffering = false,
                             isPlaying = false,
                             error = errorDesc,
                             isFallbackAvailable = true
                         )
-                    }
+                    }                    }
                 })
             }
         startProgressTracking()
@@ -368,17 +367,8 @@ class CS3IPlayer(
     override fun selectPluginStream(stream: com.example.data.plugin.CloudStreamStream) {
         if (stream.url.isBlank()) return
         val currentPosition = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: lastPositionMs
-        val headers = stream.headers.toMutableMap().apply {
-            if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", ignoreCase = true) }) {
-                put("Referer", stream.referer)
-            }
-        }
-        val mimeType = when (stream.streamType.substringAfterLast('.').uppercase()) {
-            "M3U8", "HLS" -> "application/x-mpegURL"
-            "DASH", "MPD" -> "application/dash+xml"
-            "MP4", "VIDEO" -> "video/mp4"
-            else -> null
-        }
+        val headers = buildStreamHeaders(stream)
+        val mimeType = resolveMimeType(stream.streamType, stream.url)
         playInternal(
             url = stream.url,
             title = lastTitle,
@@ -405,16 +395,76 @@ class CS3IPlayer(
         progressJob = coroutineScope.launch(Dispatchers.Main) {
             while (isActive) {
                 exoPlayer?.let { player ->
-                    if (player.isPlaying) {
+                    if (player.playbackState == Player.STATE_BUFFERING) {
+                        if (bufferingStartedAtMs == 0L) bufferingStartedAtMs = SystemClock.elapsedRealtime()
+                        val bufferingForMs = SystemClock.elapsedRealtime() - bufferingStartedAtMs
+                        if (bufferingForMs >= 45_000L && bufferingFallbackRequestedForUrl != lastUrl) {
+                            bufferingFallbackRequestedForUrl = lastUrl
+                            if (!tryNextPluginStream()) {
+                                bufferingStartedAtMs = 0L
+                                _playerState.value = _playerState.value.copy(
+                                    isBuffering = false,
+                                    isPlaying = false,
+                                    error = "Sumber video tidak merespons setelah 45 detik. Coba pilih sumber lain atau putar ulang.",
+                                    isFallbackAvailable = true
+                                )
+                                player.stop()
+                            }
+                        }
+                    } else if (player.playbackState == Player.STATE_READY) {
+                        bufferingStartedAtMs = 0L
+                        bufferingFallbackRequestedForUrl = null
+                    }
+                    // Duration is available at READY even while paused.
+                    if (player.playbackState == Player.STATE_READY) {
                         _playerState.value = _playerState.value.copy(
                             currentPositionMs = player.currentPosition.coerceAtLeast(0L),
-                            durationMs = player.duration.coerceAtLeast(0L)
+                            durationMs = player.duration.coerceAtLeast(0L),
+                            isSeekable = player.isCurrentMediaItemSeekable
                         )
-                        lastPositionMs = player.currentPosition.coerceAtLeast(0L)
                     }
+                    if (player.isPlaying) lastPositionMs = player.currentPosition.coerceAtLeast(0L)
                 }
                 delay(500)
             }
+        }
+    }
+
+    private fun buildStreamHeaders(stream: com.example.data.plugin.CloudStreamStream): Map<String, String> =
+        stream.headers.toMutableMap().apply {
+            if (stream.referer.isNotBlank() && keys.none { it.equals("Referer", ignoreCase = true) }) {
+                put("Referer", stream.referer)
+            }
+        }
+
+    private fun buildStreamAttemptKey(url: String, headers: Map<String, String>): String {
+        val normalizedHeaders = headers.entries.sortedBy { it.key.lowercase() }
+            .joinToString("&") { it.key.lowercase() + "=" + it.value }
+        return normalizePlaybackUrl(url) + "|" + normalizedHeaders
+    }
+
+    private fun tryNextPluginStream(): Boolean {
+        val alternative = lastPluginStreams.asSequence()
+            .filter { it.url.isNotBlank() }
+            .filter { stream -> buildStreamAttemptKey(stream.url, buildStreamHeaders(stream)) !in attemptedPluginStreamKeys }
+            .sortedByDescending { it.quality }
+            .firstOrNull() ?: return false
+        selectPluginStream(alternative)
+        return true
+    }
+
+    private fun resolveMimeType(streamType: String, url: String): String? {
+        val type = streamType.substringAfterLast('.').uppercase()
+        val extension = runCatching {
+            Uri.parse(url).lastPathSegment.orEmpty().substringAfterLast('.', "").uppercase()
+        }.getOrDefault("")
+        return when {
+            type.contains("M3U8") || type.contains("HLS") || extension == "M3U8" -> "application/x-mpegURL"
+            type.contains("DASH") || type == "MPD" || extension == "MPD" -> "application/dash+xml"
+            type.contains("WEBM") || extension == "WEBM" -> "video/webm"
+            type.contains("MKV") || type.contains("MATROSKA") || extension == "MKV" -> "video/x-matroska"
+            type.contains("MP4") || type == "VIDEO" || extension == "MP4" -> "video/mp4"
+            else -> null
         }
     }
 
@@ -456,9 +506,10 @@ class CS3IPlayer(
         lastExternalSubtitles = externalSubtitles
         lastVideoInterceptor = videoInterceptor
         lastPluginStreams = pluginStreams
+        bufferingStartedAtMs = 0L
+        bufferingFallbackRequestedForUrl = null
         if (url.isNotBlank()) {
-            val referer = requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
-            attemptedPluginStreamKeys.add("$url|$referer")
+            attemptedPluginStreamKeys.add(buildStreamAttemptKey(url, requestHeaders))
         }
         httpDataSourceFactory = createHttpDataSourceFactory(videoInterceptor, externalSubtitles)
 
