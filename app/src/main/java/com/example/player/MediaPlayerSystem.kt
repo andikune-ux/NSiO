@@ -107,6 +107,31 @@ interface IPlayer {
     fun release()
 }
 
+/**
+ * Resolve common CloudStream subtitle MIME aliases without relying on Android Uri,
+ * so the mapping stays deterministic and can be covered by local unit tests.
+ */
+internal fun resolveSubtitleMimeType(url: String, declaredMimeType: String?): String? {
+    val extension = url.substringBefore('#').substringBefore('?')
+        .substringAfterLast('/')
+        .substringAfterLast('.', "")
+        .lowercase()
+    val declaredMime = declaredMimeType?.substringBefore(';')?.trim()?.lowercase()
+    return when (declaredMime) {
+        "text/vtt" -> "text/vtt"
+        "application/x-subrip", "text/srt", "application/srt" -> "application/x-subrip"
+        "application/ttml+xml" -> "application/ttml+xml"
+        "text/x-ssa", "text/x-ass", "application/x-ssa", "application/x-ass" -> "text/x-ssa"
+        else -> when (extension) {
+            "vtt" -> "text/vtt"
+            "srt" -> "application/x-subrip"
+            "ttml", "xml" -> "application/ttml+xml"
+            "ass", "ssa" -> "text/x-ssa"
+            else -> null
+        }
+    }
+}
+
 @OptIn(UnstableApi::class)
 class CS3IPlayer(
     private val context: Context,
@@ -729,29 +754,7 @@ class CS3IPlayer(
                     )
                 }
                 val subtitleConfigurations = mergedExternalSubtitles.filter { it.url.isNotBlank() }.map { subtitle ->
-                    val extension = runCatching {
-                        Uri.parse(subtitle.url).lastPathSegment.orEmpty()
-                            .substringAfterLast('.', "")
-                            .lowercase()
-                    }.getOrDefault("")
-                    // CloudStream providers do not always agree on subtitle MIME aliases.
-                    // Normalize common ASS/SSA aliases to Media3's SSA decoder MIME type.
-                    val declaredMime = subtitle.mimeType
-                        ?.substringBefore(';')
-                        ?.trim()
-                        ?.lowercase()
-                    val subtitleMime = when (declaredMime) {
-                        "text/vtt", "application/x-subrip", "application/ttml+xml" -> declaredMime
-                        "text/x-ssa", "text/x-ass", "application/x-ssa", "application/x-ass" -> "text/x-ssa"
-                        "text/srt", "application/srt" -> "application/x-subrip"
-                        else -> when (extension) {
-                            "vtt" -> "text/vtt"
-                            "srt" -> "application/x-subrip"
-                            "ttml", "xml" -> "application/ttml+xml"
-                            "ass", "ssa" -> "text/x-ssa"
-                            else -> null
-                        }
-                    }
+                    val subtitleMime = resolveSubtitleMimeType(subtitle.url, subtitle.mimeType)
                     ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
                         .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
                         .setLabel(subtitle.displayName?.takeIf { it.isNotBlank() } ?: subtitle.language.ifBlank { "Subtitle" })
