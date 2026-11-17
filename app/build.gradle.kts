@@ -157,22 +157,15 @@ dependencies {
   implementation(libs.androidx.media3.session)
   implementation(libs.play.services.cast.framework)
   implementation(libs.androidx.work.runtime.ktx)
-  implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
-  implementation(libs.firebase.appcheck.recaptcha)
-  implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.retrofit)
 
   // CloudStream SDK compatibility runtime (GPL-3.0; see LICENSES/CLOUDSTREAM3.md).
   // NiceHttp is vendored in app/src/main/java/com/lagradost/nicehttp and uses this OkHttp client.
@@ -195,7 +188,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
 }
 
  
