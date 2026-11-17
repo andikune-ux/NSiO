@@ -1,6 +1,9 @@
 package com.example.player
 
 import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.os.SystemClock
 import androidx.annotation.OptIn
@@ -9,6 +12,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Player
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -30,6 +34,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,6 +196,19 @@ class CS3IPlayer(
         return OkHttpDataSource.Factory(client)
             .setUserAgent(STANDARD_USER_AGENT)
             .setDefaultRequestProperties(baseHeaders)
+    }
+
+    private fun ensureMediaSessionServiceStarted() {
+        try {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, NSiOMediaSessionService::class.java)
+            )
+        } catch (error: Exception) {
+            // Playback in the foreground remains available if Android rejects a
+            // background-service start; the failure is visible in logcat.
+            Log.w("NSiOPlayer", "Unable to start media playback service", error)
+        }
     }
 
     private fun initExoPlayer() {
@@ -645,6 +663,7 @@ class CS3IPlayer(
         exoPlayer?.let { player ->
             try {
                 require(url.isNotBlank()) { "URL media kosong" }
+                ensureMediaSessionServiceStarted()
                 httpDataSourceFactory.setDefaultRequestProperties(
                     mapOf("Accept" to "*/*", "User-Agent" to STANDARD_USER_AGENT) + requestHeaders
                 )
@@ -665,6 +684,7 @@ class CS3IPlayer(
                 )
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
                 if (drmInfo != null) {
                     val drmUuid = runCatching { UUID.fromString(drmInfo.uuid) }.getOrNull()
@@ -953,5 +973,21 @@ class CS3IPlayer(
         progressJob?.cancel()
         exoPlayer?.release()
         exoPlayer = null
+    }
+}
+
+/**
+ * One player engine per app process. The Activity/ViewModel and MediaSessionService
+ * must control the exact same ExoPlayer instance to avoid duplicate streams.
+ */
+object PlayerRuntime {
+    @Volatile private var instance: CS3IPlayer? = null
+    private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    fun get(context: Context): CS3IPlayer {
+        instance?.let { return it }
+        return synchronized(this) {
+            instance ?: CS3IPlayer(context.applicationContext, playbackScope).also { instance = it }
+        }
     }
 }

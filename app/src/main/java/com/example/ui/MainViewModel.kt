@@ -24,7 +24,7 @@ import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
-import com.example.player.CS3IPlayer
+import com.example.player.PlayerRuntime
 import com.example.player.shouldUseNativePlayer
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +64,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val pluginManager = PluginManager(application)
     val downloadManager = VideoDownloadManager.getInstance(application)
     val downloads = downloadManager.downloads
-    val player = CS3IPlayer(application, viewModelScope)
+    val player = PlayerRuntime.get(application)
     private var cloudStreamVerifierJob: Job? = null
 
     init {
@@ -2209,6 +2209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        player.release()
+        // Playback engine is application-scoped and is released by process teardown,
+        // not by an Activity/ViewModel leaving the foreground.
     }
 }

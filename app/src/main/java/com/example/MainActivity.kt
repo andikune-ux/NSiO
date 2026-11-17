@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        if (coreStarted && !isInPictureInPictureMode) viewModel.pausePlaybackForBackground()
+        // MediaSessionService now owns background playback; do not pause on Activity onPause.
         super.onPause()
     }
 
