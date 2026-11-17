@@ -39,10 +39,9 @@ class TenBandEqualizerProcessor(initialGainsDb: FloatArray = FloatArray(10)) : B
         updateCoefficients()
     }
 
-    fun reset() {
+    fun resetBands() {
         gainsDb = FloatArray(10)
         updateCoefficients()
-        clearFilterState()
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
