@@ -208,12 +208,6 @@ fun PlayerScreen(
     var isRewindingHeld by remember { mutableStateOf(false) }
     var isFastForwardHeld by remember { mutableStateOf(false) }
     var controlsLocked by remember { mutableStateOf(false) }
-    var swipeSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_seek_enabled", false)) }
-    var swipeBrightnessEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_brightness_enabled", true)) }
-    var swipeVolumeEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_volume_enabled", true)) }
-    var doubleTapSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_seek_enabled", false)) }
-    var doubleTapPauseEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_pause_enabled", false)) }
-    var doubleTapSeekSeconds by remember(context) { mutableStateOf(playerPreferences.getInt("gesture_double_tap_seek_seconds", 10).coerceIn(5, 30)) }
     var skipStamps by remember(media.id) { mutableStateOf<List<VideoSkipStamp>>(emptyList()) }
     var skipStampLoadFinished by remember(media.id) { mutableStateOf(false) }
     var sleepTimerEndAtMs by remember { mutableStateOf<Long?>(null) }
@@ -223,6 +217,12 @@ fun PlayerScreen(
     val playerPreferences = remember(context) {
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
     }
+    var swipeSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_seek_enabled", false)) }
+    var swipeBrightnessEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_brightness_enabled", true)) }
+    var swipeVolumeEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_swipe_volume_enabled", true)) }
+    var doubleTapSeekEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_seek_enabled", false)) }
+    var doubleTapPauseEnabled by remember(context) { mutableStateOf(playerPreferences.getBoolean("gesture_double_tap_pause_enabled", false)) }
+    var doubleTapSeekSeconds by remember(context) { mutableStateOf(playerPreferences.getInt("gesture_double_tap_seek_seconds", 10).coerceIn(5, 30)) }
     var selectedOrientation by remember(context) {
         mutableStateOf(
             playerPreferences.getString("player_orientation", "Otomatis")
@@ -755,7 +755,7 @@ fun PlayerScreen(
                             }
                         }
                     }
-                    .pointerInput(media.id, swipeVolumeEnabled, playerState.volume) {
+                    .pointerInput(media.id, swipeVolumeEnabled) {
                         if (swipeVolumeEnabled) {
                             var currentVolume = viewModel.player.exoPlayer?.volume ?: playerState.volume
                             detectVerticalDragGestures(
