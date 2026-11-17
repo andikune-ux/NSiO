@@ -216,6 +216,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean) {
     val context = LocalContext.current
