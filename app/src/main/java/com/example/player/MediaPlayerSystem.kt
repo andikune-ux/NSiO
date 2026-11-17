@@ -81,7 +81,8 @@ data class PlayerState(
     val audioCompressorEnabled: Boolean = false,
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val playbackDiagnostics: List<String> = emptyList()
 )
 
 interface IPlayer {
@@ -489,13 +490,40 @@ class CS3IPlayer(
             }
         }
         val preferences = context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+        val videoFormat = player.videoFormat
+        val audioFormat = player.audioFormat
+        val diagnostics = buildList {
+            add("Status: " + when (player.playbackState) {
+                Player.STATE_BUFFERING -> "Buffering"
+                Player.STATE_READY -> if (player.isPlaying) "Memutar" else "Siap / dijeda"
+                Player.STATE_ENDED -> "Selesai"
+                else -> "Menyiapkan"
+            })
+            add("Jenis: " + if (player.isCurrentMediaItemDynamic) "Live" else "VOD")
+            videoFormat?.let { format ->
+                val resolution = if (format.width > 0 && format.height > 0) "${format.width} × ${format.height}" else "Tidak diketahui"
+                val codec = format.codecs ?: format.sampleMimeType ?: "Codec tidak diketahui"
+                add("Video: $resolution · $codec")
+                if (format.bitrate > 0) add("Bitrate video: ${format.bitrate / 1000} kbps")
+                if (format.frameRate.isFinite() && format.frameRate > 0f) add("Frame rate: ${"%.2f".format(java.util.Locale.US, format.frameRate)} fps")
+            } ?: video.firstOrNull { it.selected }?.let { add("Video: ${it.label}") }
+            audioFormat?.let { format ->
+                val codec = format.codecs ?: format.sampleMimeType ?: "Codec tidak diketahui"
+                val channels = format.channelCount.takeIf { it > 0 }?.let { "${it} channel" }
+                val sampleRate = format.sampleRate.takeIf { it > 0 }?.let { "${it} Hz" }
+                add("Audio: " + listOfNotNull(codec, channels, sampleRate).joinToString(" · "))
+                if (format.bitrate > 0) add("Bitrate audio: ${format.bitrate / 1000} kbps")
+            } ?: audio.firstOrNull { it.selected }?.let { add("Audio: ${it.label}") }
+            add("Kecepatan: ${player.playbackParameters.speed}×")
+        }
         _playerState.value = _playerState.value.copy(
             audioTracks = audio,
             subtitleTracks = subtitles,
             videoTracks = video,
             subtitlesDisabled = player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT),
             preferredAudioLanguage = preferences.getString("preferred_audio_language", null),
-            preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null)
+            preferredSubtitleLanguage = preferences.getString("preferred_subtitle_language", null),
+            playbackDiagnostics = diagnostics
         )
     }
 
