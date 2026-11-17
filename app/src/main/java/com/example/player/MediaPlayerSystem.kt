@@ -225,6 +225,9 @@ class CS3IPlayer(
                     ?.takeIf { it.isNotBlank() }
                     ?.let(preferredParameters::setPreferredTextLanguage)
                 trackSelectionParameters = preferredParameters.build()
+                preferences.getFloat("preferred_playback_speed", 1f)
+                    .takeIf { it.isFinite() && it in 0.25f..4f }
+                    ?.let(::setPlaybackSpeed)
                 addListener(object : Player.Listener {
                     override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                         refreshTrackOptions()
@@ -801,6 +804,10 @@ class CS3IPlayer(
         val player = exoPlayer ?: return
         if (speed <= 0f) return
         player.setPlaybackSpeed(speed)
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .putFloat("preferred_playback_speed", speed)
+            .apply()
         _playerState.value = _playerState.value.copy(playbackSpeed = speed)
     }
 
