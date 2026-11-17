@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.focusGroup
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
@@ -2035,14 +2036,17 @@ fun CloudStreamSearchPanel(
             content.plot?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content.cast.takeIf { it.isNotEmpty() }?.let { cast ->
                 Text("Pemeran / Artis", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cast.take(10).forEach { person ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    cast.take(20).forEach { person ->
                         Column(modifier = Modifier.width(76.dp)) {
-                            if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = person.imageUrl, contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
+                            if (!person.imageUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(person.imageUrl), contentDescription = person.name, modifier = Modifier.size(62.dp).clip(CircleShape))
                             Text(person.name, fontSize = 9.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             person.role?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
                             person.voiceActorImageUrl?.takeIf { it.isNotBlank() }?.let { voiceImage ->
-                                AsyncImage(model = voiceImage, contentDescription = "Pengisi suara", modifier = Modifier.size(42.dp).clip(CircleShape))
+                                AsyncImage(model = contentImageRequest(voiceImage), contentDescription = "Pengisi suara", modifier = Modifier.size(42.dp).clip(CircleShape))
                             }
                             person.voiceActorName?.takeIf { it.isNotBlank() }?.let {
                                 Text("Suara: $it", fontSize = 8.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -2131,7 +2135,7 @@ fun CloudStreamSearchPanel(
                 }
                 visibleEpisodes.forEachIndexed { index, episode ->
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = episode.posterUrl, contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
+                        if (!episode.posterUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(episode.posterUrl), contentDescription = episode.name, modifier = Modifier.width(62.dp).height(42.dp).clip(RoundedCornerShape(7.dp)))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(listOfNotNull(episode.episode?.let { "E$it" }, episode.name.ifBlank { "Episode ${index + 1}" }).joinToString(" • "), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                             episode.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2) }
@@ -2163,7 +2167,7 @@ fun CloudStreamSearchPanel(
                 Text("Rekomendasi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 recommendations.take(12).forEach { item ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!item.posterUrl.isNullOrBlank()) AsyncImage(model = item.posterUrl, contentDescription = item.title, modifier = Modifier.width(40.dp).height(56.dp).clip(RoundedCornerShape(6.dp)))
+                        if (!item.posterUrl.isNullOrBlank()) AsyncImage(model = contentImageRequest(item.posterUrl), contentDescription = item.title, modifier = Modifier.width(40.dp).height(56.dp).clip(RoundedCornerShape(6.dp)))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(item.title, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.contentType, item.year?.toString()).joinToString(" • "), fontSize = 8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
