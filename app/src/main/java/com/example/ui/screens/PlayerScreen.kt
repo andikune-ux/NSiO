@@ -1710,7 +1710,7 @@ fun PlayerScreen(
                             playerState.currentPositionMs < (stamp.endMs - 1_000L).coerceAtLeast(stamp.startMs + 1L)
                     }
                 } else null
-                if (activeSkipStamp != null && showControls && !controlsLocked) {
+                if (activeSkipStamp != null && !controlsLocked) {
                     Button(
                         onClick = {
                             viewModel.player.seekTo(activeSkipStamp.endMs.coerceAtMost(playerState.durationMs))
