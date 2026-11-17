@@ -95,7 +95,7 @@ abstract class GenerateNsioLauncherIconsTask : DefaultTask() {
     val graphics = adaptive.createGraphics()
     graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
     graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    val safeSize = 292
+    val safeSize = 432
     graphics.drawImage(cleaned, (432 - safeSize) / 2, (432 - safeSize) / 2, safeSize, safeSize, null)
     graphics.dispose()
     write(adaptive, File(root, "drawable-xxxhdpi/ic_launcher_foreground_art.png"))
