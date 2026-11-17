@@ -408,6 +408,12 @@ class CloudStreamPluginRuntime(private val context: Context) {
 
         val resolved = mutableListOf<ExtractorLink>()
         rawLinks.forEach { raw ->
+            // DRM links already carry their key metadata. Re-running them through a
+            // generic extractor can downgrade them to a plain ExtractorLink and drop DRM.
+            if (raw is DrmExtractorLink) {
+                synchronized(resolved) { resolved.add(raw) }
+                return@forEach
+            }
             val before = synchronized(resolved) { resolved.size }
             val handled = withTimeoutOrNull(LINKS_TIMEOUT_MS) {
                 try {
