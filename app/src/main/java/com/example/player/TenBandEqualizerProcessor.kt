@@ -39,12 +39,6 @@ class TenBandEqualizerProcessor(initialGainsDb: FloatArray = FloatArray(10)) : B
         updateCoefficients()
     }
 
-    override fun reset() {
-        gainsDb = FloatArray(10)
-        updateCoefficients()
-        clearFilterState()
-    }
-
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if ((inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT && inputAudioFormat.encoding != C.ENCODING_PCM_16BIT) ||
             inputAudioFormat.sampleRate <= 0 || inputAudioFormat.channelCount <= 0
