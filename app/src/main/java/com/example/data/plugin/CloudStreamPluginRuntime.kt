@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.DrmExtractorLink
 import com.lagradost.cloudstream3.utils.extractorApis
 import com.lagradost.cloudstream3.utils.loadExtractor
 import java.io.File
@@ -130,6 +131,14 @@ data class CloudStreamSubtitle(
     val isExternal: Boolean = false
 )
 
+data class CloudStreamDrm(
+    val uuid: String,
+    val keyId: String?,
+    val key: String?,
+    val keyType: String?,
+    val keyRequestParameters: Map<String, String> = emptyMap()
+)
+
 data class CloudStreamStream(
     val pluginName: String,
     val providerName: String,
@@ -142,7 +151,8 @@ data class CloudStreamStream(
     val streamType: String,
     val subtitles: List<CloudStreamSubtitle> = emptyList(),
     val extractorData: String? = null,
-    val videoInterceptor: okhttp3.Interceptor? = null
+    val videoInterceptor: okhttp3.Interceptor? = null,
+    val drm: CloudStreamDrm? = null
 )
 
 class CloudStreamPluginRuntime(private val context: Context) {
@@ -437,7 +447,16 @@ class CloudStreamPluginRuntime(private val context: Context) {
                 streamType = link.type.toString(),
                 subtitles = synchronized(subtitles) { subtitles.distinctBy { it.language to it.url } },
                 extractorData = link.extractorData,
-                videoInterceptor = runCatching { api.getVideoInterceptor(link) }.getOrNull()
+                videoInterceptor = runCatching { api.getVideoInterceptor(link) }.getOrNull(),
+                drm = (link as? DrmExtractorLink)?.let { drmLink ->
+                    CloudStreamDrm(
+                        uuid = drmLink.uuid.toString(),
+                        keyId = drmLink.kid,
+                        key = drmLink.key,
+                        keyType = drmLink.kty,
+                        keyRequestParameters = drmLink.keyRequestParameters
+                    )
+                }
             )
         }
     }
