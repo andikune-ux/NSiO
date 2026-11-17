@@ -605,23 +605,34 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(media.id, mediaList, swipeSeekEnabled, playerState.durationMs) {
+                .pointerInput(media.id, mediaList, swipeSeekEnabled, playerState.durationMs, playerState.currentPositionMs) {
                     var horizontalDistance = 0f
+                    var gestureStartPosition = playerState.currentPositionMs.coerceIn(0L, playerState.durationMs.coerceAtLeast(0L))
                     var seekingByGesture = false
                     detectHorizontalDragGestures(
+                        onDragStart = {
+                            horizontalDistance = 0f
+                            gestureStartPosition = playerState.currentPositionMs.coerceIn(0L, playerState.durationMs.coerceAtLeast(0L))
+                        },
                         onHorizontalDrag = { _, delta ->
                             horizontalDistance += delta
                             if (usesNativePlayer && swipeSeekEnabled && playerState.isSeekable && playerState.durationMs > 0L) {
                                 seekingByGesture = true
                                 isSeeking = true
-                                val seekDelta = (delta / size.width.toFloat() * playerState.durationMs * 2f).toLong()
-                                seekPreviewMs = (seekPreviewMs + seekDelta).coerceIn(0L, playerState.durationMs)
+                                // Match CloudStream's quadratic seek curve: 2x horizontal travel,
+                                // with a faster response near the edge and fine control near center.
+                                val normalizedDistance = (horizontalDistance * 2f / size.width.toFloat())
+                                val signedCurve = normalizedDistance * kotlin.math.abs(normalizedDistance)
+                                val seekDelta = (playerState.durationMs * signedCurve).toLong()
+                                seekPreviewMs = (gestureStartPosition + seekDelta)
+                                    .coerceIn(0L, playerState.durationMs)
                                 showControls = true
                             }
                         },
                         onDragEnd = {
                             if (seekingByGesture) {
-                                if (kotlin.math.abs(horizontalDistance) >= size.height * 0.02f) {
+                                // CloudStream ignores tiny horizontal movements under 7 seconds.
+                                if (kotlin.math.abs(seekPreviewMs - gestureStartPosition) > 7_000L) {
                                     viewModel.player.seekTo(seekPreviewMs)
                                 }
                                 isSeeking = false
