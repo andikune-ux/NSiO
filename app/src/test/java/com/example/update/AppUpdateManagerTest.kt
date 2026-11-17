@@ -175,4 +175,15 @@ class AppUpdateManagerTest {
         )
     }
 
+
+    @Test
+    fun resolvesCloudStreamSubtitleMimeTypesFromDeclaredTypeAndUrlExtension() {
+        assertEquals("text/vtt", com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/captions.VTT?token=abc", null))
+        assertEquals("application/x-subrip", com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/id.srt?token=abc", "text/srt; charset=utf-8"))
+        assertEquals("application/ttml+xml", com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/captions.xml", null))
+        assertEquals("text/x-ssa", com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/style.ass", "application/x-ass"))
+        assertEquals("text/x-ssa", com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/style.ssa", null))
+        assertNull(com.example.player.resolveSubtitleMimeType("https://cdn.example/subs/file.bin", null))
+    }
+
 }
