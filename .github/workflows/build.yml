@@ -1,111 +1,194 @@
-name: 🚀 NSiO • Build, Test & Release
-
+name: NSiO Main CI Build Release
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: write
   actions: write
-
-# Give each commit its own concurrency group. GitHub otherwise replaces older
-# pending runs in the same group even when cancel-in-progress is false.
 concurrency:
-  group: nsio-mainline-release-${{ github.run_id }}
+  group: nsio-main-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: 🎬 Build • Test • Package • Publish
+  lint:
+    name: 🧹 Lint Check
     runs-on: ubuntu-latest
     steps:
-      - name: 📚 Checkout full Git history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '9.3.1' }
+      - name: Run Android lint
+        run: gradle lintDebug --no-daemon
+      - name: Print lint report on failure
+        if: failure()
+        run: find app/build -type f -iname '*lint*' -print -exec cat {} \; || true
 
-      - name: ☕ Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: '17'
+  unit_tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '9.3.1' }
+      - name: Run unit tests
+        run: gradle testDebugUnitTest --no-daemon
 
-      - name: 🐘 Set up Gradle 9.3.1
-        uses: gradle/actions/setup-gradle@v4
+  dependency_report:
+    name: 📚 Dependency Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '9.3.1' }
+      - name: Generate runtime dependency report
+        run: gradle :app:dependencies --configuration debugRuntimeClasspath --no-daemon > dependency-report.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
         with:
-          gradle-version: '9.3.1'
+          name: NSiO-dependencies-${{ github.run_number }}
+          path: dependency-report.txt
+          retention-days: 14
 
-      - name: 🧮 Calculate NSiO version
+  build:
+    name: 📦 Build & Upload APK
+    runs-on: ubuntu-latest
+    outputs:
+      version_tag: ${{ steps.version.outputs.version_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '9.3.1' }
+      - name: Calculate NSiO version
+        id: version
         shell: bash
-        run: bash .github/scripts/compute-nsio-version.sh
-
-      - name: 🧪 Run tests & build APK
-        run: gradle testDebugUnitTest assembleDebug --no-daemon
-
-      - name: 📦 Package versioned APK + SHA-256
-        shell: bash
+        run: |
+          set -euo pipefail
+          bash .github/scripts/compute-nsio-version.sh
+          source nsio-version.env
+          echo "version_tag=$NSIO_VERSION_TAG" >> "$GITHUB_OUTPUT"
+      - name: Assemble APK
+        run: gradle assembleDebug --no-daemon
+      - name: Package APK and checksum
+        env:
+          VERSION_TAG: ${{ steps.version.outputs.version_tag }}
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          cp "$APK" "NSiO-${NSIO_VERSION_TAG}-debug.apk"
-          sha256sum "NSiO-${NSIO_VERSION_TAG}-debug.apk" | tee "NSiO-${NSIO_VERSION_TAG}-debug.apk.sha256"
-
-      - name: ☁️ Upload APK artifact
-        uses: actions/upload-artifact@v4
+          cp "$APK" "NSiO-$VERSION_TAG-debug.apk"
+          sha256sum "NSiO-$VERSION_TAG-debug.apk" | tee "NSiO-$VERSION_TAG-debug.apk.sha256"
+      - uses: actions/upload-artifact@v4
         with:
-          name: NSiO-${{ env.NSIO_VERSION_TAG }}
+          name: NSiO-${{ steps.version.outputs.version_tag }}
           path: |
-            NSiO-${{ env.NSIO_VERSION_TAG }}-debug.apk
-            NSiO-${{ env.NSIO_VERSION_TAG }}-debug.apk.sha256
+            NSiO-${{ steps.version.outputs.version_tag }}-debug.apk
+            NSiO-${{ steps.version.outputs.version_tag }}-debug.apk.sha256
           retention-days: 14
 
-      - name: 🏷️ Publish verified latest release
+  apk_validation:
+    name: 🔎 APK Validation
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NSiO-${{ needs.build.outputs.version_tag }}
+          path: verified-apk
+      - name: Verify checksum and APK archive
+        run: |
+          set -euo pipefail
+          cd verified-apk
+          APK="NSiO-${{ needs.build.outputs.version_tag }}-debug.apk"
+          test -s "$APK"
+          sha256sum -c "$APK.sha256"
+          unzip -t "$APK" >/dev/null
+
+  size_report:
+    name: 📏 APK Size Report
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NSiO-${{ needs.build.outputs.version_tag }}
+          path: size-report
+      - name: Report APK size
+        run: |
+          APK="size-report/NSiO-${{ needs.build.outputs.version_tag }}-debug.apk"
+          BYTES="$(stat -c '%s' "$APK")"
+          MIB="$(awk -v bytes="$BYTES" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
+          echo "APK size: $BYTES bytes ($MIB MiB)" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: 🏷️ Publish validated APK to GitHub Releases
+    runs-on: ubuntu-latest
+    needs: [build, apk_validation]
+    if: ${{ always() && needs.build.result == 'success' && needs.apk_validation.result == 'success' && github.ref == 'refs/heads/main' }}
+    concurrency:
+      group: nsio-main-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/download-artifact@v4
+        with:
+          name: NSiO-${{ needs.build.outputs.version_tag }}
+          path: release-files
+      - name: Publish immutable version release
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
+          VERSION_TAG: ${{ needs.build.outputs.version_tag }}
         run: |
           set -euo pipefail
           CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           if [[ "$CURRENT_MAIN" != "$GITHUB_SHA" ]]; then
-            echo "Skip release: main has advanced to $CURRENT_MAIN."
+            echo "A newer main commit exists; latest commit workflow will publish."
             exit 0
           fi
-
-          if gh release view "$NSIO_VERSION_TAG" >/dev/null 2>&1; then
-            echo "Release $NSIO_VERSION_TAG already exists; immutable release will not be overwritten."
+          APK="release-files/NSiO-$VERSION_TAG-debug.apk"
+          CHECKSUM="$APK.sha256"
+          test -s "$APK"
+          test -s "$CHECKSUM"
+          if gh release view "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "Release already exists; immutable assets are not overwritten."
             exit 0
           fi
-
-          if git ls-remote --exit-code --tags origin "refs/tags/$NSIO_VERSION_TAG" >/dev/null 2>&1; then
-            echo "Tag $NSIO_VERSION_TAG already exists without a matching release; refusing to move it."
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION_TAG" >/dev/null 2>&1; then
+            echo "Tag exists without release; refusing to move it."
             exit 1
           fi
+          gh release create "$VERSION_TAG" "$APK" "$CHECKSUM" --target "$GITHUB_SHA" --title "NSiO $VERSION_TAG" --generate-notes
 
-          gh release create "$NSIO_VERSION_TAG" \
-            "NSiO-$NSIO_VERSION_TAG-debug.apk" \
-            "NSiO-$NSIO_VERSION_TAG-debug.apk.sha256" \
-            --target "$GITHUB_SHA" \
-            --title "NSiO $NSIO_VERSION_TAG" \
-            --generate-notes
-
-      - name: 🧹 Retain only 3 newest artifacts (best effort)
+  artifact_cleanup:
+    name: 🧹 Retain 3 Newest Build Artifacts
+    runs-on: ubuntu-latest
+    needs: [build, release]
+    if: ${{ always() && needs.build.result == 'success' }}
+    steps:
+      - name: Delete old artifacts (best effort)
         uses: actions/github-script@v7
         continue-on-error: true
         with:
           script: |
             try {
               const { owner, repo } = context.repo;
-              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-                owner, repo, per_page: 100
-              });
-              const buildRuns = runs.filter(run => run.path === ".github/workflows/build.yml");
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { owner, repo, per_page: 100 });
               const artifacts = [];
-              for (const run of buildRuns) {
-                const items = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                  owner, repo, run_id: run.id, per_page: 100
-                });
+              for (const run of runs.filter(item => item.path === ".github/workflows/build.yml")) {
+                const items = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { owner, repo, run_id: run.id, per_page: 100 });
                 artifacts.push(...items.filter(item => !item.expired));
               }
               artifacts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
@@ -114,13 +197,63 @@ jobs:
                   await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
                 } catch (error) {
                   if (error.status === 404) continue;
-                  if (error.status === 403 || error.status === 429 || error.status >= 500) {
-                    core.warning(`Artifact cleanup paused by GitHub API (HTTP ${error.status}); build remains successful.`);
+                  if ([403, 429].includes(error.status) || error.status >= 500) {
+                    core.warning("Artifact cleanup paused by API limits; build and release are unaffected.");
                     break;
                   }
                   throw error;
                 }
               }
             } catch (error) {
-              core.warning(`Artifact retention skipped; build/package result is unaffected: ${error.message}`);
+              core.warning(`Artifact cleanup skipped; build/release unaffected: ${error.message}`);
             }
+
+  workflow_summary:
+    name: 📝 Rangkuman Hasil Workflow
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [lint, unit_tests, dependency_report, build, apk_validation, size_report, release, artifact_cleanup]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - name: Create complete Indonesian summary
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## 📝 Rangkuman hasil NSiO"
+            echo
+            echo "### Status setiap pekerjaan"
+            echo "$JOB_RESULTS" | jq -r '
+              {
+                lint: "Lint Check",
+                unit_tests: "Unit Tests",
+                dependency_report: "Dependency Report",
+                build: "Build APK",
+                apk_validation: "Validasi APK",
+                size_report: "Laporan ukuran APK",
+                release: "Publikasi GitHub Release",
+                artifact_cleanup: "Pembersihan artifact lama"
+              } as $labels
+              | to_entries[]
+              | "- " + (if .value.result == "success" then "✅ Berhasil" elif .value.result == "failure" then "❌ Gagal" elif .value.result == "cancelled" then "⏹️ Dibatalkan" elif .value.result == "skipped" then "⏭️ Dilewati" else "⏳ Tidak diketahui" end) + " — **" + $labels[.key] + "**"
+            '
+            BUILD="$(echo "$JOB_RESULTS" | jq -r '.build.result // "unknown"')"
+            VALID="$(echo "$JOB_RESULTS" | jq -r '.apk_validation.result // "unknown"')"
+            RELEASE="$(echo "$JOB_RESULTS" | jq -r '.release.result // "unknown"')"
+            echo
+            if [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == success ]]; then
+              echo "✅ APK berhasil dibuat, divalidasi, dan diterbitkan. Pemeriksaan update di aplikasi NSiO dapat menemukan rilis ini."
+            elif [[ "$BUILD" == success && "$VALID" == success && "$RELEASE" == skipped ]]; then
+              echo "⚠️ APK valid, tetapi publikasi dilewati. Periksa apakah main sudah memiliki commit yang lebih baru."
+            else
+              echo "❌ APK belum berhasil melewati build dan validasi; tidak ada rilis baru."
+            fi
+            echo
+            echo "### Commit"
+            echo "- SHA: $GITHUB_SHA"
+            echo "- Pesan: $(git log -1 --pretty=%s)"
+            echo
+            echo "Lint dan Unit Test dilaporkan terpisah; publikasi APK bergantung pada Build dan APK Validation."
+          } >> "$GITHUB_STEP_SUMMARY"
