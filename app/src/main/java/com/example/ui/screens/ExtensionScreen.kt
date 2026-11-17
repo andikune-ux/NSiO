@@ -1893,9 +1893,12 @@ fun CloudStreamSearchPanel(
             content.nextAiringEpisode?.let { episode ->
                 val airingText = content.nextAiringUnixTime?.let { timestamp ->
                     runCatching {
-                        java.time.Instant.ofEpochSecond(timestamp)
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm"))
+                        java.text.SimpleDateFormat(
+                            "dd MMM yyyy, HH:mm",
+                            java.util.Locale.getDefault()
+                        ).apply {
+                            timeZone = java.util.TimeZone.getDefault()
+                        }.format(java.util.Date(timestamp * 1000L))
                     }.getOrNull()
                 }
                 Text(
