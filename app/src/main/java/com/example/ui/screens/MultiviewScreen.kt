@@ -120,8 +120,6 @@ fun MultiviewScreen(
         mutableStateListOf<CS3IPlayer>().apply { repeat(4) { add(CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false)) } }
     }
     val panelBounds = remember { mutableStateMapOf<Int, Rect>() }
-    var draggingPanel by remember { mutableStateOf<Int?>(null) }
-    var dragRootPosition by remember { mutableStateOf(Offset.Zero) }
     val slots = remember { mutableStateListOf<MultiviewSlotUi>().apply { repeat(4) { add(MultiviewSlotUi()) } } }
     var audioSlot by remember { mutableStateOf(0) }
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
@@ -398,8 +396,6 @@ fun MultiviewScreen(
                 onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                 onSwap = ::swapPanels,
                 panelBounds = panelBounds,
-                dragRootPosition = dragRootPosition,
-                onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                 modifier = Modifier.fillMaxSize().weight(1f)
             )
         } else if (expandedSlot != null) {
@@ -415,8 +411,6 @@ fun MultiviewScreen(
                     onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                     onSwap = ::swapPanels,
                     panelBounds = panelBounds,
-                    dragRootPosition = dragRootPosition,
-                    onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                     modifier = Modifier.weight(2.15f).fillMaxWidth()
                 )
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -431,8 +425,6 @@ fun MultiviewScreen(
                             onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
                             onSwap = ::swapPanels,
                             panelBounds = panelBounds,
-                            dragRootPosition = dragRootPosition,
-                            onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
@@ -624,8 +616,6 @@ private fun MultiviewPanel(
     onRestoreGrid: () -> Unit,
     onSwap: (Int, Int) -> Unit,
     panelBounds: MutableMap<Int, Rect>,
-    dragRootPosition: Offset,
-    onDragState: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val playerState by runtime.playerState.collectAsState()
@@ -642,20 +632,19 @@ private fun MultiviewPanel(
                     onDragStart = { local ->
                         pointerInPanel = local
                         val bounds = panelBounds[index]
-                        onDragState(index, if (bounds != null) bounds.topLeft + local else local)
                     },
                     onDrag = { change, amount ->
                         change.consume()
                         pointerInPanel += amount
                         val bounds = panelBounds[index]
-                        if (bounds != null) onDragState(index, bounds.topLeft + pointerInPanel)
                     },
                     onDragEnd = {
-                        val target = panelBounds.entries.firstOrNull { (targetIndex, rect) -> targetIndex != index && rect.contains(dragRootPosition) }?.key
+                        val bounds = panelBounds[index]
+                        val finalPosition = if (bounds != null) bounds.topLeft + pointerInPanel else pointerInPanel
+                        val target = panelBounds.entries.firstOrNull { (targetIndex, rect) -> targetIndex != index && rect.contains(finalPosition) }?.key
                         if (target != null) onSwap(index, target)
-                        onDragState(-1, Offset.Zero)
                     },
-                    onDragCancel = { onDragState(-1, Offset.Zero) }
+                    onDragCancel = {}
                 )
             },
         verticalArrangement = Arrangement.spacedBy(6.dp)
