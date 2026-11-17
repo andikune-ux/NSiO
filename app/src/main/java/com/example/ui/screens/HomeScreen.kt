@@ -216,13 +216,20 @@ fun HomeScreen(
     fun matchesVideoCategory(category: String, metadata: String): Boolean {
         val value = metadata.lowercase()
         return when (category) {
-            "Movie" -> value.contains("movie") || value.contains("film")
-            "Seri TV" -> value.contains("tv") || value.contains("series") || value.contains("serial")
-            "Anime" -> value.contains("anime")
-            "Drama Asia" -> value.contains("asian") || value.contains("asia") || value.contains("k-drama") || value.contains("cdrama") || value.contains("j-drama")
-            "Dubb Indo" -> value.contains("dubb indo") || value.contains("dub indo") || value.contains("indonesia") || value.contains("indonesian") || value.contains("bahasa indonesia")
+            // Mirror CloudStream TvType groupings: AnimeMovie and OVA belong to Anime,
+            // while TvSeries, AsianDrama, Cartoon and NSFW remain distinct types.
+            "Movie" -> (value.contains("movie") || value.contains("film")) &&
+                !value.contains("anime movie") && !value.contains("animemovie")
+            "Seri TV" -> value.contains("tvseries") || value.contains("tv series") ||
+                value.contains("series") || value.contains("serial")
+            "Anime" -> value.contains("anime") || value.contains("ova")
+            "Drama Asia" -> value.contains("asiandrama") || value.contains("asian drama") ||
+                value.contains("k-drama") || value.contains("cdrama") || value.contains("j-drama")
+            "Dubb Indo" -> value.contains("dubb indo") || value.contains("dub indo") ||
+                value.contains("indonesian dub") || value.contains("bahasa indonesia") ||
+                value.contains("audio indonesia")
             "Kartun" -> value.contains("cartoon") || value.contains("animation") || value.contains("kartun")
-            "NSFW" -> value.contains("nsfw") || value.contains("adult") || value.contains("18+")
+            "NSFW" -> value.contains("nsfw")
             else -> true
         }
     }

@@ -1172,7 +1172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailUrl = item.posterUrl.orEmpty(),
                     type = "CLOUDSTREAM",
                     sourceType = "CLOUDSTREAM",
-                    category = sectionNames.joinToString(" • ").ifBlank { "CloudStream" },
+                    category = (sectionNames + listOfNotNull(item.contentType?.takeIf { it.isNotBlank() })).distinct().joinToString(" • ").ifBlank { "CloudStream" },
                     sourceUrl = entry.url,
                     pluginId = pluginId,
                     repositoryId = repositoryId,

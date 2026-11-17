@@ -1523,13 +1523,18 @@ fun CloudStreamSearchPanel(
             selectedVideoFilters.isEmpty() || selectedVideoFilters.any { category ->
                 val metadata = "${result.contentType.orEmpty()} ${result.providerName} ${result.pluginName} ${result.title} ${entry.language}".lowercase()
                 when (category) {
-                    "Movie" -> metadata.contains("movie") || metadata.contains("film")
-                    "Seri TV" -> metadata.contains("tv") || metadata.contains("series") || metadata.contains("serial")
-                    "Anime" -> metadata.contains("anime")
-                    "Drama Asia" -> metadata.contains("asian") || metadata.contains("asia") || metadata.contains("k-drama") || metadata.contains("cdrama") || metadata.contains("j-drama")
-                    "Dubb Indo" -> metadata.contains("dubb indo") || metadata.contains("dub indo") || metadata.contains("indonesia") || metadata.contains("indonesian")
+                    "Movie" -> (metadata.contains("movie") || metadata.contains("film")) &&
+                        !metadata.contains("anime movie") && !metadata.contains("animemovie")
+                    "Seri TV" -> metadata.contains("tvseries") || metadata.contains("tv series") ||
+                        metadata.contains("series") || metadata.contains("serial")
+                    "Anime" -> metadata.contains("anime") || metadata.contains("ova")
+                    "Drama Asia" -> metadata.contains("asiandrama") || metadata.contains("asian drama") ||
+                        metadata.contains("k-drama") || metadata.contains("cdrama") || metadata.contains("j-drama")
+                    "Dubb Indo" -> metadata.contains("dubb indo") || metadata.contains("dub indo") ||
+                        metadata.contains("indonesian dub") || metadata.contains("bahasa indonesia") ||
+                        metadata.contains("audio indonesia")
                     "Kartun" -> metadata.contains("cartoon") || metadata.contains("animation") || metadata.contains("kartun")
-                    "NSFW" -> metadata.contains("nsfw") || metadata.contains("adult") || metadata.contains("18+")
+                    "NSFW" -> metadata.contains("nsfw")
                     else -> true
                 }
             }

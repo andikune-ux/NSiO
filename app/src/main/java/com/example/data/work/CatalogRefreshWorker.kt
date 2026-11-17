@@ -130,7 +130,7 @@ class CatalogRefreshWorker(
                                 thumbnailUrl = item.posterUrl.orEmpty(),
                                 type = "CLOUDSTREAM",
                                 sourceType = "CLOUDSTREAM",
-                                category = section.sectionName.ifBlank { "CloudStream" },
+                                category = listOf(section.sectionName, item.contentType.orEmpty()).filter { it.isNotBlank() }.distinct().joinToString(" • ").ifBlank { "CloudStream" },
                                 sourceUrl = entry.url,
                                 pluginId = pluginId,
                                 repositoryId = repositoryId,
