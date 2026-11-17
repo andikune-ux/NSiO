@@ -1046,6 +1046,11 @@ fun PlayerScreen(
                                 "Bahasa audio" to (playerState.preferredAudioLanguage ?: "Otomatis"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
                                 "Subtitle Delay" to (if (playerState.subtitleDelayMs > 0) "+${playerState.subtitleDelayMs} ms" else "${playerState.subtitleDelayMs} ms"),
+                                "A-B Repeat" to when {
+                                    playerState.repeatA != null && playerState.repeatB != null -> "${formatMs(playerState.repeatA)} – ${formatMs(playerState.repeatB)}"
+                                    playerState.repeatA != null -> "A ${formatMs(playerState.repeatA)} · pilih B"
+                                    else -> "Mati"
+                                },
                                 "Kompresor audio" to if (playerState.audioCompressorEnabled) "Aktif" else "Mati",
                                 "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
                                 "Bahasa subtitle" to (playerState.preferredSubtitleLanguage ?: "Otomatis"),
@@ -1264,6 +1269,41 @@ fun PlayerScreen(
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
+                                }
+                                "A-B Repeat" -> {
+                                    Text(
+                                        "Ulangi segmen video dari titik A sampai titik B. Tandai A, lanjutkan ke bagian akhir, lalu tandai B. Minimal jarak A–B adalah 0,5 detik.",
+                                        color = controlMutedColor,
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                    Text(
+                                        text = if (playerState.repeatA == null) "＋ Tandai titik A" else "✓ A · ${formatMs(playerState.repeatA)}",
+                                        color = if (playerState.repeatA == null) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            viewModel.player.setRepeatPointA()
+                                        }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
+                                    Text(
+                                        text = if (playerState.repeatB == null) "＋ Tandai titik B" else "✓ B · ${formatMs(playerState.repeatB)}",
+                                        color = if (playerState.repeatB == null) controlAccentColor else controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                            .clickable(enabled = playerState.repeatA != null) { viewModel.player.setRepeatPointB() }
+                                            .padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
+                                    if (playerState.repeatA != null && playerState.repeatB != null) {
+                                        Text("Loop aktif · ${formatMs(playerState.repeatA)} – ${formatMs(playerState.repeatB)}", color = controlAccentColor, fontSize = 11.sp)
+                                    }
+                                    Text(
+                                        "Hapus A–B",
+                                        color = controlTextColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            viewModel.player.clearABRepeat()
+                                        }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
                                 }
                                 "Audio Delay" -> {
                                     Text(
