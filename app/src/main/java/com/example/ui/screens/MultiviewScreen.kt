@@ -64,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.data.model.MediaItem
@@ -570,6 +571,7 @@ fun MultiviewScreen(
     }
 }
 
+@OptIn(UnstableApi::class)
 @Composable
 private fun MultiviewPanel(
     index: Int,

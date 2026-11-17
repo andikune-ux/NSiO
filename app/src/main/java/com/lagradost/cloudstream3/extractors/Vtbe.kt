@@ -19,21 +19,21 @@ open class Vtbe : ExtractorApi() {
 
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
         val response = app.get(url,referer=mainUrl).document
-        val extractedpack =response.selectFirst("script:containsData(function(p,a,c,k,e,d))")?.data().toString()
-            JsUnpacker(extractedpack).unpack()?.let { unPacked ->
-                Regex("sources:\\[\\{file:\"(.*?)\"").find(unPacked)?.groupValues?.get(1)?.let { link ->
-                    return listOf(
-                        ExtractorLink(
-                            this.name,
-                            this.name,
-                            link,
-                            referer ?: "",
-                            Qualities.Unknown.value,
-                            URI(link).path.endsWith(".m3u8")
-                        )
+        val extractedpack = response.selectFirst("script:containsData(function(p,a,c,k,e,d))")?.data().toString()
+        JsUnpacker(extractedpack).unpack()?.let { unPacked ->
+            Regex("sources:\\[\\{file:\"(.*?)\"").find(unPacked)?.groupValues?.get(1)?.let { link ->
+                return listOf(
+                    ExtractorLink(
+                        this.name,
+                        this.name,
+                        link,
+                        referer ?: "",
+                        Qualities.Unknown.value,
+                        URI(link).path.endsWith(".m3u8")
                     )
-                }
+                )
             }
-            return null
+        }
+        return null
     }
 }
