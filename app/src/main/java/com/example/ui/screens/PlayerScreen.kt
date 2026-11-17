@@ -385,6 +385,14 @@ fun PlayerScreen(
         skipStampLoadFinished = true
     }
 
+    // Keep the skip prompt independent from the auto-hiding transport controls.
+    val activeSkipStamp = if (skipStampLoadFinished && usesNativePlayer && !playerState.isLive) {
+        skipStamps.firstOrNull { stamp ->
+            playerState.currentPositionMs >= stamp.startMs &&
+                playerState.currentPositionMs < (stamp.endMs - 1_000L).coerceAtLeast(stamp.startMs + 1L)
+        }
+    } else null
+
     // Keep the scrubber in sync with playback, but never overwrite the user's drag preview.
     LaunchedEffect(playerState.currentPositionMs, isSeeking) {
         if (!isSeeking) seekPreviewMs = playerState.currentPositionMs.coerceAtLeast(0L)
@@ -1878,37 +1886,6 @@ fun PlayerScreen(
 
                 }
 
-                // CloudStream-style manual skip prompt: only appears while the playhead is inside a known segment.
-                val activeSkipStamp = if (skipStampLoadFinished && usesNativePlayer && !playerState.isLive) {
-                    skipStamps.firstOrNull { stamp ->
-                        playerState.currentPositionMs >= stamp.startMs &&
-                            playerState.currentPositionMs < (stamp.endMs - 1_000L).coerceAtLeast(stamp.startMs + 1L)
-                    }
-                } else null
-                if (activeSkipStamp != null && !controlsLocked) {
-                    Button(
-                        onClick = {
-                            viewModel.player.seekTo(activeSkipStamp.endMs.coerceAtMost(playerState.durationMs))
-                            revealControls()
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 22.dp, bottom = 164.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.94f),
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text(
-                            "Lewati ${activeSkipStamp.label}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                    }
-                }
-
                 // Floating frame preview: extract the actual video frame at the seek timestamp.
                 if (isSeeking && usesNativePlayer && !playerState.isLive && playerState.durationMs > 0L) {
                     Column(
@@ -2051,6 +2028,40 @@ fun PlayerScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // The skip action stays available even after the main controls auto-hide.
+        AnimatedVisibility(
+            visible = activeSkipStamp != null && !controlsLocked && !isInPipMode,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                activeSkipStamp?.let { stamp ->
+                    Button(
+                        onClick = {
+                            viewModel.player.seekTo(stamp.endMs.coerceAtMost(playerState.durationMs))
+                            revealControls()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 22.dp, bottom = 164.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.94f),
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            "Lewati ${stamp.label}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
                     }
                 }
             }
