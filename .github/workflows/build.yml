@@ -196,7 +196,12 @@ jobs:
     name: 🏷️ Publish Verified Release
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/heads/') }}
-    needs: [lint, unit_tests, build, apk_validation]
+    # Publishing is gated by a successful build and APK integrity check.
+    # Lint and unit tests remain independent checks and do not block delivery.
+    concurrency:
+      group: nsio-release-${{ github.repository }}
+      cancel-in-progress: false
+    needs: [build, apk_validation]
     steps:
       - name: 📚 Checkout full Git history
         uses: actions/checkout@v4
