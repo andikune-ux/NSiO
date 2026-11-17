@@ -95,7 +95,7 @@ fun MultiviewScreen(
     val scope = rememberCoroutineScope()
     val mediaItems by viewModel.mediaList.collectAsState()
     val players = remember {
-        List(4) { CS3IPlayer(context.applicationContext, scope) }
+        List(4) { CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false) }
     }
     val slots = remember { mutableStateListOf<MultiviewSlotUi>().apply { repeat(4) { add(MultiviewSlotUi()) } } }
     var audioSlot by remember { mutableStateOf(0) }
