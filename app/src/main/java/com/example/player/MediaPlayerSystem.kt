@@ -301,7 +301,7 @@ class CS3IPlayer(
                             error = errorDesc,
                             isFallbackAvailable = true
                         )
-                    }                    }
+                    }
                 })
             }
         startProgressTracking()
