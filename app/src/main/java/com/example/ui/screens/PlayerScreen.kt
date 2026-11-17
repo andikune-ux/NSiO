@@ -14,6 +14,8 @@ import android.view.LayoutInflater
 import android.widget.Toast
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -125,6 +127,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.model.MediaItem
@@ -159,6 +162,34 @@ fun PlayerScreen(
         controlsInteraction++
     }
     var showQueue by remember { mutableStateOf(false) }
+    val playerPreferences = remember(context) {
+        context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
+    }
+    var subtitleScale by remember(context) {
+        mutableStateOf(playerPreferences.getFloat("subtitle_scale", 1f).coerceIn(0.75f, 1.5f))
+    }
+    val externalSubtitlePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                val mime = context.contentResolver.getType(uri)
+                val label = uri.lastPathSegment.orEmpty()
+                    .substringAfterLast(':')
+                    .substringAfterLast('/')
+                    .ifBlank { "Subtitle eksternal" }
+                viewModel.player.addExternalSubtitle(uri, label, mime)
+                selectedPlayerSetting = null
+                showTrackMenu = true
+            }.onFailure {
+                Toast.makeText(context, "Subtitle tidak dapat dibuka: ${it.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     var showTrackMenu by remember { mutableStateOf(false) }
     var selectedPlayerSetting by remember { mutableStateOf<String?>(null) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
@@ -198,6 +229,23 @@ fun PlayerScreen(
         activeGesture = null
     }
 
+    LaunchedEffect(subtitleScale, playerViewRef) {
+        playerPreferences.edit().putFloat("subtitle_scale", subtitleScale).apply()
+        playerViewRef?.subtitleView?.apply {
+            setStyle(
+                CaptionStyleCompat(
+                    android.graphics.Color.WHITE,
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT,
+                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                    android.graphics.Color.BLACK,
+                    null
+                )
+            )
+            setFractionalTextSize(0.055f * subtitleScale)
+        }
+    }
+
     // Keep the scrubber in sync with playback, but never overwrite the user's drag preview.
     LaunchedEffect(playerState.currentPositionMs, isSeeking) {
         if (!isSeeking) seekPreviewMs = playerState.currentPositionMs.coerceAtLeast(0L)
@@ -219,8 +267,8 @@ fun PlayerScreen(
     // Extract a real frame near the requested seek timestamp off the UI thread.
     // Some protected/HLS sources do not expose frames through MediaMetadataRetriever;
     // in that case the UI falls back to the media poster when available.
-    LaunchedEffect(isSeeking, seekPreviewMs, media.url) {
-        if (!isSeeking || !usesNativePlayer) {
+    LaunchedEffect(isSeeking, seekPreviewMs, media.url, playerState.isLive) {
+        if (!isSeeking || !usesNativePlayer || playerState.isLive) {
             previewFrame = null
         } else {
             // Clear immediately on every drag update; never display a frame from
@@ -427,6 +475,17 @@ fun PlayerScreen(
                             player = viewModel.player.exoPlayer
                             resizeMode = selectedResizeMode
                             playerViewRef = this
+                            subtitleView?.apply {
+                                setStyle(CaptionStyleCompat(
+                                    android.graphics.Color.WHITE,
+                                    android.graphics.Color.TRANSPARENT,
+                                    android.graphics.Color.TRANSPARENT,
+                                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                    android.graphics.Color.BLACK,
+                                    null
+                                ))
+                                setFractionalTextSize(0.055f * subtitleScale)
+                            }
                             useController = false
                             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         }
@@ -435,6 +494,17 @@ fun PlayerScreen(
                         view.player = viewModel.player.exoPlayer
                         view.resizeMode = selectedResizeMode
                         playerViewRef = view
+                        view.subtitleView?.apply {
+                            setStyle(CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT,
+                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK,
+                                null
+                            ))
+                            setFractionalTextSize(0.055f * subtitleScale)
+                        }
                     },
                     modifier = Modifier.fillMaxSize().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null
@@ -751,6 +821,9 @@ fun PlayerScreen(
                                     overflow = TextOverflow.Ellipsis,
                                     color = controlMutedColor
                                 )
+                                if (playerState.isLive) {
+                                    Text("LIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF5A5A))
+                                }
                             }
                         }
                         if (!isPhoto) {
@@ -853,7 +926,8 @@ fun PlayerScreen(
                                 "Kualitas video" to (playerState.videoTracks.firstOrNull { it.selected }?.label ?: "Otomatis"),
                                 "Audio" to (playerState.audioTracks.firstOrNull { it.selected }?.label ?: "Default"),
                                 "Audio Delay" to (if (playerState.audioDelayMs > 0) "+${playerState.audioDelayMs} ms" else "${playerState.audioDelayMs} ms"),
-                                "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis")
+                                "Subtitle" to (playerState.subtitleTracks.firstOrNull { it.selected }?.label ?: if (playerState.subtitlesDisabled) "Mati" else "Otomatis"),
+                                "Ukuran subtitle" to "${(subtitleScale * 100).toInt()}%"
                             ).forEach { (label, current) ->
                                 Text(
                                     text = "$label  ·  $current  ›",
@@ -973,6 +1047,18 @@ fun PlayerScreen(
                                 }
                                 "Subtitle" -> {
                                     Text(
+                                        text = "＋ Muat subtitle dari perangkat",
+                                        color = controlAccentColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                            externalSubtitlePicker.launch(arrayOf(
+                                                "text/*",
+                                                "application/x-subrip",
+                                                "application/octet-stream"
+                                            ))
+                                        }.padding(horizontal = 10.dp, vertical = 10.dp)
+                                    )
+                                    Text(
                                         text = if (playerState.subtitlesDisabled) "✓ Mati" else "Mati",
                                         color = if (playerState.subtitlesDisabled) controlAccentColor else controlTextColor,
                                         fontSize = 12.sp,
@@ -990,6 +1076,19 @@ fun PlayerScreen(
                                             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
                                                 viewModel.player.selectTrack(track)
                                                 selectedPlayerSetting = null
+                                            }.padding(horizontal = 10.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                "Ukuran subtitle" -> {
+                                    listOf(0.75f, 0.9f, 1f, 1.15f, 1.3f, 1.5f).forEach { scale ->
+                                        Text(
+                                            text = (if (kotlin.math.abs(subtitleScale - scale) < 0.01f) "✓ " else "") + "${(scale * 100).toInt()}%",
+                                            color = if (kotlin.math.abs(subtitleScale - scale) < 0.01f) controlAccentColor else controlTextColor,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                                                subtitleScale = scale
+                                                playerViewRef?.subtitleView?.setFractionalTextSize(0.055f * scale)
                                             }.padding(horizontal = 10.dp, vertical = 9.dp)
                                         )
                                     }
@@ -1109,7 +1208,7 @@ fun PlayerScreen(
                 }
 
                 // Floating frame preview: extract the actual video frame at the seek timestamp.
-                if (isSeeking && usesNativePlayer && playerState.durationMs > 0L) {
+                if (isSeeking && usesNativePlayer && !playerState.isLive && playerState.durationMs > 0L) {
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
