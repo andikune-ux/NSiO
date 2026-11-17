@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.LruCache
 import android.view.ViewGroup
 import android.view.ContextThemeWrapper
@@ -241,12 +242,24 @@ fun PlayerScreen(
                         android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
                 }
-                val mime = context.contentResolver.getType(uri)
-                val label = uri.lastPathSegment.orEmpty()
-                    .substringAfterLast(':')
-                    .substringAfterLast('/')
-                    .ifBlank { "Subtitle eksternal" }
-                viewModel.player.addExternalSubtitle(uri, label, mime)
+                val displayName = context.contentResolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                } ?: uri.lastPathSegment.orEmpty().substringAfterLast(':').substringAfterLast('/')
+                val extension = displayName.substringAfterLast('.', "").lowercase()
+                val mime = context.contentResolver.getType(uri) ?: when (extension) {
+                    "srt" -> "application/x-subrip"
+                    "vtt" -> "text/vtt"
+                    "ass", "ssa" -> "text/x-ssa"
+                    "ttml", "xml" -> "application/ttml+xml"
+                    else -> null
+                }
+                viewModel.player.addExternalSubtitle(uri, displayName, mime)
                 selectedPlayerSetting = null
                 showTrackMenu = true
             }.onFailure {
