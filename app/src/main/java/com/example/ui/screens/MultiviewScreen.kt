@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,11 +52,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -110,8 +117,11 @@ fun MultiviewScreen(
     val isServerUnlocked by viewModel.isServerUnlocked.collectAsState()
     val pluginRepositories by viewModel.pluginManager.repositories.collectAsState()
     val players = remember {
-        List(4) { CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false) }
+        mutableStateListOf<CS3IPlayer>().apply { repeat(4) { add(CS3IPlayer(context.applicationContext, scope, manageMediaSessionService = false)) } }
     }
+    val panelBounds = remember { mutableStateMapOf<Int, Rect>() }
+    var draggingPanel by remember { mutableStateOf<Int?>(null) }
+    var dragRootPosition by remember { mutableStateOf(Offset.Zero) }
     val slots = remember { mutableStateListOf<MultiviewSlotUi>().apply { repeat(4) { add(MultiviewSlotUi()) } } }
     var audioSlot by remember { mutableStateOf(0) }
     var pickerSlot by remember { mutableStateOf<Int?>(null) }
@@ -213,6 +223,19 @@ fun MultiviewScreen(
         players.forEachIndexed { playerIndex, player ->
             player.exoPlayer?.volume = if (playerIndex == focusedIndex && slots[playerIndex].source != null) 1f else 0f
         }
+    }
+
+    fun swapPanels(first: Int, second: Int) {
+        if (first !in 0..3 || second !in 0..3 || first == second) return
+        val player = players[first]
+        players[first] = players[second]
+        players[second] = player
+        val slot = slots[first]
+        slots[first] = slots[second]
+        slots[second] = slot
+        if (audioSlot == first) audioSlot = second else if (audioSlot == second) audioSlot = first
+        if (expandedSlot == first) expandedSlot = second else if (expandedSlot == second) expandedSlot = first
+        if (fullscreenSlot == first) fullscreenSlot = second else if (fullscreenSlot == second) fullscreenSlot = first
     }
 
     fun clearSlot(index: Int) {
@@ -372,6 +395,10 @@ fun MultiviewScreen(
                 onClose = { clearSlot(focusedSlot) },
                 onAudio = { setAudioFocus(focusedSlot) },
                 onFullscreen = { cycleMagnification(focusedSlot) },
+                onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
+                onSwap = ::swapPanels,
+                panelBounds = panelBounds,
+                onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                 modifier = Modifier.fillMaxSize().weight(1f)
             )
         } else if (expandedSlot != null) {
@@ -384,6 +411,10 @@ fun MultiviewScreen(
                     onClose = { clearSlot(mainIndex) },
                     onAudio = { setAudioFocus(mainIndex) },
                     onFullscreen = { cycleMagnification(mainIndex) },
+                    onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
+                    onSwap = ::swapPanels,
+                    panelBounds = panelBounds,
+                    onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                     modifier = Modifier.weight(2.15f).fillMaxWidth()
                 )
                 Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -395,6 +426,10 @@ fun MultiviewScreen(
                             onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
                             onFullscreen = { cycleMagnification(index) },
+                            onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
+                            onSwap = ::swapPanels,
+                            panelBounds = panelBounds,
+                            onDragState = { source, position -> draggingPanel = source; dragRootPosition = position },
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
@@ -583,6 +618,10 @@ private fun MultiviewPanel(
     onClose: () -> Unit,
     onAudio: () -> Unit,
     onFullscreen: () -> Unit,
+    onRestoreGrid: () -> Unit,
+    onSwap: (Int, Int) -> Unit,
+    panelBounds: MutableMap<Int, Rect>,
+    onDragState: (Int, Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val playerState by runtime.playerState.collectAsState()
@@ -591,7 +630,30 @@ private fun MultiviewPanel(
             .clip(RoundedCornerShape(17.dp))
             .background(Color(0xFF111A27))
             .border(1.dp, if (isAudioActive) Color(0xFF5AC8FA).copy(alpha = 0.75f) else Color.White.copy(alpha = 0.10f), RoundedCornerShape(17.dp))
-            .padding(7.dp),
+            .padding(7.dp)
+            .onGloballyPositioned { panelBounds[index] = it.boundsInRoot() }
+            .pointerInput(index, panelBounds) {
+                var pointerInPanel = Offset.Zero
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { local ->
+                        pointerInPanel = local
+                        val bounds = panelBounds[index]
+                        onDragState(index, if (bounds != null) bounds.topLeft + local else local)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        pointerInPanel += amount
+                        val bounds = panelBounds[index]
+                        if (bounds != null) onDragState(index, bounds.topLeft + pointerInPanel)
+                    },
+                    onDragEnd = {
+                        val target = panelBounds.entries.firstOrNull { (targetIndex, rect) -> targetIndex != index && rect.contains(dragRootPosition) }?.key
+                        if (target != null) onSwap(index, target)
+                        onDragState(-1, Offset.Zero)
+                    },
+                    onDragCancel = { onDragState(-1, Offset.Zero) }
+                )
+            },
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -611,6 +673,9 @@ private fun MultiviewPanel(
                 }
                 IconButton(onClick = onFullscreen, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Default.Fullscreen, contentDescription = "Perbesar panel ${index + 1}", tint = Color.White, modifier = Modifier.size(17.dp))
+                }
+                IconButton(onClick = onRestoreGrid, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.GridView, contentDescription = "Kembali ke 2x2", tint = Color(0xFF8DE7FF), modifier = Modifier.size(17.dp))
                 }
                 IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Kosongkan panel ${index + 1}", tint = Color(0xFFFF9A9A), modifier = Modifier.size(17.dp))
