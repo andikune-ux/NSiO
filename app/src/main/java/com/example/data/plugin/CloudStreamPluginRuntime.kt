@@ -128,7 +128,8 @@ data class CloudStreamSubtitle(
     val url: String,
     val headers: Map<String, String> = emptyMap(),
     val mimeType: String? = null,
-    val isExternal: Boolean = false
+    val isExternal: Boolean = false,
+    val displayName: String? = null
 )
 
 data class CloudStreamDrm(
