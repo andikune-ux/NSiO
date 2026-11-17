@@ -78,9 +78,6 @@ import com.example.player.multiview.MultiviewSourceKind
 import com.example.player.multiview.MultiviewSourceRegistry
 import com.example.player.multiview.MultiviewSourceRequest
 import com.example.ui.MainViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 private data class MultiviewSlotUi(
@@ -98,7 +95,7 @@ fun MultiviewScreen(
     val scope = rememberCoroutineScope()
     val mediaItems by viewModel.mediaList.collectAsState()
     val players = remember {
-        List(4) { CS3IPlayer(context.applicationContext, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
+        List(4) { CS3IPlayer(context.applicationContext, scope) }
     }
     val slots = remember { mutableStateListOf<MultiviewSlotUi>().apply { repeat(4) { add(MultiviewSlotUi()) } } }
     var audioSlot by remember { mutableStateOf(0) }
@@ -116,33 +113,36 @@ fun MultiviewScreen(
                 CloudStreamMultiviewAdapter { item ->
                     val streams = viewModel.resolveCloudStreamForMultiview(item)
                     val selected = streams.maxByOrNull { it.quality }
-                        ?: return@CloudStreamMultiviewAdapter MultiviewResolveResult.Failure("Plugin tidak menemukan stream.")
-                    val headers = selected.headers.toMutableMap().apply {
-                        if (selected.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
-                            put("Referer", selected.referer)
+                    if (selected == null) {
+                        MultiviewResolveResult.Failure("Plugin tidak menemukan stream.")
+                    } else {
+                        val headers = selected.headers.toMutableMap().apply {
+                            if (selected.referer.isNotBlank() && keys.none { it.equals("Referer", true) }) {
+                                put("Referer", selected.referer)
+                            }
                         }
-                    }
-                    val streamType = selected.streamType.substringAfterLast('.').uppercase()
-                    val extension = runCatching { Uri.parse(selected.url).lastPathSegment.orEmpty().substringAfterLast('.', "").uppercase() }.getOrDefault("")
-                    val mime = when {
-                        streamType.contains("HLS") || streamType.contains("M3U8") || extension == "M3U8" -> "application/x-mpegURL"
-                        streamType.contains("DASH") || streamType == "MPD" || extension == "MPD" -> "application/dash+xml"
-                        streamType.contains("WEBM") || extension == "WEBM" -> "video/webm"
-                        streamType.contains("MKV") || extension == "MKV" -> "video/x-matroska"
-                        streamType.contains("MP4") || streamType.contains("VIDEO") || extension == "MP4" -> "video/mp4"
-                        else -> null
-                    }
-                    MultiviewResolveResult.Success(
-                        MultiviewResolvedSource(
-                            uri = Uri.parse(selected.url),
-                            title = item.title,
-                            mimeType = mime,
-                            requestHeaders = headers,
-                            sourceKind = MultiviewSourceKind.CLOUDSTREAM,
-                            cloudStream = selected,
-                            pluginStreams = streams
+                        val streamType = selected.streamType.substringAfterLast('.').uppercase()
+                        val extension = runCatching { Uri.parse(selected.url).lastPathSegment.orEmpty().substringAfterLast('.', "").uppercase() }.getOrDefault("")
+                        val mime = when {
+                            streamType.contains("HLS") || streamType.contains("M3U8") || extension == "M3U8" -> "application/x-mpegURL"
+                            streamType.contains("DASH") || streamType == "MPD" || extension == "MPD" -> "application/dash+xml"
+                            streamType.contains("WEBM") || extension == "WEBM" -> "video/webm"
+                            streamType.contains("MKV") || extension == "MKV" -> "video/x-matroska"
+                            streamType.contains("MP4") || streamType.contains("VIDEO") || extension == "MP4" -> "video/mp4"
+                            else -> null
+                        }
+                        MultiviewResolveResult.Success(
+                            MultiviewResolvedSource(
+                                uri = Uri.parse(selected.url),
+                                title = item.title,
+                                mimeType = mime,
+                                requestHeaders = headers,
+                                sourceKind = MultiviewSourceKind.CLOUDSTREAM,
+                                cloudStream = selected,
+                                pluginStreams = streams
+                            )
                         )
-                    )
+                    }
                 }
             )
         )
