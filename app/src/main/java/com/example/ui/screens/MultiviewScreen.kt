@@ -571,7 +571,7 @@ fun MultiviewScreen(
     }
 }
 
-@OptIn(UnstableApi::class)
+@UnstableApi
 @Composable
 private fun MultiviewPanel(
     index: Int,
