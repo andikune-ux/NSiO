@@ -8,7 +8,7 @@ package com.example.player
 internal fun normalizePlaybackUrl(url: String): String {
     val normalized = url.trim()
     val match = Regex(
-        "^https?://drive\\.google\\.com/file/d/([A-Za-z0-9_-]+)/preview/?(?:[?#].*)?$",
+        "^https?://drive\\.google\\.com/file/d/([A-Za-z0-9_-]+)/(?:preview|view)/?(?:[?#].*)?$",
         RegexOption.IGNORE_CASE
     ).matchEntire(normalized)
     val fileId = match?.groupValues?.getOrNull(1)
