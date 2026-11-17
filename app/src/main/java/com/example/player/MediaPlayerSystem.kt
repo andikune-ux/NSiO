@@ -508,14 +508,29 @@ class CS3IPlayer(
      * The SAF URI permission is retained by the caller and the active stream is
      * re-prepared at its current timestamp.
      */
-    fun addExternalSubtitle(uri: Uri, label: String, mimeType: String?) {
+    fun addExternalSubtitle(uri: Uri, displayName: String, mimeType: String?) {
         val player = exoPlayer ?: return
         if (lastUrl.isBlank()) return
+        val safeName = displayName.substringAfterLast('/').substringAfterLast(':')
+            .ifBlank { "Subtitle eksternal" }
+        val normalizedName = safeName.substringBeforeLast('.', safeName)
+        val language = Regex("(?i)(?:^|[._ -])(id|ind|indonesian|en|eng|english|ja|jpn|japanese|ko|kor|korean|zh|chi|chinese|ar|ara|arabic)(?:$|[._ -])")
+            .find(normalizedName)?.groupValues?.get(1)?.lowercase()
+            ?.let { code -> when (code) {
+                "ind", "indonesian" -> "id"
+                "eng", "english" -> "en"
+                "jpn", "japanese" -> "ja"
+                "kor", "korean" -> "ko"
+                "chi", "chinese" -> "zh"
+                "ara", "arabic" -> "ar"
+                else -> code
+            } } ?: "Unknown"
         val subtitle = com.example.data.plugin.CloudStreamSubtitle(
-            language = label.ifBlank { "Subtitle eksternal" },
+            language = language,
             url = uri.toString(),
             mimeType = mimeType,
-            isExternal = true
+            isExternal = true,
+            displayName = normalizedName
         )
         userExternalSubtitles.removeAll { it.url == subtitle.url }
         userExternalSubtitles.add(subtitle)
@@ -727,7 +742,7 @@ class CS3IPlayer(
                     }
                     ExoMediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
                         .setLanguage(subtitle.language.takeIf { it.isNotBlank() && it != "Unknown" })
-                        .setLabel(subtitle.language.ifBlank { "Subtitle" })
+                        .setLabel(subtitle.displayName?.takeIf { it.isNotBlank() } ?: subtitle.language.ifBlank { "Subtitle" })
                         .setSelectionFlags(if (subtitle.isExternal) C.SELECTION_FLAG_DEFAULT else 0)
                         .apply { subtitleMime?.let(::setMimeType) }
                         .build()
