@@ -13,13 +13,16 @@ object ModuleArchivePolicy {
         var total=0L
         var hasDex=false
         var manifest:JSONObject?=null
+        val normalizedNames=hashSetOf<String>()
         while(entries.hasMoreElements()) {
             val entry=entries.nextElement()
             count++
             require(count<=MAX_ENTRIES) { "Paket modul memiliki terlalu banyak file." }
             val name=entry.name.replace('\\','/')
-            val segments=name.trimEnd('/').split('/')
-            require(!name.startsWith("/") && segments.none { it==".." || it.isBlank() }) { "Paket modul berisi jalur file tidak aman." }
+            val normalizedName=name.trimEnd('/')
+            val segments=normalizedName.split('/')
+            require(!name.startsWith("/") && segments.none { it==".." || it=="." || it.isBlank() }) { "Paket modul berisi jalur file tidak aman." }
+            require(normalizedNames.add(normalizedName)) { "Paket modul berisi nama file duplikat." }
             if(entry.isDirectory) continue
             require(entry.size>=0L && entry.size<=MAX_ENTRY_BYTES) { "Ukuran file modul tidak valid atau terlalu besar." }
             total+=entry.size
