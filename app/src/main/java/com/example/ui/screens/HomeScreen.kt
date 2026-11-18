@@ -694,9 +694,15 @@ fun HomeScreen(
                                             fontSize = 10.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        if (sourceType == "CLOUDSTREAM") {
+                                        val selectedCloudStreamPluginId = selectedFilter
+                                            .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
+                                            ?.removePrefix("CLOUDSTREAM_PLUGIN:")
+                                            ?.takeIf { it.isNotBlank() }
+                                        if (sourceType == "CLOUDSTREAM" && selectedCloudStreamPluginId != null) {
                                             IconButton(
-                                                onClick = { viewModel.loadMoreCloudStreamCatalogOnHome() },
+                                                onClick = {
+                                                    viewModel.loadMoreCloudStreamCatalogOnHome(selectedCloudStreamPluginId)
+                                                },
                                                 enabled = !isLoadingMoreCloudStreamHome,
                                                 modifier = Modifier.size(34.dp)
                                             ) {
@@ -705,7 +711,7 @@ fun HomeScreen(
                                                 } else {
                                                     Icon(
                                                         imageVector = Icons.Default.CloudSync,
-                                                        contentDescription = "Muat halaman CloudStream berikutnya",
+                                                        contentDescription = "Muat halaman berikutnya dari plugin terpilih",
                                                         tint = MaterialTheme.colorScheme.primary,
                                                         modifier = Modifier.size(18.dp)
                                                     )
