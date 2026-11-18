@@ -357,37 +357,103 @@ internal object DdtvServerUrlPolicy {
 }
 
 internal object DdtvStreamResolver {
-    fun resolve(video: JSONObject, detail: JSONObject): List<DdtvStream> {
-        val code = DdtvServerUrlPolicy.validateVideoCode(video.optString("code", ""))
-        val domains = linkedSetOf<String>()
-        val domainArray = video.optJSONArray("domains")
-        if (domainArray != null) {
-            for (index in 0 until minOf(domainArray.length(), 32)) {
-                domainArray.optString(index, "").takeIf { it.isNotBlank() }?.let(domains::add)
-            }
-        }
-        video.optString("domain", "").takeIf { it.isNotBlank() }?.let(domains::add)
-        if (domains.isEmpty()) throw IOException("Alamat streaming DDTV belum tersedia.")
+    private val urlKeys = setOf(
+        "url", "play_url", "playurl", "video_url", "videourl",
+        "stream_url", "streamurl", "m3u8", "hls", "dash",
+        "play", "src", "file", "link", "source", "sources",
+        "urls", "streams", "play_link", "playlink"
+    )
+    private val progressiveExtensions = setOf(".mp4", ".m4v", ".mkv", ".webm", ".ts", ".flv", ".mp3", ".m4a")
 
-        val signature = detail.optString("sig", "")
+    fun resolve(video: JSONObject, detail: JSONObject): List<DdtvStream> {
+        val signature = detail.optString("sig", "").trim()
         if (signature.length > 16_384 || signature.contains('\r') || signature.contains('\n')) {
             throw IOException("Otorisasi streaming DDTV tidak valid.")
         }
         val headers = linkedMapOf("User-Agent" to "okhttp/4.12.0")
         if (signature.isNotEmpty()) headers["Authorization"] = signature
 
-        val streams = domains.mapNotNull { rawDomain ->
-            val base = runCatching {
-                DdtvServerUrlPolicy.origin(
-                    if (rawDomain.startsWith("https://", ignoreCase = true)) rawDomain
-                    else "https://$rawDomain"
-                )
-            }.getOrNull() ?: return@mapNotNull null
-            val url = "$base/$code/index.m3u8"
-            val type = DdtvServerUrlPolicy.manifestType(url)
-            if (type.isEmpty()) null else DdtvStream(url, type, headers.toMap())
+        val bases = linkedSetOf<String>()
+        val domainArray = video.optJSONArray("domains")
+        if (domainArray != null) {
+            for (index in 0 until minOf(domainArray.length(), 32)) {
+                addBase(domainArray.optString(index, ""), bases)
+            }
         }
-        if (streams.isEmpty()) throw IOException("Tidak ada link HLS/DASH untuk video ini.")
-        return streams
+        addBase(video.optString("domain", ""), bases)
+
+        // Use playback URLs returned by the server first. Do not fabricate a
+        // /<code>/index.m3u8 path: the DDTV API does not guarantee that route.
+        val candidates = linkedSetOf<String>()
+        collectPlaybackUrls(detail, candidates, 0)
+        collectPlaybackUrls(video, candidates, 0)
+
+        val resolved = linkedSetOf<String>()
+        candidates.forEach { raw ->
+            val absolute = resolveCandidate(raw, bases) ?: return@forEach
+            resolved.add(absolute)
+        }
+        if (resolved.isEmpty()) {
+            throw IOException("Respons detail DDTV tidak memuat URL streaming yang valid. Server tidak memberikan link pemutaran.")
+        }
+
+        return resolved.mapNotNull { url ->
+            val type = playbackType(url)
+            if (type.isEmpty()) null else DdtvStream(url, type, headers.toMap())
+        }.also {
+            if (it.isEmpty()) throw IOException("URL dari server DDTV bukan format media yang didukung.")
+        }
+    }
+
+    private fun addBase(raw: String, output: MutableSet<String>) {
+        val value = raw.trim()
+        if (value.isBlank()) return
+        val candidate = if (value.startsWith("https://", true)) value else "https://$value"
+        runCatching { DdtvServerUrlPolicy.origin(candidate) }.getOrNull()?.let(output::add)
+    }
+
+    private fun collectPlaybackUrls(value: Any?, output: MutableSet<String>, depth: Int) {
+        if (depth > 6 || output.size >= 32) return
+        when (value) {
+            is JSONObject -> {
+                val keys = value.keys()
+                while (keys.hasNext() && output.size < 32) {
+                    val key = keys.next()
+                    val child = value.opt(key)
+                    if (key.lowercase(Locale.ROOT) in urlKeys) {
+                        when (child) {
+                            is String -> output.add(child.trim())
+                            is JSONArray, is JSONObject -> collectPlaybackUrls(child, output, depth + 1)
+                        }
+                    } else if (child is JSONObject || child is JSONArray) {
+                        collectPlaybackUrls(child, output, depth + 1)
+                    }
+                }
+            }
+            is JSONArray -> for (index in 0 until minOf(value.length(), 64)) {
+                collectPlaybackUrls(value.opt(index), output, depth + 1)
+            }
+        }
+    }
+
+    private fun resolveCandidate(raw: String, bases: Set<String>): String? {
+        val value = raw.trim()
+        if (value.isBlank() || value.length > 16_384 ||
+            value.contains('\r') || value.contains('\n') || value.startsWith("//")
+        ) return null
+        val absolute = if (value.startsWith("https://", true)) {
+            value
+        } else {
+            val base = bases.firstOrNull() ?: return null
+            runCatching { URI(base).resolve(value).toString() }.getOrNull() ?: return null
+        }
+        return absolute.takeIf(DdtvServerUrlPolicy::isPublicHttps)
+    }
+
+    private fun playbackType(url: String): String {
+        val manifest = DdtvServerUrlPolicy.manifestType(url)
+        if (manifest.isNotEmpty()) return manifest
+        val path = runCatching { URI(url).path.lowercase(Locale.ROOT) }.getOrDefault("")
+        return if (progressiveExtensions.any(path::endsWith)) "progressive" else ""
     }
 }
