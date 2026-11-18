@@ -81,19 +81,50 @@ class DdtvProtocolTest {
     }
 
     @Test
-    fun streamResolverBuildsHlsUrlAndAuthorizationHeader() {
+    fun streamResolverUsesExactPlaybackUrlReturnedByServer() {
         val streams = DdtvStreamResolver.resolve(
+            JSONObject().put("code", "movie_123"),
             JSONObject()
-                .put("code", "movie_123")
-                .put("domains", JSONArray().put("media.example.test")),
-            JSONObject().put("sig", "signature-token")
+                .put("sig", "signature-token")
+                .put("data", JSONObject().put("play_url", "https://media.example.test/live/master.m3u8?token=abc"))
         )
 
         assertEquals(1, streams.size)
-        assertEquals("https://media.example.test/movie_123/index.m3u8", streams.first().url)
+        assertEquals("https://media.example.test/live/master.m3u8?token=abc", streams.first().url)
         assertEquals("hls", streams.first().manifestType)
         assertEquals("okhttp/4.12.0", streams.first().headers["User-Agent"])
         assertEquals("signature-token", streams.first().headers["Authorization"])
+    }
+
+    @Test
+    fun streamResolverSupportsNestedUrlArraysAndProgressiveMedia() {
+        val streams = DdtvStreamResolver.resolve(
+            JSONObject(),
+            JSONObject().put(
+                "sources",
+                JSONArray().put(JSONObject().put("url", "https://cdn.example.test/movie.mp4?auth=xyz"))
+            )
+        )
+
+        assertEquals(1, streams.size)
+        assertEquals("https://cdn.example.test/movie.mp4?auth=xyz", streams.first().url)
+        assertEquals("progressive", streams.first().manifestType)
+    }
+
+    @Test
+    fun streamResolverDoesNotInventAnIndexPlaylistWhenServerReturnsNoUrl() {
+        var rejected = false
+        try {
+            DdtvStreamResolver.resolve(
+                JSONObject()
+                    .put("code", "movie_123")
+                    .put("domains", JSONArray().put("media.example.test")),
+                JSONObject().put("sig", "signature-token")
+            )
+        } catch (_: IOException) {
+            rejected = true
+        }
+        assertTrue(rejected)
     }
 
     @Test
