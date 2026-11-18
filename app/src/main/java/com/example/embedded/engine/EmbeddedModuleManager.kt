@@ -10,41 +10,109 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-data class EmbeddedModuleState(val metadata:ModuleMetadata,val enabled:Boolean,val running:Boolean=false)
+data class EmbeddedModuleState(
+    val metadata: ModuleMetadata,
+    val enabled: Boolean,
+    val running: Boolean = false,
+    val lastError: String? = null
+)
 
-class EmbeddedModuleManager(context:Context) {
-    private val app=context.applicationContext
-    private val prefs=app.getSharedPreferences("embedded_modules",Context.MODE_PRIVATE)
-    private val storage=ModuleStorage(app)
-    private val modules:Map<String,EmbeddedModule> = listOf(DdtvModule()).associateBy { it.metadata.id }
-    private val created=mutableSetOf<String>()
-    private val running=mutableSetOf<String>()
-    private fun snapshot()=modules.values.map { m ->
-        val enabled=prefs.getBoolean("enabled:${m.metadata.id}",m.metadata.builtIn)
-        EmbeddedModuleState(m.metadata,enabled,m.metadata.id in running && enabled)
+/**
+ * Owns module lifecycle on the host side. A failed module callback is contained here and
+ * reported to the UI; it must never take down the host/player process.
+ */
+class EmbeddedModuleManager(context: Context) {
+    private val app = context.applicationContext
+    private val prefs = app.getSharedPreferences("embedded_modules", Context.MODE_PRIVATE)
+    private val storage = ModuleStorage(app)
+    private val modules: Map<String, EmbeddedModule> =
+        listOf(DdtvModule()).associateBy { it.metadata.id }
+    private val created = mutableSetOf<String>()
+    private val running = mutableSetOf<String>()
+    private val errors = mutableMapOf<String, String>()
+
+    private fun snapshot() = modules.values.map { module ->
+        val id = module.metadata.id
+        val enabled = prefs.getBoolean("enabled:$id", module.metadata.builtIn)
+        EmbeddedModuleState(module.metadata, enabled, id in running && enabled, errors[id])
     }
-    private val _states=MutableStateFlow(snapshot())
-    val states:StateFlow<List<EmbeddedModuleState>> = _states.asStateFlow()
-    @Synchronized fun setEnabled(id:String,enabled:Boolean) {
+
+    private val _states = MutableStateFlow(snapshot())
+    val states: StateFlow<List<EmbeddedModuleState>> = _states.asStateFlow()
+
+    private fun publish() {
+        _states.value = snapshot()
+    }
+
+    @Synchronized
+    fun setEnabled(id: String, enabled: Boolean) {
         require(id in modules) { "Modul tidak dikenal." }
-        prefs.edit().putBoolean("enabled:$id",enabled).apply()
-        if(!enabled) stop(id)
-        _states.value=snapshot()
+        if (!enabled) stop(id)
+        prefs.edit().putBoolean("enabled:$id", enabled).apply()
+        publish()
     }
-    @Synchronized fun start(id:String) {
-        val module=modules[id] ?: error("Modul tidak dikenal.")
-        require(prefs.getBoolean("enabled:$id",module.metadata.builtIn)) { "Aktifkan modul sebelum membukanya." }
-        if(id !in created) { module.onCreate(ModuleContext(app,storage.directory(id))); created+=id }
-        module.onStart()
-        running+=id
-        _states.value=snapshot()
+
+    @Synchronized
+    fun start(id: String) {
+        val module = modules[id] ?: error("Modul tidak dikenal.")
+        require(prefs.getBoolean("enabled:$id", module.metadata.builtIn)) {
+            "Aktifkan modul sebelum membukanya."
+        }
+        if (id in running) return
+
+        var createdNow = false
+        try {
+            if (id !in created) {
+                module.onCreate(ModuleContext(app, storage.directory(id)))
+                created += id
+                createdNow = true
+            }
+            module.onStart()
+            running += id
+            errors.remove(id)
+            publish()
+        } catch (failure: Throwable) {
+            running -= id
+            if (createdNow) {
+                runCatching { module.onDestroy() }
+                created -= id
+            } else if (id in created) {
+                runCatching { module.onStop() }
+            }
+            errors[id] = failure.message ?: failure.javaClass.simpleName
+            publish()
+            throw IllegalStateException("Modul ${module.metadata.name} gagal dijalankan: ${errors[id]}", failure)
+        }
     }
-    @Synchronized fun stop(id:String) {
-        modules[id]?.let { if(id in running) { it.onStop(); running-=id } }
-        _states.value=snapshot()
+
+    @Synchronized
+    fun stop(id: String) {
+        val module = modules[id] ?: return
+        if (id !in running) return
+        try {
+            module.onStop()
+            errors.remove(id)
+        } catch (failure: Throwable) {
+            errors[id] = failure.message ?: failure.javaClass.simpleName
+        } finally {
+            running -= id
+            publish()
+        }
     }
-    @Synchronized fun destroy(id:String) {
-        modules[id]?.let { if(id in created) { it.onStop(); it.onDestroy(); running-=id; created-=id } }
-        _states.value=snapshot()
+
+    @Synchronized
+    fun destroy(id: String) {
+        val module = modules[id] ?: return
+        stop(id)
+        if (id !in created) return
+        try {
+            module.onDestroy()
+            created -= id
+            errors.remove(id)
+        } catch (failure: Throwable) {
+            errors[id] = failure.message ?: failure.javaClass.simpleName
+        } finally {
+            publish()
+        }
     }
 }
