@@ -45,6 +45,8 @@ class EmbeddedModuleManager(
     private val _states = MutableStateFlow(snapshot())
     val states: StateFlow<List<EmbeddedModuleState>> = _states.asStateFlow()
 
+    fun availableMediaSources() = mediaBridge.availableSources()
+
     private fun publish() {
         _states.value = snapshot()
     }
