@@ -441,6 +441,9 @@ fun MultiviewScreen(
                             onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
                             onFullscreen = { cycleMagnification(index) },
+                            onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
+                            onSwap = ::swapPanels,
+                            panelBounds = panelBounds,
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
@@ -454,6 +457,9 @@ fun MultiviewScreen(
                             onClose = { clearSlot(index) },
                             onAudio = { setAudioFocus(index) },
                             onFullscreen = { cycleMagnification(index) },
+                            onRestoreGrid = { fullscreenSlot = null; expandedSlot = null },
+                            onSwap = ::swapPanels,
+                            panelBounds = panelBounds,
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
                     }
