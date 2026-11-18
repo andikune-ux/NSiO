@@ -11,7 +11,13 @@ fun interface ModuleArtifactTrust { fun isTrusted(artifact:File):Boolean }
 class PinnedDigestTrust(private val trustedSha256:Set<String> = emptySet()):ModuleArtifactTrust {
     override fun isTrusted(artifact:File):Boolean {
         if(!artifact.isFile || trustedSha256.isEmpty()) return false
-        val digest=MessageDigest.getInstance("SHA-256").digest(artifact.readBytes()).joinToString("") { "%02x".format(it) }
+        val digest=MessageDigest.getInstance("SHA-256").let { md ->
+            artifact.inputStream().buffered().use { input ->
+                val buffer=ByteArray(16*1024)
+                while(true) { val count=input.read(buffer); if(count<0) break; md.update(buffer,0,count) }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        }
         return digest in trustedSha256
     }
 }
