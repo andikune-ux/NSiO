@@ -18,7 +18,8 @@ object ModuleArchivePolicy {
             count++
             require(count<=MAX_ENTRIES) { "Paket modul memiliki terlalu banyak file." }
             val name=entry.name.replace('\\','/')
-            require(!name.startsWith("/") && name.split('/').none { it==".." || it.isBlank() }) { "Paket modul berisi jalur file tidak aman." }
+            val segments=name.trimEnd('/').split('/')
+            require(!name.startsWith("/") && segments.none { it==".." || it.isBlank() }) { "Paket modul berisi jalur file tidak aman." }
             if(entry.isDirectory) continue
             require(entry.size>=0L && entry.size<=MAX_ENTRY_BYTES) { "Ukuran file modul tidak valid atau terlalu besar." }
             total+=entry.size
