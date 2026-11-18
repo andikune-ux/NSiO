@@ -1562,13 +1562,14 @@ fun HomeScreen(
 
                         androidx.compose.animation.AnimatedVisibility(
                             visible = showQuickActions,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 16.dp, bottom = 78.dp),
                             enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
                             exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
                         ) {
                             Row(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 16.dp, bottom = 78.dp)
                                     .widthIn(min = 220.dp, max = 250.dp)
                                     .liquidGlass(
                                         shape = RoundedCornerShape(20.dp),
