@@ -71,6 +71,10 @@ open class Plugin : BasePlugin() {
 
 class PluginManager(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("nsio_plugins_prefs", Context.MODE_PRIVATE)
+
+    companion object {
+        private const val NSFW_CATALOG_ENABLED_KEY = "nsfw_catalog_enabled"
+    }
     private val cloudStreamRuntime = CloudStreamPluginRuntime(context)
     companion object {
         private const val MAX_CLOUDSTREAM_ARTIFACT_BYTES = 128L * 1024L * 1024L
@@ -84,6 +88,12 @@ class PluginManager(private val context: Context) {
             "https://raw.githubusercontent.com/admknight/CloudstreamExtensions/master/repo.json"
         )
     }
+    fun isNsfwCatalogEnabled(): Boolean = prefs.getBoolean(NSFW_CATALOG_ENABLED_KEY, false)
+
+    fun setNsfwCatalogEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(NSFW_CATALOG_ENABLED_KEY, enabled).apply()
+    }
+
     private val _installedPlugins = MutableStateFlow<List<Plugin>>(emptyList())
     val installedPlugins: StateFlow<List<Plugin>> = _installedPlugins.asStateFlow()
     private val _repositories = MutableStateFlow<List<RepoManifest>>(emptyList())
