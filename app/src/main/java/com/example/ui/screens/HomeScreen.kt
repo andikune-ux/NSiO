@@ -45,6 +45,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
@@ -94,6 +96,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,6 +110,7 @@ import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
+import com.example.embedded.engine.EmbeddedModuleManager
 
 @Composable
 fun HomeScreen(
@@ -169,6 +173,11 @@ fun HomeScreen(
     var cloudStreamSearchRequest by rememberSaveable { mutableStateOf(0) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
+    var showQuickActions by rememberSaveable { mutableStateOf(false) }
+    var showDdtvPrototypeDialog by rememberSaveable { mutableStateOf(false) }
+    var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
+    val appContext = LocalContext.current
+    val embeddedModuleManager = remember(appContext) { EmbeddedModuleManager(appContext) }
     var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
@@ -176,9 +185,10 @@ fun HomeScreen(
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
+    BackHandler(enabled = isSearchExpanded || showQuickActions || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
         when {
             showCloudStreamOrderDialog -> showCloudStreamOrderDialog = false
+            showQuickActions -> showQuickActions = false
             expandedPlaylistCategory != null -> expandedPlaylistCategory = null
             showPlaylistPicker -> showPlaylistPicker = false
             isSearchExpanded -> isSearchExpanded = false
@@ -1508,69 +1518,112 @@ fun HomeScreen(
                             }
                         }
 
+                        // Existing playlist filtering stays available through its own compact shortcut.
                         Box(
                             modifier = Modifier
-                                .size(54.dp)
-                                .clickable { showPlaylistPicker = !showPlaylistPicker }
-                                .liquidGlassTvFocusable(shape = RoundedCornerShape(16.dp))
-                                .drawBehind {
-                                    // Trace the Material Extension glyph itself so the purple
-                                    // outline follows its puzzle-piece silhouette, not a circle.
-                                    val glyph = Path().apply {
-                                        moveTo(20.5f, 11f)
-                                        lineTo(19f, 11f)
-                                        lineTo(19f, 7f)
-                                        cubicTo(19f, 5.9f, 18.1f, 5f, 17f, 5f)
-                                        lineTo(13f, 5f)
-                                        lineTo(13f, 3.5f)
-                                        cubicTo(13f, 2.12f, 11.88f, 1f, 10.5f, 1f)
-                                        cubicTo(9.12f, 1f, 8f, 2.12f, 8f, 3.5f)
-                                        lineTo(8f, 5f)
-                                        lineTo(4f, 5f)
-                                        cubicTo(2.9f, 5f, 2f, 5.9f, 2f, 7f)
-                                        lineTo(2f, 10.8f)
-                                        lineTo(3.5f, 10.8f)
-                                        cubicTo(4.88f, 10.8f, 6f, 11.92f, 6f, 13.3f)
-                                        cubicTo(6f, 14.68f, 4.88f, 15.8f, 3.5f, 15.8f)
-                                        lineTo(2f, 15.8f)
-                                        lineTo(2f, 20f)
-                                        cubicTo(2f, 21.1f, 2.9f, 22f, 4f, 22f)
-                                        lineTo(8f, 22f)
-                                        lineTo(8f, 20.5f)
-                                        cubicTo(8f, 19.12f, 9.12f, 18f, 10.5f, 18f)
-                                        cubicTo(11.88f, 18f, 13f, 19.12f, 13f, 20.5f)
-                                        lineTo(13f, 22f)
-                                        lineTo(17f, 22f)
-                                        cubicTo(18.1f, 22f, 19f, 21.1f, 19f, 20f)
-                                        lineTo(19f, 16f)
-                                        lineTo(20.5f, 16f)
-                                        cubicTo(21.88f, 16f, 23f, 14.88f, 23f, 13.5f)
-                                        cubicTo(23f, 12.12f, 21.88f, 11f, 20.5f, 11f)
-                                        close()
-                                    }
-                                    val glyphSize = 28.dp.toPx()
-                                    val scaleFactor = glyphSize / 24f
-                                    val left = (size.width - glyphSize) / 2f
-                                    val top = (size.height - glyphSize) / 2f
-                                    withTransform({
-                                        translate(left, top)
-                                        scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
-                                    }) {
-                                        drawPath(
-                                            path = glyph,
-                                            color = accentColor,
-                                            style = Stroke(width = 1.35.dp.toPx())
-                                        )
-                                    }
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF29243D).copy(alpha = 0.92f) else Color(0xFFF0EAFE))
+                                .border(1.dp, Color(0xFFB69CFF).copy(alpha = 0.7f), CircleShape)
+                                .clickable {
+                                    showQuickActions = false
+                                    showPlaylistPicker = !showPlaylistPicker
                                 }
-                                .testTag("floating_playlist_extension_button"),
+                                .liquidGlassTvFocusable(shape = CircleShape)
+                                .testTag("floating_playlist_selector_button"),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.Extension,
-                                contentDescription = "Buka pilihan playlist",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
+                                Icons.Default.PlaylistPlay,
+                                contentDescription = "Pilih sumber playlist",
+                                tint = if (isDark) Color(0xFFD5C5FF) else Color(0xFF7048B8),
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showQuickActions,
+                            enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .widthIn(min = 220.dp, max = 250.dp)
+                                    .liquidGlass(
+                                        shape = RoundedCornerShape(20.dp),
+                                        alpha = if (isDark) 0.96f else 0.98f,
+                                        borderAlpha = if (isDark) 0.62f else 0.78f,
+                                        elevation = 16.dp
+                                    )
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+                                        .clickable {
+                                            showQuickActions = false
+                                            onNavigateToExtension()
+                                        }
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
+                                        .padding(vertical = 12.dp)
+                                        .testTag("quick_action_extension"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Icon(Icons.Default.Extension, contentDescription = null, tint = accentColor, modifier = Modifier.size(25.dp))
+                                        Text("Extension", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+                                        .clickable {
+                                            showQuickActions = false
+                                            runCatching {
+                                                embeddedModuleManager.start("dev.andikune.nsio.ddtv")
+                                                showDdtvPrototypeDialog = true
+                                            }.onFailure {
+                                                ddtvLaunchError = it.localizedMessage ?: "DDTV Prototype tidak dapat dibuka."
+                                            }
+                                        }
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
+                                        .padding(vertical = 12.dp)
+                                        .testTag("quick_action_ddtv"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Icon(Icons.Default.Tv, contentDescription = null, tint = accentColor, modifier = Modifier.size(25.dp))
+                                        Text("DDTV", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF17364A).copy(alpha = 0.94f) else Color(0xFFE4F7FF))
+                                .border(1.2.dp, Color(0xFF66D9FF).copy(alpha = 0.78f), CircleShape)
+                                .clickable {
+                                    showPlaylistPicker = false
+                                    showQuickActions = !showQuickActions
+                                }
+                                .liquidGlassTvFocusable(shape = CircleShape)
+                                .testTag("floating_quick_actions_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = if (showQuickActions) "Tutup pintasan" else "Buka pintasan",
+                                tint = if (isDark) Color(0xFF9CEBFF) else Color(0xFF087EAD),
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
@@ -1678,6 +1731,38 @@ fun HomeScreen(
                     Material3Text("Selesai")
                 }
             }
+        )
+    }
+
+    if (showDdtvPrototypeDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDdtvPrototypeDialog = false
+                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+            },
+            title = { Material3Text("DDTV Experimental") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Material3Text("DDTV Prototype berhasil dibuka melalui NSiO Embedded Module Engine.")
+                    Material3Text("Modul ini masih berupa prototype native dan belum terhubung ke server, protokol, atau payload DDTV MONYET PRO.", style = MaterialTheme.typography.bodySmall)
+                    Material3Text("Lifecycle modul aktif • penyimpanan terpisah • player utama tidak disentuh.", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDdtvPrototypeDialog = false
+                    embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                }) { Material3Text("Tutup Modul") }
+            }
+        )
+    }
+
+    ddtvLaunchError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { ddtvLaunchError = null },
+            title = { Material3Text("DDTV Prototype") },
+            text = { Material3Text(message) },
+            confirmButton = { TextButton(onClick = { ddtvLaunchError = null }) { Material3Text("Tutup") } }
         )
     }
 
