@@ -1,124 +1,3 @@
-@Composable
-fun ExtensionScreen(
-    viewModel: MainViewModel,
-    onNavigateToHome: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
-    val mediaList by viewModel.mediaList.collectAsState()
-    val selectedFilter by viewModel.selectedFilter.collectAsState()
-    val playlists = sourcePlaylists.sortedBy { it.name.trim().lowercase() }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(14.dp)
-            .testTag("extension_playlist_screen")
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Extension",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "Pilih playlist yang ingin ditampilkan di Beranda",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            OutlinedButton(
-                onClick = onNavigateToHome,
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Beranda", fontSize = 12.sp)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 18.dp)
-        ) {
-            item {
-                val selected = selectedFilter == "ALL"
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                        .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                        .clickable {
-                            viewModel.selectFilter("ALL")
-                            onNavigateToHome()
-                        }
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Semua Playlist", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text("${mediaList.size} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Playlist aktif", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-
-            if (playlists.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Belum ada playlist tersimpan. Playlist yang sudah tersedia akan muncul di sini.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else {
-                items(playlists, key = { it.id }) { playlist ->
-                    val filter = "PLAYLIST:${playlist.id}"
-                    val selected = selectedFilter == filter
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
-                            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                            .clickable {
-                                viewModel.selectFilter(filter)
-                                onNavigateToHome()
-                            }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(playlist.name, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                            Text("${playlist.itemCount} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Playlist aktif", tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-        }
-    }
-}
-
 package com.example.ui.screens
 
 import androidx.compose.animation.core.animateFloat
@@ -218,6 +97,127 @@ import com.example.data.model.SourcePlaylist
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentRed
+
+@Composable
+fun ExtensionScreen(
+    viewModel: MainViewModel,
+    onNavigateToHome: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
+    val mediaList by viewModel.mediaList.collectAsState()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val playlists = sourcePlaylists.sortedBy { it.name.trim().lowercase() }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(14.dp)
+            .testTag("extension_playlist_screen")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Material3Text(
+                    text = "Extension",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Material3Text(
+                    text = "Pilih playlist yang ingin ditampilkan di Beranda",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            OutlinedButton(
+                onClick = onNavigateToHome,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Material3Text("Beranda", fontSize = 12.sp)
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 18.dp)
+        ) {
+            item {
+                val selected = selectedFilter == "ALL"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                        .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                        .clickable {
+                            viewModel.selectFilter("ALL")
+                            onNavigateToHome()
+                        }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Material3Text("Semua Playlist", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Material3Text("${mediaList.size} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Playlist aktif", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            if (playlists.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Material3Text(
+                            "Belum ada playlist tersimpan. Playlist yang sudah tersedia akan muncul di sini.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                items(playlists, key = { it.id }) { playlist ->
+                    val filter = "PLAYLIST:${playlist.id}"
+                    val selected = selectedFilter == filter
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            .clickable {
+                                viewModel.selectFilter(filter)
+                                onNavigateToHome()
+                            }
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Material3Text(playlist.name, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                            Material3Text("${playlist.itemCount} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Playlist aktif", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun SourceManagementScreen(
