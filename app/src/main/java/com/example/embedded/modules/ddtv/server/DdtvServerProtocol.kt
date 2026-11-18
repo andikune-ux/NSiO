@@ -361,7 +361,9 @@ internal object DdtvStreamResolver {
         "url", "play_url", "playurl", "video_url", "videourl",
         "stream_url", "streamurl", "m3u8", "hls", "dash",
         "play", "src", "file", "link", "source", "sources",
-        "urls", "streams", "play_link", "playlink"
+        "urls", "streams", "play_link", "playlink", "file_url",
+        "source_url", "download_url", "video_path", "url_m3u8",
+        "url_mp4", "playlist", "manifest", "master", "address"
     )
     private val progressiveExtensions = setOf(".mp4", ".m4v", ".mkv", ".webm", ".ts", ".flv", ".mp3", ".m4a")
 
@@ -427,6 +429,9 @@ internal object DdtvStreamResolver {
                         }
                     } else if (child is JSONObject || child is JSONArray) {
                         collectPlaybackUrls(child, output, depth + 1)
+                    } else if (child is String && child.trim().startsWith("https://", true)) {
+                        // Some DDTV payload revisions use an unlabelled URL field.
+                        output.add(child.trim())
                     }
                 }
             }
