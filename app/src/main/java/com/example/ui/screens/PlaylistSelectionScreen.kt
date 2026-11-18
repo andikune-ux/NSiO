@@ -47,6 +47,16 @@ fun PlaylistSelectionScreen(
     val mediaItems by viewModel.mediaList.collectAsState()
     val repos by viewModel.pluginManager.repositories.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val drivePlaylists = remember(playlists, mediaItems) {
+        playlists.filter { playlist ->
+            playlist.sourceType.equals("DRIVE", ignoreCase = true) ||
+                com.example.data.extractor.MediaSourceClassifier.isGoogleDriveUrl(playlist.url) ||
+                mediaItems.any { item ->
+                    item.playlistId == playlist.id &&
+                        com.example.data.extractor.MediaSourceClassifier.isDriveMedia(item)
+                }
+        }.sortedBy { it.name.lowercase() }
+    }
     val enabledPlugins = remember(repos) {
         repos.flatMap { repo ->
             repo.plugins.filter { entry ->
@@ -71,6 +81,12 @@ fun PlaylistSelectionScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Playlist tersimpan", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                OutlinedButton(
+                    onClick = { viewModel.selectFilter("DRIVE_ALL"); onNavigateToHome() },
+                    modifier = Modifier.fillMaxWidth().testTag("playlist_all_drive")
+                ) {
+                    Text("Tampilkan Semua Playlist Drive (${drivePlaylists.size})", fontSize = 11.sp)
+                }
                 if (playlists.isEmpty()) {
                     Text("Belum ada playlist tersimpan. Tambahkan sumber melalui Manajemen Sumber.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
