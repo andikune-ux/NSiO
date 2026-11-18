@@ -93,6 +93,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -104,6 +105,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.firebase.AuthState
 import com.example.data.model.MediaSourceClassifier
 import com.example.data.model.MediaItem
@@ -123,6 +125,7 @@ import com.example.embedded.api.ModuleMediaResult
 import com.example.embedded.api.ModuleMediaSource
 import com.example.embedded.host.CatalogMediaAdapter
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
 
 @Composable
 fun HomeScreen(
@@ -1873,6 +1876,8 @@ fun HomeScreen(
             }
         }
         AlertDialog(
+            modifier = Modifier.fillMaxSize().padding(8.dp),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
             onDismissRequest = {
                 showDdtvPrototypeDialog = false
                 embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
@@ -1880,7 +1885,7 @@ fun HomeScreen(
             title = { Material3Text("DDTV") },
             text = {
                 Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}")
@@ -1947,16 +1952,49 @@ fun HomeScreen(
                                     .map { video.optString(it, "").trim() }
                                     .firstOrNull { it.isNotBlank() }
                                     ?: "Video $videoId"
-                                Column(
+                                val thumbnail = sequenceOf("cover_url", "cover", "thumbnail", "image", "poster")
+                                    .map { video.optString(it, "").trim() }
+                                    .firstOrNull { it.startsWith("https://", true) || it.startsWith("http://", true) }
+                                    .orEmpty()
+                                Row(
                                     modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                                         .clickable(enabled = !ddtvServerLoading) { playDdtvVideo(video) }
-                                        .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Material3Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Material3Text("ID $videoId • Video Type ${video.optInt("video_type", category.videoType)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Box(
+                                        modifier = Modifier.size(width = 132.dp, height = 78.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        if (thumbnail.isNotBlank()) {
+                                            AsyncImage(
+                                                model = thumbnail,
+                                                contentDescription = title,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Movie, contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.align(Alignment.Center).size(30.dp))
+                                        }
+                                    }
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Material3Text(title, style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Material3Text("ID $videoId • Video Type ${video.optInt("video_type", category.videoType)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Material3Text("Lihat detail dan putar", style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
                             }
                         }
