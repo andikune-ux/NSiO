@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.OpenableColumns
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
@@ -103,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.firebase.AuthState
 import com.example.data.model.MediaSourceClassifier
+import com.example.data.model.MediaItem
 import com.example.data.model.WatchHistoryPolicy
 import com.example.ui.MainViewModel
 import com.example.ui.components.MediaGridCard
@@ -182,6 +186,44 @@ fun HomeScreen(
     val embeddedModuleStates by embeddedModuleManager.states.collectAsState()
     val ddtvModuleState = embeddedModuleStates.firstOrNull { it.metadata.id == "dev.andikune.nsio.ddtv" }
     val ddtvHostSources = remember(embeddedModuleManager) { embeddedModuleManager.availableMediaSources() }
+
+    val ddtvLocalFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                appContext.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            val displayName = runCatching {
+                appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+            }.getOrNull()?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Video lokal"
+            val profile = activeProfile
+            if (profile == null) {
+                ddtvLaunchError = "Pilih profil NSiO terlebih dahulu."
+            } else {
+                viewModel.playMedia(
+                    MediaItem(
+                        id = "ddtv-local:${uri}",
+                        profileId = profile.id,
+                        title = displayName,
+                        url = uri.toString(),
+                        type = "VIDEO",
+                        sourceType = "FILE",
+                        category = "DDTV • File lokal",
+                        createdAt = System.currentTimeMillis()
+                    )
+                )
+                showDdtvPrototypeDialog = false
+                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+            }
+        }
+    }
     var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
@@ -1780,6 +1822,11 @@ fun HomeScreen(
                                 Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
                             }
                         }
+                    }
+                    TextButton(onClick = {
+                        ddtvLocalFilePicker.launch(arrayOf("video/*", "audio/*"))
+                    }) {
+                        Material3Text("Pilih file dari perangkat…")
                     }
                     if (ddtvVisibleMedia.isEmpty()) {
                         Material3Text(
