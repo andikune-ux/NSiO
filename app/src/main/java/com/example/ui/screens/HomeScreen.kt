@@ -1939,17 +1939,44 @@ fun HomeScreen(
                 }
             }
         }
-        AlertDialog(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-            onDismissRequest = {
-                showDdtvPrototypeDialog = false
-                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-            },
-            title = { Material3Text("DDTV") },
-            text = {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Material3Text("DDTV", style = MaterialTheme.typography.titleLarge)
+                        Material3Text(
+                            "Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            runCatching {
+                                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                embeddedModuleManager.start("dev.andikune.nsio.ddtv")
+                            }.onFailure {
+                                ddtvLaunchError = it.localizedMessage ?: "DDTV gagal dimulai ulang."
+                                showDdtvPrototypeDialog = false
+                            }
+                        }) { Material3Text("Mulai Ulang") }
+                        TextButton(onClick = {
+                            showDdtvPrototypeDialog = false
+                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                        }) { Material3Text("Tutup") }
+                    }
+                }
+                Divider(color = MaterialTheme.colorScheme.outlineVariant)
                 Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}")
@@ -2277,25 +2304,9 @@ fun HomeScreen(
                         Material3Text("Error: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = {
-                        runCatching {
-                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-                            embeddedModuleManager.start("dev.andikune.nsio.ddtv")
-                        }.onFailure {
-                            ddtvLaunchError = it.localizedMessage ?: "DDTV gagal dimulai ulang."
-                            showDdtvPrototypeDialog = false
-                        }
-                    }) { Material3Text("Mulai Ulang") }
-                    TextButton(onClick = {
-                        showDdtvPrototypeDialog = false
-                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-                    }) { Material3Text("Tutup") }
                 }
             }
-        )
+        }
     }
 
     ddtvLaunchError?.let { message ->
