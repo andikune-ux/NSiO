@@ -2013,10 +2013,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         syncPlaybackQueue(item)
         _playbackPreparationMessage.value = null
         _currentlyPlaying.value = item
+        val streamExtension = runCatching {
+            java.net.URI(item.url).path.orEmpty().substringAfterLast('.', "").lowercase()
+        }.getOrDefault("")
         val mimeType = when (streamType.lowercase()) {
             "hls", "m3u8" -> "application/x-mpegURL"
             "dash", "mpd" -> "application/dash+xml"
-            "progressive", "mp4" -> "video/mp4"
+            "progressive", "mp4" -> when (streamExtension) {
+                "m4v", "mp4" -> "video/mp4"
+                "mkv" -> "video/x-matroska"
+                "webm" -> "video/webm"
+                "ts" -> "video/mp2t"
+                "flv" -> "video/x-flv"
+                "mp3" -> "audio/mpeg"
+                "m4a" -> "audio/mp4"
+                else -> null
+            }
             "webm" -> "video/webm"
             "mkv" -> "video/x-matroska"
             else -> null
