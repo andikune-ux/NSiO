@@ -877,9 +877,12 @@ private fun PluginRepoTab(
     }
 
     fun matchesPluginCategory(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
+        val isNsfw = isCloudStreamPluginNsfw(entry)
+        if (selectedPluginCategory == "NSFW") return nsfwEnabled && isNsfw
+        if (isNsfw) return false
         val types = entry.tvTypes.joinToString(" ").lowercase()
         return when (selectedPluginCategory) {
-            "Semua" -> nsfwEnabled || !isCloudStreamPluginNsfw(entry)
+            "Semua" -> true
             "Movie" -> types.contains("movie") || types.contains("film")
             "Seri TV" -> types.contains("tv") || types.contains("series")
             "Anime" -> types.contains("anime")
@@ -887,7 +890,6 @@ private fun PluginRepoTab(
             "Dubb Indo" -> entry.language.equals("id", true) || entry.language.contains("indonesia", true) || entry.language.contains("indonesian", true)
             "Kartun" -> types.contains("cartoon") || types.contains("animation")
             "Indonesia", "Malaysia", "Singapura", "Thailand", "Jepang", "Korea Selatan", "Tiongkok/Taiwan", "Vietnam", "Filipina", "India", "Barat", "Global" -> cloudStreamPluginCountry(entry) == selectedPluginCategory
-            "NSFW" -> nsfwEnabled && isCloudStreamPluginNsfw(entry)
             else -> true
         }
     }
