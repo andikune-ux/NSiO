@@ -197,6 +197,8 @@ fun HomeScreen(
     var ddtvServerCategories by remember { mutableStateOf<List<DdtvCategory>>(emptyList()) }
     var ddtvServerVideos by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var ddtvSelectedCategory by remember { mutableStateOf<DdtvCategory?>(null) }
+    var ddtvDetailVideo by remember { mutableStateOf<JSONObject?>(null) }
+    var ddtvDetailPayload by remember { mutableStateOf<JSONObject?>(null) }
     val appContext = LocalContext.current
     val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
     val ddtvMediaBridge = remember(appContext, viewModel, drivePlaylistIds) {
@@ -1828,6 +1830,30 @@ fun HomeScreen(
                 }
             }
         }
+        val openDdtvDetail: (JSONObject) -> Unit = { video ->
+            val category = ddtvSelectedCategory
+            val videoId = video.optLong("id", video.optLong("video_id", 0L))
+            if (category == null || videoId <= 0L) {
+                ddtvLaunchError = "Identitas video DDTV tidak valid."
+            } else if (!ddtvServerLoading) {
+                ddtvServerLoading = true
+                ddtvServerStatus = "Memuat detail video..."
+                ddtvScope.launch {
+                    try {
+                        val detail = embeddedModuleManager.fetchDdtvDetail(
+                            videoId, video.optInt("video_type", category.videoType)
+                        )
+                        ddtvDetailVideo = video
+                        ddtvDetailPayload = detail
+                        ddtvServerStatus = "Detail video berhasil dimuat"
+                    } catch (failure: Exception) {
+                        ddtvLaunchError = failure.localizedMessage ?: "Gagal memuat detail DDTV."
+                    } finally {
+                        ddtvServerLoading = false
+                    }
+                }
+            }
+        }
         val playDdtvVideo: (JSONObject) -> Unit = { video ->
             val category = ddtvSelectedCategory
             val videoId = video.optLong("id", video.optLong("video_id", 0L))
@@ -1839,7 +1865,7 @@ fun HomeScreen(
                 ddtvScope.launch {
                     try {
                         val videoType = video.optInt("video_type", category.videoType)
-                        val detail = embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
+                        val detail = ddtvDetailPayload ?: embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
                         val stream = embeddedModuleManager.resolveDdtvStreams(video, detail).firstOrNull()
                             ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
                         val title = sequenceOf("title", "name", "video_name")
@@ -1941,6 +1967,66 @@ fun HomeScreen(
                                 }
                             }
                         }
+                        if (ddtvDetailVideo != null) {
+                            val selectedVideo = ddtvDetailVideo!!
+                            val selectedDetail = ddtvDetailPayload
+                            val selectedId = selectedVideo.optLong("id", selectedVideo.optLong("video_id", 0L))
+                            val selectedTitle = sequenceOf("title", "name", "video_name")
+                                .map { selectedVideo.optString(it, "").trim() }
+                                .firstOrNull { it.isNotBlank() } ?: "Video $selectedId"
+                            val selectedPoster = sequenceOf("cover_url", "cover", "thumbnail", "image", "poster")
+                                .map { selectedVideo.optString(it, "").trim() }
+                                .firstOrNull { it.startsWith("https://", true) || it.startsWith("http://", true) }
+                                .orEmpty()
+                            TextButton(onClick = { ddtvDetailVideo = null; ddtvDetailPayload = null }) {
+                                Material3Text("‹ Kembali ke daftar")
+                            }
+                            if (selectedPoster.isNotBlank()) {
+                                AsyncImage(
+                                    model = selectedPoster,
+                                    contentDescription = selectedTitle,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxWidth().height(210.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
+                            }
+                            Material3Text(selectedTitle, style = MaterialTheme.typography.headlineSmall)
+                            Material3Text(
+                                "ID $selectedId • Video Type ${selectedVideo.optInt("video_type", ddtvSelectedCategory?.videoType ?: 0)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            selectedDetail?.let { detail ->
+                                val hiddenKeys = setOf("video_id", "id", "video_type", "play_url", "url", "stream_url", "m3u8", "mp4")
+                                detail.keys().asSequence()
+                                    .filter { key -> key !in hiddenKeys && !detail.isNull(key) }
+                                    .take(24)
+                                    .forEach { key ->
+                                        val value = detail.opt(key)
+                                        val display = when (value) {
+                                            is JSONObject, is org.json.JSONArray -> value.toString()
+                                            else -> value?.toString().orEmpty()
+                                        }.take(700)
+                                        if (display.isNotBlank() && display != "null") {
+                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Material3Text(
+                                                    key.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Material3Text(display, style = MaterialTheme.typography.bodyMedium)
+                                            }
+                                        }
+                                    }
+                            }
+                            Button(
+                                enabled = !ddtvServerLoading,
+                                onClick = { playDdtvVideo(selectedVideo) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Material3Text(if (ddtvServerLoading) "Menyiapkan..." else "Putar video")
+                            }
+                        } else {
                         ddtvSelectedCategory?.let { category ->
                             Material3Text("Video • ${category.name}", style = MaterialTheme.typography.titleSmall)
                             if (ddtvServerVideos.isEmpty() && !ddtvServerLoading) {
@@ -1960,7 +2046,7 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth()
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                                        .clickable(enabled = !ddtvServerLoading) { playDdtvVideo(video) }
+                                        .clickable(enabled = !ddtvServerLoading) { openDdtvDetail(video) }
                                         .padding(10.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1997,6 +2083,7 @@ fun HomeScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     } else {
                         TextButton(onClick = {
