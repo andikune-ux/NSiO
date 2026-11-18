@@ -67,7 +67,7 @@ import com.example.ui.components.BottomNavGlassBar
 import com.example.ui.components.BottomNavSafeAreaGlass
 import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
-import com.example.ui.screens.ExtensionScreen
+import com.example.ui.screens.SourceManagementScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
@@ -441,7 +441,7 @@ private fun AppNavContent(
                 onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) },
                 onNavigateToMultiview = onNavigateToMultiview
             )
-            NavDestination.EXTENSION -> ExtensionScreen(
+            NavDestination.EXTENSION -> SourceManagementScreen(
                 viewModel = viewModel,
                 onNavigateToHome = { onNavigate(NavDestination.HOME) }
             )
