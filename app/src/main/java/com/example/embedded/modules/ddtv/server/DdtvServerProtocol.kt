@@ -14,7 +14,7 @@ import java.security.Signature
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.X509EncodedKeySpec
 import java.security.KeyFactory
-import java.util.Base64
+import android.util.Base64
 import java.util.Locale
 import java.util.regex.Pattern
 import javax.crypto.Cipher
@@ -71,12 +71,12 @@ internal data class DdtvProtocolProfile(
             }
 
             val key = runCatching {
-                Base64.getDecoder().decode(value.getString("key"))
+                Base64.decode(value.getString("key"), Base64.DEFAULT)
             }.getOrElse { throw IOException("Kunci protokol DDTV tidak valid.", it) }
             if (key.size != 32) throw IOException("Panjang kunci AES DDTV tidak valid.")
 
             val publicKeyBytes = runCatching {
-                Base64.getDecoder().decode(value.getString("publicKey"))
+                Base64.decode(value.getString("publicKey"), Base64.DEFAULT)
             }.getOrElse { throw IOException("Public key DDTV tidak valid.", it) }
             val publicKey = runCatching {
                 KeyFactory.getInstance("RSA")
@@ -134,14 +134,14 @@ internal object DdtvProtocolCodec {
         val envelope = ByteArray(iv.size + encrypted.size)
         System.arraycopy(iv, 0, envelope, 0, iv.size)
         System.arraycopy(encrypted, 0, envelope, iv.size, encrypted.size)
-        return Base64.getEncoder().encodeToString(envelope)
+        return Base64.encodeToString(envelope, Base64.NO_WRAP)
     }
 
     fun decryptPayload(encoded: String, key: ByteArray): String {
         if (encoded.length > MAX_PLAINTEXT_BYTES) {
             throw IOException("Respons DDTV terlalu besar.")
         }
-        val envelope = runCatching { Base64.getDecoder().decode(encoded) }
+        val envelope = runCatching { Base64.decode(encoded, Base64.DEFAULT) }
             .getOrElse { throw IOException("Envelope respons DDTV bukan Base64 yang valid.", it) }
         if (envelope.size < IV_BYTES + AES_BLOCK_BYTES ||
             (envelope.size - IV_BYTES) % AES_BLOCK_BYTES != 0
@@ -174,7 +174,7 @@ internal object DdtvProtocolCodec {
         val plainText = decryptPayload(response.getString("data"), key)
         val signatureText = response.optString("s", "")
         if (signatureText.isNotEmpty()) {
-            val signatureBytes = runCatching { Base64.getDecoder().decode(signatureText) }
+            val signatureBytes = runCatching { Base64.decode(signatureText, Base64.DEFAULT) }
                 .getOrElse { throw IOException("Tanda tangan respons DDTV bukan Base64 yang valid.", it) }
             val verifier = Signature.getInstance("SHA256withRSA")
             verifier.initVerify(publicKey)
