@@ -56,6 +56,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -826,6 +827,30 @@ private fun ServerSourceTab(
     }
 }
 
+private fun cloudStreamPluginCountry(entry: com.example.data.plugin.CloudStreamPluginEntry): String {
+    val language = entry.language.trim().lowercase().replace('_', '-')
+    return when {
+        language in setOf("id", "id-id", "ind", "indonesia", "indonesian") || language.endsWith("-id") -> "Indonesia"
+        language in setOf("ms", "ms-my", "may", "malay", "malaysian") || language.endsWith("-my") -> "Malaysia"
+        language in setOf("en-sg", "sg", "singapore") || language.endsWith("-sg") -> "Singapura"
+        language in setOf("th", "th-th", "tha", "thai") || language.endsWith("-th") -> "Thailand"
+        language in setOf("ja", "ja-jp", "jpn", "japanese") || language.endsWith("-jp") -> "Jepang"
+        language in setOf("ko", "ko-kr", "kor", "korean") || language.endsWith("-kr") -> "Korea Selatan"
+        language in setOf("zh", "zh-cn", "zh-tw", "zho", "chinese") || language.endsWith("-cn") || language.endsWith("-tw") -> "Tiongkok/Taiwan"
+        language in setOf("vi", "vi-vn", "vietnamese") || language.endsWith("-vn") -> "Vietnam"
+        language in setOf("tl", "fil", "filipino") || language.endsWith("-ph") -> "Filipina"
+        language in setOf("hi", "hin", "hindi") || language.endsWith("-in") -> "India"
+        language in setOf("en-us", "en-gb", "en-au", "en-ca") || language.endsWith("-us") || language.endsWith("-gb") -> "Barat"
+        else -> "Global"
+    }
+}
+
+private fun isCloudStreamPluginNsfw(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
+    val metadata = (entry.tvTypes + entry.name + entry.internalName + entry.description)
+        .joinToString(" ").lowercase()
+    return Regex("""(^|[^a-z0-9])(nsfw|adult|18\+|xxx|hentai)([^a-z0-9]|$)""").containsMatchIn(metadata)
+}
+
 @Composable
 private fun PluginRepoTab(
     viewModel: MainViewModel,
@@ -842,8 +867,30 @@ private fun PluginRepoTab(
     var showRepositoryDialog by remember { mutableStateOf(false) }
     var showPluginDialog by remember { mutableStateOf(false) }
     var selectedPluginCategory by rememberSaveable { mutableStateOf("Semua") }
+    var nsfwEnabled by remember { mutableStateOf(viewModel.pluginManager.isNsfwCatalogEnabled()) }
     var expandedPluginDialog by rememberSaveable { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    LaunchedEffect(nsfwEnabled) {
+        viewModel.pluginManager.setNsfwCatalogEnabled(nsfwEnabled)
+        if (!nsfwEnabled && selectedPluginCategory == "NSFW") selectedPluginCategory = "Semua"
+    }
+
+    fun matchesPluginCategory(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
+        val types = entry.tvTypes.joinToString(" ").lowercase()
+        return when (selectedPluginCategory) {
+            "Semua" -> nsfwEnabled || !isCloudStreamPluginNsfw(entry)
+            "Movie" -> types.contains("movie") || types.contains("film")
+            "Seri TV" -> types.contains("tv") || types.contains("series")
+            "Anime" -> types.contains("anime")
+            "Drama Asia" -> types.contains("asian") || types.contains("asia") || types.contains("drama")
+            "Dubb Indo" -> entry.language.equals("id", true) || entry.language.contains("indonesia", true) || entry.language.contains("indonesian", true)
+            "Kartun" -> types.contains("cartoon") || types.contains("animation")
+            "Indonesia", "Malaysia", "Singapura", "Thailand", "Jepang", "Korea Selatan", "Tiongkok/Taiwan", "Vietnam", "Filipina", "India", "Barat", "Global" -> cloudStreamPluginCountry(entry) == selectedPluginCategory
+            "NSFW" -> nsfwEnabled && isCloudStreamPluginNsfw(entry)
+            else -> true
+        }
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -855,7 +902,8 @@ private fun PluginRepoTab(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                listOf("Semua", "Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun", "NSFW").forEach { category ->
+                (listOf("Semua", "🇮🇩 Indonesia", "🇲🇾 Malaysia", "🇸🇬 Singapura", "🇹🇭 Thailand", "🇯🇵 Jepang", "🇰🇷 Korea Selatan", "🇨🇳 Tiongkok/Taiwan", "🇻🇳 Vietnam", "🇵🇭 Filipina", "🇮🇳 India", "🌐 Global", "Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun") + if (nsfwEnabled) listOf("🔞 NSFW") else emptyList()).forEach { label ->
+                    val category = label.substringAfterLast(" ").let { if (label.startsWith("🇮🇩")) "Indonesia" else if (label.startsWith("🇲🇾")) "Malaysia" else if (label.startsWith("🇸🇬")) "Singapura" else if (label.startsWith("🇹🇭")) "Thailand" else if (label.startsWith("🇯🇵")) "Jepang" else if (label.startsWith("🇰🇷")) "Korea Selatan" else if (label.startsWith("🇨🇳")) "Tiongkok/Taiwan" else if (label.startsWith("🇻🇳")) "Vietnam" else if (label.startsWith("🇵🇭")) "Filipina" else if (label.startsWith("🇮🇳")) "India" else if (label.startsWith("🌐")) "Global" else if (label.startsWith("🔞")) "NSFW" else label }
                     val active = selectedPluginCategory == category
                     Box(
                         modifier = Modifier.clip(RoundedCornerShape(18.dp))
@@ -864,9 +912,21 @@ private fun PluginRepoTab(
                             .clickable { selectedPluginCategory = category }
                             .padding(horizontal = 11.dp, vertical = 7.dp)
                     ) {
-                        Text(category, fontSize = 10.sp, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                        Text(label, fontSize = 10.sp, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
                     }
                 }
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().liquidGlass(shape = RoundedCornerShape(16.dp), alpha = 0.10f, borderAlpha = 0.25f, elevation = 2.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Tampilkan plugin NSFW", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (nsfwEnabled) "Kategori NSFW terbuka; plugin tetap dipasang manual." else "Nonaktif secara default. Aktifkan untuk menampilkan kategori NSFW.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = nsfwEnabled, onCheckedChange = { nsfwEnabled = it })
             }
         }
         item {
@@ -1003,22 +1063,7 @@ private fun PluginRepoTab(
         )
     }
     if (showRepositoryDialog) {
-        fun matchesRepositoryPlugin(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
-            val types = entry.tvTypes.joinToString(" ").lowercase()
-            val language = entry.language.lowercase()
-            return when (selectedPluginCategory) {
-                "Semua" -> true
-                "Movie" -> types.contains("movie") || types.contains("film")
-                "Seri TV" -> types.contains("tv") || types.contains("series")
-                "Anime" -> types.contains("anime")
-                "Drama Asia" -> types.contains("asian") || types.contains("asia") || types.contains("drama")
-                "Dubb Indo" -> language == "id" || language.contains("indonesia") || language.contains("indonesian")
-                "Kartun" -> types.contains("cartoon") || types.contains("animation")
-                "NSFW" -> types.contains("nsfw") || types.contains("adult") || types.contains("18+")
-                else -> true
-            }
-        }
-        val filteredRepos = repos.filter { repo -> selectedPluginCategory == "Semua" || repo.plugins.any(::matchesRepositoryPlugin) }
+        val filteredRepos = repos.filter { repo -> repo.plugins.any(::matchesPluginCategory) }
         AlertDialog(
             onDismissRequest = { showRepositoryDialog = false },
             title = { Text("Daftar Repository (${filteredRepos.size}/${repos.size})") },
@@ -1041,21 +1086,6 @@ private fun PluginRepoTab(
     }
     if (showPluginDialog) {
         val allEntries = repos.flatMap { it.plugins }.distinctBy { it.internalName to it.version }
-        fun matchesPluginCategory(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
-            val types = entry.tvTypes.joinToString(" ").lowercase()
-            val language = entry.language.lowercase()
-            return when (selectedPluginCategory) {
-                "Semua" -> true
-                "Movie" -> types.contains("movie") || types.contains("film")
-                "Seri TV" -> types.contains("tv") || types.contains("series")
-                "Anime" -> types.contains("anime")
-                "Drama Asia" -> types.contains("asian") || types.contains("asia") || types.contains("drama")
-                "Dubb Indo" -> language == "id" || language.contains("indonesia") || language.contains("indonesian")
-                "Kartun" -> types.contains("cartoon") || types.contains("animation")
-                "NSFW" -> types.contains("nsfw") || types.contains("adult") || types.contains("18+")
-                else -> true
-            }
-        }
         val entries = allEntries.filter(::matchesPluginCategory)
         Dialog(
             onDismissRequest = { showPluginDialog = false; expandedPluginDialog = false },
