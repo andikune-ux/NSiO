@@ -68,6 +68,7 @@ import com.example.ui.components.BottomNavSafeAreaGlass
 import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
 import com.example.ui.screens.SourceManagementScreen
+import com.example.ui.screens.PlaylistSelectionScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
@@ -438,9 +439,10 @@ private fun AppNavContent(
         when (targetDest) {
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
-                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) },
+                onNavigateToExtension = { onNavigate(NavDestination.PLAYLIST) },
                 onNavigateToMultiview = onNavigateToMultiview
             )
+            NavDestination.PLAYLIST -> PlaylistSelectionScreen(viewModel = viewModel, onNavigateToHome = { onNavigate(NavDestination.HOME) }, onNavigateToSourceManagement = { onNavigate(NavDestination.EXTENSION) })
             NavDestination.EXTENSION -> SourceManagementScreen(
                 viewModel = viewModel,
                 onNavigateToHome = { onNavigate(NavDestination.HOME) }
