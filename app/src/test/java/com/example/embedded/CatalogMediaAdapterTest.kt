@@ -40,7 +40,7 @@ class CatalogMediaAdapterTest {
     @Test
     fun driveAdapterRejectsNonDriveCatalogItem() = runBlocking {
         val media = item("LINK", "https://example.com/video.mp4")
-        val adapter = CatalogMediaAdapter(ModuleMediaSource.DRIVE, { listOf(media) }) {}
+        val adapter = CatalogMediaAdapter(ModuleMediaSource.DRIVE, { listOf(media) }, onPlay = {})
 
         val result = adapter.open(
             ModuleMediaRequest(ModuleMediaSource.DRIVE, media.url, media.title)
@@ -51,7 +51,7 @@ class CatalogMediaAdapterTest {
 
     @Test
     fun missingCatalogItemReturnsUnavailable() = runBlocking {
-        val adapter = CatalogMediaAdapter(ModuleMediaSource.SERVER, { emptyList() }) {}
+        val adapter = CatalogMediaAdapter(ModuleMediaSource.SERVER, { emptyList() }, onPlay = {})
 
         val result = adapter.open(
             ModuleMediaRequest(ModuleMediaSource.SERVER, "https://server.example/a.mp4", "Missing")
