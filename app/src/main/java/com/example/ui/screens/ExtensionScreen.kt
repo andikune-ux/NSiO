@@ -131,13 +131,13 @@ fun SourceManagementScreen(
         // Header Title
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
             Text(
-                text = "Daftar Playlist",
+                text = "Manajemen Sumber",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Kelola playlist, sumber konten, dan plugin CloudStream dalam satu tempat.",
+                text = "Kelola Sumber Link, Sumber File, Server (PIN), Plugin, dan Repository.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -947,43 +947,6 @@ private fun PluginRepoTab(
                 Button(onClick = { showPlaylistDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar playlist (" + sourcePlaylists.size + ")", fontSize = 11.sp) }
                 Button(onClick = { showRepositoryDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar repository (" + repos.size + ")", fontSize = 11.sp) }
                 Button(onClick = { showPluginDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Buka daftar plugin (" + (repos.sumOf { it.plugins.size } + plugins.size) + ")", fontSize = 11.sp) }
-            }
-        }
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .liquidGlass(shape = RoundedCornerShape(18.dp), alpha = 0.10f, borderAlpha = 0.25f, elevation = 3.dp)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                Text("Pilih plugin aktif untuk Beranda", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Text("Hanya plugin yang sudah terpasang dan diaktifkan ditampilkan di sini.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton(
-                    onClick = { viewModel.selectFilter("CLOUDSTREAM_ALL"); onNavigateToHome() },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Tampilkan Semua Plugin (${enabledPlugins.size})", fontSize = 11.sp) }
-                if (enabledPlugins.isEmpty()) {
-                    Text("Belum ada plugin aktif. Pasang dan aktifkan plugin melalui daftar plugin di bawah.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    enabledPlugins.forEach { pair ->
-                        val pluginId = pair.first
-                        val pluginName = pair.second
-                        val active = selectedFilter == "CLOUDSTREAM_PLUGIN:$pluginId"
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.13f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                                .clickable { viewModel.selectFilter("CLOUDSTREAM_PLUGIN:$pluginId"); onNavigateToHome() }
-                                .padding(horizontal = 10.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(pluginName, modifier = Modifier.weight(1f), fontSize = 11.sp, maxLines = 1)
-                            if (active) Icon(Icons.Default.LockOpen, contentDescription = "Dipilih", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                }
             }
         }
         item {
