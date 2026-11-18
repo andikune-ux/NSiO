@@ -67,11 +67,13 @@ class DdtvProtocolTest {
     fun categoryParserPreservesServerCategoryIdsAndVideoType() {
         val category = DdtvCategory.fromJson(
             JSONObject()
+                .put("id", "film")
                 .put("name", "Film")
                 .put("video_type", 1)
                 .put("category_id", JSONArray().put(12).put(18))
         )
 
+        assertEquals("film", category.id)
         assertEquals("Film", category.name)
         assertEquals(1, category.videoType)
         assertTrue(category.related)
