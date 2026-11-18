@@ -185,7 +185,6 @@ fun HomeScreen(
     var cloudStreamSearchRequest by rememberSaveable { mutableStateOf(0) }
     var showServerPinDialog by rememberSaveable { mutableStateOf(false) }
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
-    var showExtensionPlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showQuickActions by rememberSaveable { mutableStateOf(false) }
     var showDdtvPrototypeDialog by rememberSaveable { mutableStateOf(false) }
     var ddtvSourceFilter by rememberSaveable { mutableStateOf("ALL") }
@@ -257,9 +256,8 @@ fun HomeScreen(
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showQuickActions || showPlaylistPicker || showExtensionPlaylistDialog || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
+    BackHandler(enabled = isSearchExpanded || showQuickActions || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
         when {
-            showExtensionPlaylistDialog -> showExtensionPlaylistDialog = false
             showCloudStreamOrderDialog -> showCloudStreamOrderDialog = false
             showQuickActions -> showQuickActions = false
             expandedPlaylistCategory != null -> expandedPlaylistCategory = null
@@ -1616,9 +1614,7 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
                                         .clickable {
                                             showQuickActions = false
-                                            showPlaylistPicker = false
-                                            expandedPlaylistCategory = null
-                                            showExtensionPlaylistDialog = true
+                                            onNavigateToExtension()
                                         }
                                         .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
                                         .padding(vertical = 12.dp)
@@ -1701,87 +1697,6 @@ fun HomeScreen(
                 }
             }
         }
-    }
-
-    if (showExtensionPlaylistDialog) {
-        val playlists = sourcePlaylists.sortedBy { it.name.trim().lowercase() }
-        AlertDialog(
-            onDismissRequest = { showExtensionPlaylistDialog = false },
-            title = { Material3Text("Extension • Daftar Playlist") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 440.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Material3Text(
-                        "Pilih playlist yang sudah tersimpan untuk menampilkan kontennya di Beranda.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    val allSelected = selectedFilter == "ALL"
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (allSelected) accentColor.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                            .clickable {
-                                viewModel.selectFilter("ALL")
-                                showExtensionPlaylistDialog = false
-                            }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = if (allSelected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Material3Text("Semua Playlist", fontWeight = FontWeight.SemiBold)
-                            Material3Text("${mediaList.size} media", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (allSelected) Icon(Icons.Default.Tv, contentDescription = "Aktif", tint = accentColor)
-                    }
-                    if (playlists.isEmpty()) {
-                        Material3Text(
-                            "Belum ada playlist tersimpan. Playlist yang sudah tersedia akan muncul di sini.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        playlists.forEach { playlist ->
-                            val filter = "PLAYLIST:${playlist.id}"
-                            val selected = selectedFilter == filter
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (selected) accentColor.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                                    .clickable {
-                                        viewModel.selectFilter(filter)
-                                        showExtensionPlaylistDialog = false
-                                    }
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = if (selected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Material3Text(playlist.name, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Material3Text("${playlist.itemCount} media", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                if (selected) Icon(Icons.Default.Tv, contentDescription = "Aktif", tint = accentColor)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showExtensionPlaylistDialog = false }) {
-                    Material3Text("Tutup")
-                }
-            }
-        )
     }
 
     if (showCloudStreamOrderDialog) {
