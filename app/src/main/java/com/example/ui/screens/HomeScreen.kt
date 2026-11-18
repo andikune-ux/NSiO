@@ -681,7 +681,7 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                                 Text(
-                                    text = "Buka menu Extension untuk menambahkan link streaming, file lokal, atau upload server.",
+                                    text = "Buka Daftar Playlist untuk mengelola playlist, sumber konten, dan plugin.",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(320.dp),
@@ -700,7 +700,7 @@ fun HomeScreen(
                                         .testTag("btn_go_to_extension")
                                 ) {
                                     Text(
-                                        "Buka Menu Extension",
+                                        "Buka Daftar Playlist",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
                                     )
@@ -1552,7 +1552,7 @@ fun HomeScreen(
                                     }
                                 }
                                 Text(
-                                    "Ubah nama playlist melalui Extension → Plugin & Repo → Riwayat Playlist Sumber.",
+                                    "Ubah nama playlist melalui Daftar Playlist → Plugin & Repo → Riwayat Playlist Sumber.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.sp,
                                     lineHeight = 12.sp
@@ -1593,8 +1593,8 @@ fun HomeScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Icon(Icons.Default.Extension, contentDescription = null, tint = accentColor, modifier = Modifier.size(25.dp))
-                                        Text("Extension", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                        Icon(Icons.Default.PlaylistPlay, contentDescription = "Daftar Playlist", tint = accentColor, modifier = Modifier.size(25.dp))
+                                        Text("Daftar Playlist", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                                 Box(
@@ -1963,7 +1963,7 @@ fun HomeScreen(
                         if (ddtvVisibleMedia.isEmpty()) {
                             Material3Text(
                                 when (ddtvSourceFilter) {
-                                    "DRIVE" -> "Belum ada media Google Drive di katalog. Tambahkan tautan Drive melalui menu Extension atau daftar sumber."
+                                    "DRIVE" -> "Belum ada media Google Drive di katalog. Tambahkan tautan Drive melalui Daftar Playlist → Sumber Link."
                                     "CLOUDSTREAM" -> "Belum ada konten CloudStream yang tersedia di katalog."
                                     "FILE" -> "Belum ada file lokal yang terdaftar di katalog NSiO."
                                     else -> "Katalog media masih kosong. Tambahkan sumber media terlebih dahulu."
