@@ -20,7 +20,7 @@ class EmbeddedModuleManager(context:Context) {
     private val created=mutableSetOf<String>()
     private val running=mutableSetOf<String>()
     private fun snapshot()=modules.values.map { m ->
-        val enabled=prefs.getBoolean("enabled:${m.metadata.id}",false)
+        val enabled=prefs.getBoolean("enabled:${m.metadata.id}",m.metadata.builtIn)
         EmbeddedModuleState(m.metadata,enabled,m.metadata.id in running && enabled)
     }
     private val _states=MutableStateFlow(snapshot())
@@ -33,7 +33,7 @@ class EmbeddedModuleManager(context:Context) {
     }
     @Synchronized fun start(id:String) {
         val module=modules[id] ?: error("Modul tidak dikenal.")
-        require(prefs.getBoolean("enabled:$id",false)) { "Aktifkan modul sebelum membukanya." }
+        require(prefs.getBoolean("enabled:$id",module.metadata.builtIn)) { "Aktifkan modul sebelum membukanya." }
         if(id !in created) { module.onCreate(ModuleContext(app,storage.directory(id))); created+=id }
         module.onStart()
         running+=id
