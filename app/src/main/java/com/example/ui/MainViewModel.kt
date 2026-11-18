@@ -2007,6 +2007,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun playDdtvMedia(item: MediaItem, headers: Map<String, String>, streamType: String) {
+        // DDTV streams carry provider-specific authorization and may have no
+        // recognizable file extension, so preserve headers and MIME explicitly.
+        syncPlaybackQueue(item)
+        _playbackPreparationMessage.value = null
+        _currentlyPlaying.value = item
+        val mimeType = when (streamType.lowercase()) {
+            "hls", "m3u8" -> "application/x-mpegURL"
+            "dash", "mpd" -> "application/dash+xml"
+            "progressive", "mp4" -> "video/mp4"
+            "webm" -> "video/webm"
+            "mkv" -> "video/x-matroska"
+            else -> null
+        }
+        player.playWithMimeType(
+            url = normalizePlaybackUrl(item.url),
+            title = item.title,
+            startPositionMs = item.progressMs,
+            requestHeaders = headers,
+            mimeType = mimeType
+        )
+        startPlaybackProgressPersistence(item)
+    }
+
     fun playMedia(item: MediaItem) {
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
