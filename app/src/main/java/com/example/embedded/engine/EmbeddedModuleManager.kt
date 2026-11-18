@@ -47,6 +47,9 @@ class EmbeddedModuleManager(
 
     fun availableMediaSources() = mediaBridge.availableSources()
 
+    suspend fun openMedia(request: com.example.embedded.api.ModuleMediaRequest) =
+        mediaBridge.open(request)
+
     private fun publish() {
         _states.value = snapshot()
     }
