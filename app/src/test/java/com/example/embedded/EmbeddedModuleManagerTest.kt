@@ -11,7 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class EmbeddedModuleManagerTest {
     private val moduleId = "dev.andikune.nsio.ddtv"
     private lateinit var manager: EmbeddedModuleManager
