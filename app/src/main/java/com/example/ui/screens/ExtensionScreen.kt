@@ -271,7 +271,7 @@ private fun LinkSourceTab(
                     enabledPlugins.forEach { pair ->
                         val pluginId = pair.first
                         val pluginName = pair.second
-                        val active = viewModel.selectedFilter.collectAsState().value == "CLOUDSTREAM_PLUGIN:$pluginId"
+                        val active = selectedFilter == "CLOUDSTREAM_PLUGIN:$pluginId"
                         Row(
                             modifier = Modifier.fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
@@ -909,6 +909,7 @@ private fun PluginRepoTab(
     var nsfwEnabled by remember { mutableStateOf(viewModel.pluginManager.isNsfwCatalogEnabled()) }
     var expandedPluginDialog by rememberSaveable { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
     val enabledPlugins = remember(repos) {
         repos.flatMap { repo ->
             repo.plugins.filter { entry ->
