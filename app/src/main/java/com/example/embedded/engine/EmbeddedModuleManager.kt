@@ -67,12 +67,12 @@ class EmbeddedModuleManager(
         }
         if (id in running) return
 
-        var createdNow = false
+        var createAttempted = false
         try {
             if (id !in created) {
+                createAttempted = true
                 module.onCreate(ModuleContext(app, storage.directory(id), mediaBridge))
                 created += id
-                createdNow = true
             }
             module.onStart()
             running += id
@@ -80,7 +80,8 @@ class EmbeddedModuleManager(
             publish()
         } catch (failure: Throwable) {
             running -= id
-            if (createdNow) {
+            if (createAttempted) {
+                // onCreate may allocate resources before throwing; always offer cleanup.
                 runCatching { module.onDestroy() }
                 created -= id
             } else if (id in created) {
