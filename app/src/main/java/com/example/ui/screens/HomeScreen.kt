@@ -120,6 +120,7 @@ import com.example.embedded.api.ModuleMediaRequest
 import com.example.embedded.api.ModuleMediaResult
 import com.example.embedded.api.ModuleMediaSource
 import com.example.embedded.host.CatalogMediaAdapter
+import com.example.embedded.host.ServerMediaAdapter
 import kotlinx.coroutines.launch
 
 @Composable
@@ -195,7 +196,7 @@ fun HomeScreen(
                 CatalogMediaAdapter(ModuleMediaSource.DRIVE, { viewModel.mediaList.value }, viewModel::playMedia) { drivePlaylistIds },
                 CatalogMediaAdapter(ModuleMediaSource.CLOUD_STREAM, { viewModel.mediaList.value }, viewModel::playMedia),
                 CatalogMediaAdapter(ModuleMediaSource.FILE_MANAGER, { viewModel.mediaList.value }, viewModel::playMedia),
-                CatalogMediaAdapter(ModuleMediaSource.SERVER, { viewModel.mediaList.value }, viewModel::playMedia)
+                ServerMediaAdapter({ viewModel.mediaList.value }, viewModel::playMedia)
             )
         )
     }
@@ -1800,15 +1801,15 @@ fun HomeScreen(
     }
 
     if (showDdtvPrototypeDialog) {
-        val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds) {
+        val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds, isServerUnlocked) {
             mediaList.filter { item ->
                 when (ddtvSourceFilter) {
                     "DRIVE" -> MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
                     "CLOUDSTREAM" -> item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)
                     "FILE" -> item.sourceType.contains("LOCAL", ignoreCase = true) ||
                         item.sourceType.contains("FILE", ignoreCase = true)
-                    "SERVER" -> item.sourceType.contains("SERVER", ignoreCase = true)
-                    else -> true
+                    "SERVER" -> isServerUnlocked && item.sourceType.contains("SERVER", ignoreCase = true)
+                    else -> item.sourceType != "SERVER" || isServerUnlocked
                 }
             }.take(40)
         }
@@ -1842,7 +1843,14 @@ fun HomeScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("FILE" to "File", "SERVER" to "Server").forEach { (key, label) ->
-                            TextButton(onClick = { ddtvSourceFilter = key }) {
+                            TextButton(onClick = {
+                                if (key == "SERVER" && !isServerUnlocked) {
+                                    pendingPlaylistFilter = "DDTV_SERVER"
+                                    showServerPinDialog = true
+                                } else {
+                                    ddtvSourceFilter = key
+                                }
+                            }) {
                                 Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
                             }
                         }
@@ -1917,7 +1925,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Material3Text(
-                        "Catatan: ini adalah pusat sumber media NSiO bergaya DDTV. Server, protokol, dan payload asli MONYET PRO belum terhubung.",
+                        "Server NSiO terhubung melalui adapter khusus: Firebase Storage dan URL HTTP(S) eksternal. Protokol privat MONYET PRO belum diklaim kompatibel.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1962,7 +1970,11 @@ fun HomeScreen(
             expectedPin = settings.serverPin,
             onSuccess = {
                 viewModel.unlockServerAccess()
-                viewModel.selectFilter(pendingPlaylistFilter ?: "SERVER")
+                if (pendingPlaylistFilter == "DDTV_SERVER") {
+                    ddtvSourceFilter = "SERVER"
+                } else {
+                    viewModel.selectFilter(pendingPlaylistFilter ?: "SERVER")
+                }
                 pendingPlaylistFilter = null
                 showServerPinDialog = false
             },
