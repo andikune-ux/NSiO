@@ -8,8 +8,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class EmbeddedModuleManagerTest {
     private val moduleId = "dev.andikune.nsio.ddtv"
     private lateinit var manager: EmbeddedModuleManager
