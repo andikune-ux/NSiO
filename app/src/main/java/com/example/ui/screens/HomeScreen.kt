@@ -1668,6 +1668,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
 
     if (showCloudStreamOrderDialog) {
         val orderedIds = orderedCloudStreamPluginFilters.map { it.first }
@@ -2072,5 +2073,4 @@ fun HomeScreen(
             onDismiss = { pendingPlaylistFilter = null; showServerPinDialog = false }
         )
     }
-}
 }
