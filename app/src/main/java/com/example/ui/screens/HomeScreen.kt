@@ -189,10 +189,10 @@ fun HomeScreen(
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
     val appContext = LocalContext.current
     val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
-    val ddtvMediaBridge = remember(appContext, viewModel) {
+    val ddtvMediaBridge = remember(appContext, viewModel, drivePlaylistIds) {
         ModuleMediaBridgeRegistry(
             listOf(
-                CatalogMediaAdapter(ModuleMediaSource.DRIVE, { viewModel.mediaList.value }, viewModel::playMedia),
+                CatalogMediaAdapter(ModuleMediaSource.DRIVE, { viewModel.mediaList.value }, viewModel::playMedia) { drivePlaylistIds },
                 CatalogMediaAdapter(ModuleMediaSource.CLOUD_STREAM, { viewModel.mediaList.value }, viewModel::playMedia),
                 CatalogMediaAdapter(ModuleMediaSource.FILE_MANAGER, { viewModel.mediaList.value }, viewModel::playMedia),
                 CatalogMediaAdapter(ModuleMediaSource.SERVER, { viewModel.mediaList.value }, viewModel::playMedia)
