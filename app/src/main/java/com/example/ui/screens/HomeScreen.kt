@@ -199,7 +199,7 @@ fun HomeScreen(
     var ddtvSelectedCategory by remember { mutableStateOf<DdtvCategory?>(null) }
     var ddtvDetailVideo by remember { mutableStateOf<JSONObject?>(null) }
     var ddtvDetailPayload by remember { mutableStateOf<JSONObject?>(null) }
-    var ddtvSelectedStreamIndex by rememberSaveable { mutableIntStateOf(0) }
+    var ddtvSelectedStreamIndex by rememberSaveable { mutableStateOf(0) }
     val appContext = LocalContext.current
     val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
     val ddtvMediaBridge = remember(appContext, viewModel, drivePlaylistIds) {
