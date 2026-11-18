@@ -25,6 +25,7 @@ import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
+import com.example.player.normalizePlaybackUrl
 import com.example.player.shouldUseNativePlayer
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2033,7 +2034,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            player.play(item.url, item.title, item.progressMs, headers)
+            player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers)
             startPlaybackProgressPersistence(item)
         } else {
             player.clearError()
