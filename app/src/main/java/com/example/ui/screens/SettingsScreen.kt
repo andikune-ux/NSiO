@@ -89,6 +89,7 @@ import com.example.ui.components.liquidGlass
 import com.example.ui.components.tvFocusable
 import com.example.ui.theme.AccentRed
 import com.example.update.AppUpdateManager
+import com.example.embedded.ui.EmbeddedModuleCenter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -287,6 +288,10 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        item {
+            EmbeddedModuleCenter()
         }
 
         // 1. Firebase Cloud Firestore & Google Sign-In Card
