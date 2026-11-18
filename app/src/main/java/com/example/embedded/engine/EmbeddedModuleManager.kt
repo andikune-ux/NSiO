@@ -20,7 +20,7 @@ class EmbeddedModuleManager(context:Context) {
     private val created=mutableSetOf<String>()
     private val running=mutableSetOf<String>()
     private fun snapshot()=modules.values.map { m ->
-        val enabled=prefs.getBoolean("enabled:\${m.metadata.id}",false)
+        val enabled=prefs.getBoolean("enabled:${m.metadata.id}",false)
         EmbeddedModuleState(m.metadata,enabled,m.metadata.id in running && enabled)
     }
     private val _states=MutableStateFlow(snapshot())
