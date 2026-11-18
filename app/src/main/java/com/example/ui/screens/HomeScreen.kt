@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -1973,7 +1974,7 @@ fun HomeScreen(
                         }) { Material3Text("Tutup") }
                     }
                 }
-                Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                 Column(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                         .verticalScroll(rememberScrollState()).padding(16.dp),
