@@ -191,6 +191,9 @@ class CS3IPlayer(
     private var bufferingFallbackRequestedForUrl: String? = null
     @Volatile private var cloudStreamRefreshInProgress = false
 
+    /** True only while the active item belongs to CloudStream; other sources must never invoke its resolver. */
+    var isCloudStreamSourceActive: (() -> Boolean)? = null
+
     /** Called when resolved plugin URLs fail with an expired-link HTTP response. */
     var onCloudStreamRefreshRequested: (suspend (Long) -> Boolean)? = null
     private var lastNonZeroVolume: Float = 1f
@@ -416,7 +419,10 @@ class CS3IPlayer(
 
                         // Expired/session-bound links can be refreshed by asking the provider
                         // to resolve the source again, but never start concurrent refreshes.
-                        if (responseCode == 401 || responseCode == 403 || responseCode == 404) {
+                        val isCloudStreamSource = runCatching {
+                            isCloudStreamSourceActive?.invoke() == true
+                        }.getOrDefault(false)
+                        if (isCloudStreamSource && responseCode in setOf(401, 403, 404)) {
                             val refreshHandler = onCloudStreamRefreshRequested
                             if (refreshHandler != null && !cloudStreamRefreshInProgress) {
                                 cloudStreamRefreshInProgress = true
