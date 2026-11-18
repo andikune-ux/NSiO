@@ -32,4 +32,33 @@ class ModuleArchivePolicyTest {
         val file=archive("module.json" to """{"id":"test.module","apiVersion":2}""","classes.dex" to "dex")
         ZipFile(file).use { assertThrows(IllegalArgumentException::class.java) { ModuleArchivePolicy.validate(it) } }
     }
+    @Test fun rejectsDuplicateManifestEntries() {
+        val file=archive(
+            "module.json" to """{"id":"first.module","apiVersion":1}""",
+            "module.json" to """{"id":"second.module","apiVersion":1}""",
+            "classes.dex" to "dex"
+        )
+        ZipFile(file).use {
+            assertThrows(IllegalArgumentException::class.java) { ModuleArchivePolicy.validate(it) }
+        }
+    }
+
+    @Test fun rejectsDotSegmentPaths() {
+        val file=archive(
+            "module.json" to """{"id":"test.module","apiVersion":1}""",
+            "classes.dex" to "dex",
+            "./payload.txt" to "bad"
+        )
+        ZipFile(file).use {
+            assertThrows(IllegalArgumentException::class.java) { ModuleArchivePolicy.validate(it) }
+        }
+    }
+
+    @Test fun rejectsPackageWithoutDex() {
+        val file=archive("module.json" to """{"id":"test.module","apiVersion":1}""")
+        ZipFile(file).use {
+            assertThrows(IllegalArgumentException::class.java) { ModuleArchivePolicy.validate(it) }
+        }
+    }
+
 }
