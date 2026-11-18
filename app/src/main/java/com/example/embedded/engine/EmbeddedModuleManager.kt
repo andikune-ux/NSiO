@@ -4,6 +4,8 @@ import android.content.Context
 import com.example.embedded.api.EmbeddedModule
 import com.example.embedded.api.ModuleContext
 import com.example.embedded.api.ModuleMetadata
+import com.example.embedded.api.ModuleMediaBridge
+import com.example.embedded.api.ModuleMediaBridgeRegistry
 import com.example.embedded.modules.ddtv.DdtvModule
 import com.example.embedded.storage.ModuleStorage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +23,10 @@ data class EmbeddedModuleState(
  * Owns module lifecycle on the host side. A failed module callback is contained here and
  * reported to the UI; it must never take down the host/player process.
  */
-class EmbeddedModuleManager(context: Context) {
+class EmbeddedModuleManager(
+    context: Context,
+    private val mediaBridge: ModuleMediaBridge = ModuleMediaBridgeRegistry()
+) {
     private val app = context.applicationContext
     private val prefs = app.getSharedPreferences("embedded_modules", Context.MODE_PRIVATE)
     private val storage = ModuleStorage(app)
@@ -63,7 +68,7 @@ class EmbeddedModuleManager(context: Context) {
         var createdNow = false
         try {
             if (id !in created) {
-                module.onCreate(ModuleContext(app, storage.directory(id)))
+                module.onCreate(ModuleContext(app, storage.directory(id), mediaBridge))
                 created += id
                 createdNow = true
             }
