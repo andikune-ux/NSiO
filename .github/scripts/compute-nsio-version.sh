@@ -17,7 +17,7 @@ if ! git cat-file -e "$SOURCE_SHA^{commit}"; then
   exit 1
 fi
 
-COMMIT_NUMBER="$(git rev-list --count "$SOURCE_SHA")"
+COMMIT_NUMBER="${NSIO_BUILD_NUMBER:-$(git rev-list --count "$SOURCE_SHA")}"
 if [[ "$COMMIT_NUMBER" -lt 1 || "$COMMIT_NUMBER" -gt 99999 ]]; then
   echo "Commit ordinal is outside the documented versionCode encoding range: $COMMIT_NUMBER" >&2
   exit 1

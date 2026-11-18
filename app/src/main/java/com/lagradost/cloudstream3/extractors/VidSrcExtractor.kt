@@ -7,7 +7,7 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
-import java.util.Base64
+import android.util.Base64
 
 class VidSrcExtractor2 : VidSrcExtractor() {
     override val mainUrl = "https://vidsrc.me"
@@ -101,7 +101,7 @@ open class VidSrcExtractor : ExtractorApi() {
         for (ch in c) {
             e += (ch.code - 3).toChar()
         }
-        return String(Base64.getDecoder().decode(e))
+        return String(Base64.decode(e, Base64.DEFAULT))
     }
 
     private fun IGLImMhWrI(a: String): String {
@@ -117,13 +117,13 @@ open class VidSrcExtractor : ExtractorApi() {
                         }
                         .joinToString("")
         val d = c.reversed()
-        return String(Base64.getDecoder().decode(d))
+        return String(Base64.decode(d, Base64.DEFAULT))
     }
 
     private fun GTAxQyTyBx(a: String): String {
         val b = a.reversed()
         val c = b.filterIndexed { index, _ -> index % 2 == 0 }
-        return String(Base64.getDecoder().decode(c))
+        return String(Base64.decode(c, Base64.DEFAULT))
     }
 
     private fun C66jPHx8qu(a: String): String {
@@ -147,7 +147,7 @@ open class VidSrcExtractor : ExtractorApi() {
     private fun detdj7JHiK(a: String): String {
         val b = a.substring(10, a.length - 16)
         val c = "3SAY~#%Y(V%>5d/Yg\"\$G[Lh1rK4a;7ok"
-        val d = String(Base64.getDecoder().decode(b))
+        val d = String(Base64.decode(b, Base64.DEFAULT))
         val e = c.repeat((d.length + c.length - 1) / c.length).substring(0, d.length)
         var f = ""
         for (i in d.indices) {
@@ -218,7 +218,7 @@ open class VidSrcExtractor : ExtractorApi() {
     private fun laM1dAi3vO(a: String): String {
         val b = a.reversed()
         val c = b.replace("-", "+").replace("_", "/")
-        val d = String(Base64.getDecoder().decode(c))
+        val d = String(Base64.decode(c, Base64.DEFAULT))
         var e = ""
         val f = 5
         for (ch in d) {
@@ -230,7 +230,7 @@ open class VidSrcExtractor : ExtractorApi() {
     private fun GuxKGDsA2T(a: String): String {
         val b = a.reversed()
         val c = b.replace("-", "+").replace("_", "/")
-        val d = String(Base64.getDecoder().decode(c))
+        val d = String(Base64.decode(c, Base64.DEFAULT))
         var e = ""
         val f = 7
         for (ch in d) {
@@ -242,7 +242,7 @@ open class VidSrcExtractor : ExtractorApi() {
     private fun LXVUMCoAHJ(a: String): String {
         val b = a.reversed()
         val c = b.replace("-", "+").replace("_", "/")
-        val d = String(Base64.getDecoder().decode(c))
+        val d = String(Base64.decode(c, Base64.DEFAULT))
         var e = ""
         val f = 3
         for (ch in d) {
