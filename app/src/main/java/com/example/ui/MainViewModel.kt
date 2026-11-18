@@ -69,6 +69,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cloudStreamVerifierJob: Job? = null
 
     init {
+        // Only CloudStream items may enter the plugin URL refresh path.
+        player.isCloudStreamSourceActive = {
+            _currentlyPlaying.value?.sourceType.equals("CLOUDSTREAM", ignoreCase = true)
+        }
+
         // Expired CDN URLs are re-resolved through the original provider, not retried
         // from the stale in-memory stream list.
         player.onCloudStreamRefreshRequested = { resumePositionMs ->
