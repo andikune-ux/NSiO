@@ -7,11 +7,21 @@ package com.example.player
  */
 internal fun normalizePlaybackUrl(url: String): String {
     val normalized = url.trim()
-    val match = Regex(
-        "^https?://drive\\.google\\.com/file/d/([A-Za-z0-9_-]+)/(?:preview|view)/?(?:[?#].*)?$",
+    val uri = runCatching { java.net.URI(normalized) }.getOrNull()
+    if (uri == null || uri.scheme?.lowercase() !in setOf("http", "https") ||
+        uri.host?.lowercase() != "drive.google.com"
+    ) return normalized
+
+    val pathFileId = Regex(
+        "^/file/d/([A-Za-z0-9_-]+)/(?:preview|view)/?$",
         RegexOption.IGNORE_CASE
-    ).matchEntire(normalized)
-    val fileId = match?.groupValues?.getOrNull(1)
+    ).matchEntire(uri.path.orEmpty())?.groupValues?.getOrNull(1)
+    val queryFileId = Regex("(?:^|&)id=([A-Za-z0-9_-]+)(?:&|$)", RegexOption.IGNORE_CASE)
+        .find(uri.rawQuery.orEmpty())?.groupValues?.getOrNull(1)
+    val fileId = pathFileId ?: if (uri.path.equals("/open", true) || uri.path.equals("/uc", true)) {
+        queryFileId
+    } else null
+
     return if (!fileId.isNullOrBlank()) {
         "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
     } else normalized
