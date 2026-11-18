@@ -55,7 +55,8 @@ import androidx.compose.ui.unit.sp
 
 enum class NavDestination(val label: String) {
     HOME("Beranda"),
-    EXTENSION("Extension"),
+    EXTENSION("Manajemen Sumber"),
+    PLAYLIST("Daftar Playlist"),
     SETTINGS("Pengaturan"),
     PROFILE("Profil")
 }
@@ -138,10 +139,10 @@ fun VerticalNavToolbar(
                 )
 
                 NavToolbarGlassItem(
-                    title = "Extension",
+                    title = "Manajemen Sumber",
                     icon = if (currentDestination == NavDestination.EXTENSION) Icons.Filled.Extension else Icons.Outlined.Extension,
                     isSelected = currentDestination == NavDestination.EXTENSION,
-                    testTag = "nav_item_extension",
+                    testTag = "nav_item_source_management",
                     focusRequester = extensionFocusRequester,
                     upFocusRequester = homeFocusRequester,
                     downFocusRequester = settingsFocusRequester,
