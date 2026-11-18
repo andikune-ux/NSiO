@@ -44,6 +44,7 @@ fun PlaylistSelectionScreen(
     modifier: Modifier = Modifier
 ) {
     val playlists by viewModel.sourcePlaylists.collectAsState()
+    val mediaItems by viewModel.mediaList.collectAsState()
     val repos by viewModel.pluginManager.repositories.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val enabledPlugins = remember(repos) {
@@ -122,7 +123,14 @@ fun PlaylistSelectionScreen(
                         ) {
                             Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(9.dp))
-                            Text(pluginName, modifier = Modifier.weight(1f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(pluginName, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val videoCount = mediaItems.count { item ->
+                                    item.sourceType.equals("CLOUDSTREAM", ignoreCase = true) &&
+                                        item.pluginId.equals(pluginId, ignoreCase = true)
+                                }
+                                Text("$videoCount video", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             if (active) Icon(Icons.Default.LockOpen, contentDescription = "Dipilih", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                         }
                     }
