@@ -1991,15 +1991,38 @@ fun HomeScreen(
                             color = if (ddtvServerStatus.startsWith("Gagal")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (ddtvServerCategories.isNotEmpty()) {
-                            Material3Text("Kategori DDTV", style = MaterialTheme.typography.titleSmall)
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Material3Text("Kategori DDTV", style = MaterialTheme.typography.titleSmall)
+                                Material3Text(
+                                    "${ddtvServerCategories.size} kategori",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 ddtvServerCategories.forEach { category ->
+                                    val selected = ddtvSelectedCategory == category
                                     TextButton(
                                         enabled = !ddtvServerLoading,
-                                        onClick = { loadDdtvCategory(category) }
+                                        onClick = { loadDdtvCategory(category) },
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                            )
                                     ) {
                                         Material3Text(
-                                            if (ddtvSelectedCategory == category) "• ${category.name}" else category.name
+                                            (if (selected) "✓ " else "") + category.name,
+                                            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -2029,11 +2052,23 @@ fun HomeScreen(
                                 )
                             }
                             Material3Text(selectedTitle, style = MaterialTheme.typography.headlineSmall)
-                            Material3Text(
-                                "ID $selectedId • Video Type ${selectedVideo.optInt("video_type", ddtvSelectedCategory?.videoType ?: 0)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Material3Text(
+                                    "ID $selectedId",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Material3Text(
+                                    "•",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Material3Text(
+                                    ddtvSelectedCategory?.name ?: "DDTV",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             val ddtvStreams = remember(selectedVideo, selectedDetail) {
                                 if (selectedDetail == null) emptyList()
                                 else runCatching {
