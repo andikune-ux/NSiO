@@ -2308,7 +2308,6 @@ fun HomeScreen(
                 }
             }
         }
-    }
 
     ddtvLaunchError?.let { message ->
         AlertDialog(
