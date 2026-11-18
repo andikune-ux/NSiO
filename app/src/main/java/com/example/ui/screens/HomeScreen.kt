@@ -199,6 +199,7 @@ fun HomeScreen(
     var ddtvSelectedCategory by remember { mutableStateOf<DdtvCategory?>(null) }
     var ddtvDetailVideo by remember { mutableStateOf<JSONObject?>(null) }
     var ddtvDetailPayload by remember { mutableStateOf<JSONObject?>(null) }
+    var ddtvSelectedStreamIndex by rememberSaveable { mutableIntStateOf(0) }
     val appContext = LocalContext.current
     val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
     val ddtvMediaBridge = remember(appContext, viewModel, drivePlaylistIds) {
@@ -1844,7 +1845,14 @@ fun HomeScreen(
                         val nextPage = ddtvCurrentPage + 1
                         val nextVideos = embeddedModuleManager.fetchDdtvPage(category, nextPage)
                         if (nextVideos.isNotEmpty()) {
-                            ddtvServerVideos = ddtvServerVideos + nextVideos
+                            val knownIds = ddtvServerVideos.mapNotNull { item ->
+                                item.optLong("id", item.optLong("video_id", 0L)).takeIf { it > 0L }
+                            }.toHashSet()
+                            val uniqueNextVideos = nextVideos.filter { item ->
+                                val id = item.optLong("id", item.optLong("video_id", 0L))
+                                id <= 0L || knownIds.add(id)
+                            }
+                            ddtvServerVideos = ddtvServerVideos + uniqueNextVideos
                             ddtvCurrentPage = nextPage
                             ddtvServerStatus = "${category.name} • halaman $ddtvCurrentPage • ${ddtvServerVideos.size} video"
                         } else {
@@ -1873,6 +1881,7 @@ fun HomeScreen(
                         )
                         ddtvDetailVideo = video
                         ddtvDetailPayload = detail
+                        ddtvSelectedStreamIndex = 0
                         ddtvServerStatus = "Detail video berhasil dimuat"
                     } catch (failure: Exception) {
                         ddtvLaunchError = failure.localizedMessage ?: "Gagal memuat detail DDTV."
@@ -1894,7 +1903,8 @@ fun HomeScreen(
                     try {
                         val videoType = video.optInt("video_type", category.videoType)
                         val detail = ddtvDetailPayload ?: embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
-                        val stream = embeddedModuleManager.resolveDdtvStreams(video, detail).firstOrNull()
+                        val streams = embeddedModuleManager.resolveDdtvStreams(video, detail)
+                        val stream = streams.getOrNull(ddtvSelectedStreamIndex) ?: streams.firstOrNull()
                             ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
                         val title = sequenceOf("title", "name", "video_name")
                             .map { video.optString(it, "").trim() }
@@ -2024,17 +2034,52 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            val ddtvStreams = remember(selectedVideo, selectedDetail) {
+                                if (selectedDetail == null) emptyList()
+                                else runCatching {
+                                    embeddedModuleManager.resolveDdtvStreams(selectedVideo, selectedDetail)
+                                }.getOrDefault(emptyList())
+                            }
+                            if (ddtvStreams.isNotEmpty()) {
+                                Material3Text("Pilih server pemutaran", style = MaterialTheme.typography.titleSmall)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    ddtvStreams.forEachIndexed { index, stream ->
+                                        val label = when (stream.manifestType) {
+                                            "hls" -> "HLS"
+                                            "dash" -> "DASH"
+                                            else -> "Video langsung"
+                                        }
+                                        TextButton(
+                                            onClick = { ddtvSelectedStreamIndex = index },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Material3Text(
+                                                (if (ddtvSelectedStreamIndex == index) "✓ " else "") +
+                                                    "Server ${index + 1} • $label"
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             selectedDetail?.let { detail ->
-                                val hiddenKeys = setOf("video_id", "id", "video_type", "play_url", "url", "stream_url", "m3u8", "mp4")
-                                detail.keys().asSequence()
-                                    .filter { key -> key !in hiddenKeys && !detail.isNull(key) }
-                                    .take(24)
-                                    .forEach { key ->
-                                        val value = detail.opt(key)
+                                val metadataKeys = listOf(
+                                    "description", "intro", "content", "desc", "actor", "actors",
+                                    "director", "studio", "publisher", "year", "release_date",
+                                    "duration", "runtime", "tags", "category", "views", "score", "code"
+                                )
+                                metadataKeys.forEach { key ->
+                                    val value = detail.opt(key) ?: selectedVideo.opt(key)
+                                    if (value != null && value != JSONObject.NULL) {
                                         val display = when (value) {
-                                            is JSONObject, is org.json.JSONArray -> value.toString()
-                                            else -> value?.toString().orEmpty()
-                                        }.take(700)
+                                            is org.json.JSONArray -> (0 until value.length())
+                                                .mapNotNull { value.opt(it)?.toString() }
+                                                .filter { it.isNotBlank() }
+                                                .joinToString(" • ")
+                                            is JSONObject -> sequenceOf("name", "title", "value")
+                                                .map { value.optString(it, "").trim() }
+                                                .firstOrNull { it.isNotBlank() }.orEmpty()
+                                            else -> value.toString()
+                                        }.trim()
                                         if (display.isNotBlank() && display != "null") {
                                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 Material3Text(
@@ -2046,6 +2091,7 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                }
                             }
                             Button(
                                 enabled = !ddtvServerLoading,
