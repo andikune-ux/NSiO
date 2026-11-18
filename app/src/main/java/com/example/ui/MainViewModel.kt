@@ -1203,59 +1203,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Loads the next available CloudStream page for every installed provider and merges it into Home.
-     * Pagination is tracked per stable plugin identity; one provider failure never blocks others.
+     * Loads the next page only for the plugin currently selected in the Home filter.
+     * Other installed providers are never queried by this action.
      */
-    fun loadMoreCloudStreamCatalogOnHome() {
+    fun loadMoreCloudStreamCatalogOnHome(pluginId: String) {
+        val selectedPluginId = pluginId.trim()
+        if (selectedPluginId.isBlank()) return
         if (cloudStreamHomeLoadMoreJob?.isActive == true) return
         if (cloudStreamHomeRefreshJob?.isActive == true) {
             showStatus("Katalog CloudStream sedang diperbarui. Coba lagi sebentar.")
             return
         }
         val profileId = _activeProfile.value?.id ?: return
+        val entry = pluginManager.repositories.value
+            .asSequence()
+            .flatMap { it.plugins.asSequence() }
+            .firstOrNull {
+                it.status != 0 &&
+                    pluginManager.isCloudStreamPluginInstalled(it) &&
+                    pluginManager.cloudStreamPluginId(it) == selectedPluginId
+            }
+        if (entry == null) {
+            showStatus("Plugin yang dipilih tidak ditemukan atau belum terpasang.")
+            return
+        }
+        if (cloudStreamHomeHasNext[selectedPluginId] == false) {
+            showStatus("Katalog ${entry.name} sudah mencapai halaman terakhir.")
+            return
+        }
         cloudStreamHomeLoadMoreJob = viewModelScope.launch {
             _isLoadingMoreCloudStreamHome.value = true
-            var added = 0
-            val failures = mutableListOf<String>()
             try {
-                val entries = pluginManager.repositories.value
-                    .flatMap { it.plugins }
-                    .filter { it.status != 0 && pluginManager.isCloudStreamPluginInstalled(it) }
-                    .distinctBy { pluginManager.cloudStreamPluginId(it) }
-                prioritizeCloudStreamEntries(entries).forEach { entry ->
-                    if (_activeProfile.value?.id != profileId) return@forEach
-                    val pluginId = pluginManager.cloudStreamPluginId(entry)
-                    if (cloudStreamHomeHasNext[pluginId] == false) return@forEach
-                    val nextPage = (cloudStreamHomePages[pluginId] ?: 1) + 1
-                    val sectionPages = cloudStreamSectionPageRequests(pluginId)
-                    val requestStartedAt = System.currentTimeMillis()
-                    runCatching {
-                        pluginManager.loadCloudStreamHomePage(entry, nextPage, sectionPages.takeIf { it.isNotEmpty() })
-                    }.onSuccess { sections ->
-                        updateCloudStreamSectionPagination(
-                            pluginId,
-                            sections,
-                            requestedPages = sectionPages.takeIf { it.isNotEmpty() }
-                        )
-                        updateCloudStreamSourceHealth(profileId, pluginId, hasNext = cloudStreamHomeHasNext[pluginId] == true, succeeded = true, responseTimeMs = System.currentTimeMillis() - requestStartedAt)
-                        if (_activeProfile.value?.id == profileId && sections.isNotEmpty()) {
-                            runCatching { persistCloudStreamCatalog(entry, sections) }
-                                .onSuccess { added += it }
-                                .onFailure { failures += "${entry.name}: ${it.message ?: "gagal menyimpan"}" }
-                        }
-                    }.onFailure { error ->
-                        updateCloudStreamSourceHealth(profileId, pluginId, error = error.localizedMessage ?: "Gagal memuat halaman berikutnya", responseTimeMs = System.currentTimeMillis() - requestStartedAt)
-                        failures += "${entry.name}: ${error.message ?: "gagal memuat"}"
+                val nextPage = (cloudStreamHomePages[selectedPluginId] ?: 1) + 1
+                val sectionPages = cloudStreamSectionPageRequests(selectedPluginId)
+                val requestStartedAt = System.currentTimeMillis()
+                runCatching {
+                    pluginManager.loadCloudStreamHomePage(
+                        entry,
+                        nextPage,
+                        sectionPages.takeIf { it.isNotEmpty() }
+                    )
+                }.onSuccess { sections ->
+                    if (_activeProfile.value?.id != profileId) return@onSuccess
+                    updateCloudStreamSectionPagination(
+                        selectedPluginId,
+                        sections,
+                        requestedPages = sectionPages.takeIf { it.isNotEmpty() }
+                    )
+                    updateCloudStreamSourceHealth(
+                        profileId,
+                        selectedPluginId,
+                        hasNext = cloudStreamHomeHasNext[selectedPluginId] == true,
+                        succeeded = true,
+                        responseTimeMs = System.currentTimeMillis() - requestStartedAt
+                    )
+                    if (sections.isNotEmpty()) {
+                        runCatching { persistCloudStreamCatalog(entry, sections) }
+                            .onSuccess { showStatus("Katalog ${entry.name} bertambah: $it item.") }
+                            .onFailure { showStatus("Halaman ${entry.name} dimuat tetapi gagal disimpan: ${it.message ?: "kesalahan penyimpanan"}") }
+                    } else {
+                        showStatus("Tidak ada item baru dari katalog ${entry.name}.")
                     }
+                }.onFailure { error ->
+                    updateCloudStreamSourceHealth(
+                        profileId,
+                        selectedPluginId,
+                        error = error.localizedMessage ?: "Gagal memuat halaman berikutnya",
+                        responseTimeMs = System.currentTimeMillis() - requestStartedAt
+                    )
+                    showStatus("Gagal memuat halaman ${entry.name}; cache lama tetap digunakan.")
                 }
-                showStatus(
-                    when {
-                        added > 0 && failures.isEmpty() -> "Katalog CloudStream Home bertambah: $added item."
-                        added > 0 -> "$added item ditambahkan; ${failures.size} plugin gagal."
-                        failures.isNotEmpty() -> "Gagal memuat halaman berikutnya: ${failures.take(3).joinToString(" • ")}"
-                        else -> "Tidak ada halaman CloudStream berikutnya yang tersedia."
-                    }
-                )
             } finally {
                 _isLoadingMoreCloudStreamHome.value = false
                 cloudStreamHomeLoadMoreJob = null
