@@ -196,7 +196,7 @@ dependencies {
 // Generate launcher density assets with a typed, configuration-cache-safe Kotlin task.
 val nsioLauncherResDir = layout.buildDirectory.dir("generated/res/nsioLauncher")
 val generateNsioLauncherIcons = tasks.register<GenerateNsioLauncherIconsTask>("generateNsioLauncherIcons") {
-  sourceImage.set(layout.projectDirectory.file("src/main/icon-source/nsio-launcher.jpg"))
+  sourceImage.set(layout.projectDirectory.file("src/main/icon-source/nsio-launcher.png"))
   outputDirectory.set(nsioLauncherResDir)
 }
 
