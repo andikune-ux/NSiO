@@ -1782,6 +1782,7 @@ fun HomeScreen(
     }
 
     if (showDdtvPrototypeDialog) {
+        var ddtvCurrentPage by remember { mutableStateOf(1) }
         val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds) {
             mediaList.filter { item ->
                 when (ddtvSourceFilter) {
@@ -1816,6 +1817,9 @@ fun HomeScreen(
             if (!ddtvServerLoading) {
                 ddtvServerLoading = true
                 ddtvSelectedCategory = category
+                ddtvCurrentPage = 1
+                ddtvDetailVideo = null
+                ddtvDetailPayload = null
                 ddtvServerVideos = emptyList()
                 ddtvServerStatus = "Memuat kategori ${category.name}..."
                 ddtvScope.launch {
@@ -1824,6 +1828,30 @@ fun HomeScreen(
                         ddtvServerStatus = "${category.name} • ${ddtvServerVideos.size} video dimuat"
                     } catch (failure: Exception) {
                         ddtvServerStatus = "Gagal memuat kategori: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                    } finally {
+                        ddtvServerLoading = false
+                    }
+                }
+            }
+        }
+        val loadMoreDdtvVideos = {
+            val category = ddtvSelectedCategory
+            if (category != null && !ddtvServerLoading) {
+                ddtvServerLoading = true
+                ddtvServerStatus = "Memuat halaman ${ddtvCurrentPage + 1}..."
+                ddtvScope.launch {
+                    try {
+                        val nextPage = ddtvCurrentPage + 1
+                        val nextVideos = embeddedModuleManager.fetchDdtvPage(category, nextPage)
+                        if (nextVideos.isNotEmpty()) {
+                            ddtvServerVideos = ddtvServerVideos + nextVideos
+                            ddtvCurrentPage = nextPage
+                            ddtvServerStatus = "${category.name} • halaman $ddtvCurrentPage • ${ddtvServerVideos.size} video"
+                        } else {
+                            ddtvServerStatus = "Tidak ada video lain di halaman berikutnya."
+                        }
+                    } catch (failure: Exception) {
+                        ddtvServerStatus = "Gagal memuat halaman berikutnya: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
                     } finally {
                         ddtvServerLoading = false
                     }
@@ -2081,6 +2109,16 @@ fun HomeScreen(
                                         Material3Text("Lihat detail dan putar", style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary)
                                     }
+                                }
+                            }
+                            val pageSize = if (category.related && category.videoType == 1) 30 else 10
+                            if (ddtvServerVideos.size >= pageSize) {
+                                TextButton(
+                                    enabled = !ddtvServerLoading,
+                                    onClick = loadMoreDdtvVideos,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Material3Text(if (ddtvServerLoading) "Memuat..." else "Muat video berikutnya")
                                 }
                             }
                         }
