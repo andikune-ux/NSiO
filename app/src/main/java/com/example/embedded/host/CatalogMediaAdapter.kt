@@ -14,7 +14,8 @@ import com.example.embedded.api.ModuleMediaSource
 class CatalogMediaAdapter(
     override val source: ModuleMediaSource,
     private val mediaProvider: () -> List<MediaItem>,
-    private val onPlay: (MediaItem) -> Unit
+    private val onPlay: (MediaItem) -> Unit,
+    private val drivePlaylistIdsProvider: () -> Set<String> = { emptySet() }
 ) : ModuleMediaAdapter {
     override suspend fun open(request: ModuleMediaRequest): ModuleMediaResult {
         if (request.uri.isBlank()) return ModuleMediaResult.Rejected("Alamat media kosong.")
@@ -23,7 +24,7 @@ class CatalogMediaAdapter(
         } ?: return ModuleMediaResult.Unavailable("Media tidak ditemukan lagi di katalog NSiO.")
 
         val matchesSource = when (source) {
-            ModuleMediaSource.DRIVE -> MediaSourceClassifier.isDriveMedia(item)
+            ModuleMediaSource.DRIVE -> MediaSourceClassifier.isDriveMedia(item, drivePlaylistIdsProvider())
             ModuleMediaSource.CLOUD_STREAM -> item.sourceType.equals("CLOUDSTREAM", true)
             ModuleMediaSource.FILE_MANAGER -> item.sourceType.contains("FILE", true) ||
                 item.sourceType.contains("LOCAL", true) || item.url.startsWith("content://", true)
