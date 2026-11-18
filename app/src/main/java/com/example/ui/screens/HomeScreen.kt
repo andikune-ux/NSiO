@@ -178,6 +178,9 @@ fun HomeScreen(
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
     val appContext = LocalContext.current
     val embeddedModuleManager = remember(appContext) { EmbeddedModuleManager(appContext) }
+    val embeddedModuleStates by embeddedModuleManager.states.collectAsState()
+    val ddtvModuleState = embeddedModuleStates.firstOrNull { it.metadata.id == "dev.andikune.nsio.ddtv" }
+    val ddtvHostSources = remember(embeddedModuleManager) { embeddedModuleManager.availableMediaSources() }
     var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
@@ -1743,16 +1746,47 @@ fun HomeScreen(
             title = { Material3Text("DDTV Experimental") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Material3Text("DDTV Prototype berhasil dibuka melalui NSiO Embedded Module Engine.")
-                    Material3Text("Modul ini masih berupa prototype native dan belum terhubung ke server, protokol, atau payload DDTV MONYET PRO.", style = MaterialTheme.typography.bodySmall)
-                    Material3Text("Lifecycle modul aktif • penyimpanan terpisah • player utama tidak disentuh.", style = MaterialTheme.typography.bodySmall)
+                    Material3Text("DDTV Experimental • Embedded Module Host")
+                    Material3Text(
+                        "Status: ${if (ddtvModuleState?.running == true) "Berjalan" else "Berhenti"} • v${ddtvModuleState?.metadata?.version ?: "0.1.0"} • API ${ddtvModuleState?.metadata?.apiVersion ?: 1}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Material3Text(
+                        "Prototype native ini belum terhubung ke server, protokol, atau payload DDTV MONYET PRO.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Material3Text(
+                        if (ddtvHostSources.isEmpty())
+                            "Adapter host belum aktif. Slot integrasi tersedia untuk Drive, CloudStream, File Manager, dan Server."
+                        else
+                            "Adapter aktif: ${ddtvHostSources.joinToString { it.name }}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Material3Text(
+                        "Penyimpanan modul terpisah. Player utama dan MultiView tidak diubah.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    ddtvModuleState?.lastError?.let {
+                        Material3Text("Error terakhir: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showDdtvPrototypeDialog = false
-                    embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-                }) { Material3Text("Tutup Modul") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        runCatching {
+                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                            embeddedModuleManager.start("dev.andikune.nsio.ddtv")
+                        }.onFailure {
+                            ddtvLaunchError = it.localizedMessage ?: "DDTV gagal dimulai ulang."
+                            showDdtvPrototypeDialog = false
+                        }
+                    }) { Material3Text("Mulai Ulang") }
+                    TextButton(onClick = {
+                        showDdtvPrototypeDialog = false
+                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                    }) { Material3Text("Tutup Modul") }
+                }
             }
         )
     }
