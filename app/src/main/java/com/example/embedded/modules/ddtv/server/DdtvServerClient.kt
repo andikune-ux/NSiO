@@ -21,19 +21,19 @@ import javax.net.ssl.HttpsURLConnection
 
 class DdtvServerClient(context: Context) {
     private val appContext = context.applicationContext
-    private val preferences = appContext.getSharedPreferences("ddtv_server_protocol", Context.MODE_PRIVATE)
+    private val preferences = appContext.getSharedPreferences("cyev_ddtv_ui", Context.MODE_PRIVATE)
     private val profile: DdtvProtocolProfile by lazy {
         val source = appContext.assets.open("ddtv-ui/protocol.json")
             .bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
         DdtvProtocolProfile.fromJson(JSONObject(source))
     }
     private val deviceId: String by lazy {
-        val existing = preferences.getString("device_id", null)
+        val existing = preferences.getString("device", "")
         if (!existing.isNullOrBlank() && existing.matches(Regex("[0-9a-f]{16}"))) {
             existing
         } else {
             java.util.UUID.randomUUID().toString().replace("-", "").take(16).also {
-                preferences.edit().putString("device_id", it).apply()
+                preferences.edit().putString("device", it).apply()
             }
         }
     }

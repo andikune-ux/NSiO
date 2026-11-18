@@ -216,7 +216,7 @@ internal object DdtvServerUrlPolicy {
         ) return false
 
         val host = uri.host.lowercase(Locale.ROOT)
-        if (host.endsWith(".") || host.endsWith(".local") ||
+        if (!host.contains(".") || host.endsWith(".") || host.endsWith(".local") ||
             host.endsWith(".localhost") || host.endsWith(".internal") ||
             host == "localhost" || host.contains('%') || host.contains(':')
         ) return false
