@@ -115,6 +115,12 @@ import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 import com.example.embedded.engine.EmbeddedModuleManager
+import com.example.embedded.api.ModuleMediaBridgeRegistry
+import com.example.embedded.api.ModuleMediaRequest
+import com.example.embedded.api.ModuleMediaResult
+import com.example.embedded.api.ModuleMediaSource
+import com.example.embedded.host.CatalogMediaAdapter
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -182,7 +188,20 @@ fun HomeScreen(
     var ddtvSourceFilter by rememberSaveable { mutableStateOf("ALL") }
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
     val appContext = LocalContext.current
-    val embeddedModuleManager = remember(appContext) { EmbeddedModuleManager(appContext) }
+    val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
+    val ddtvMediaBridge = remember(appContext, viewModel) {
+        ModuleMediaBridgeRegistry(
+            listOf(
+                CatalogMediaAdapter(ModuleMediaSource.DRIVE, { viewModel.mediaList.value }, viewModel::playMedia),
+                CatalogMediaAdapter(ModuleMediaSource.CLOUD_STREAM, { viewModel.mediaList.value }, viewModel::playMedia),
+                CatalogMediaAdapter(ModuleMediaSource.FILE_MANAGER, { viewModel.mediaList.value }, viewModel::playMedia),
+                CatalogMediaAdapter(ModuleMediaSource.SERVER, { viewModel.mediaList.value }, viewModel::playMedia)
+            )
+        )
+    }
+    val embeddedModuleManager = remember(appContext, ddtvMediaBridge) {
+        EmbeddedModuleManager(appContext, ddtvMediaBridge)
+    }
     val embeddedModuleStates by embeddedModuleManager.states.collectAsState()
     val ddtvModuleState = embeddedModuleStates.firstOrNull { it.metadata.id == "dev.andikune.nsio.ddtv" }
     val ddtvHostSources = remember(embeddedModuleManager) { embeddedModuleManager.availableMediaSources() }
@@ -1806,6 +1825,11 @@ fun HomeScreen(
                 ) {
                     Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.1.0"}")
                     Material3Text(
+                        "Adapter aktif: " + ddtvHostSources.joinToString(" • ") { it.name },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Material3Text(
                         "Pilih sumber media NSiO untuk dibuka melalui player utama.",
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1847,9 +1871,33 @@ fun HomeScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                                     .clickable {
-                                        viewModel.playMedia(mediaItem)
-                                        showDdtvPrototypeDialog = false
-                                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                        val source = when {
+                                            MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds) -> ModuleMediaSource.DRIVE
+                                            mediaItem.sourceType.equals("CLOUDSTREAM", true) -> ModuleMediaSource.CLOUD_STREAM
+                                            mediaItem.sourceType.contains("FILE", true) ||
+                                                mediaItem.sourceType.contains("LOCAL", true) ||
+                                                mediaItem.url.startsWith("content://", true) -> ModuleMediaSource.FILE_MANAGER
+                                            mediaItem.sourceType.contains("SERVER", true) -> ModuleMediaSource.SERVER
+                                            else -> null
+                                        }
+                                        if (source == null) {
+                                            viewModel.playMedia(mediaItem)
+                                            showDdtvPrototypeDialog = false
+                                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                        } else {
+                                            ddtvScope.launch {
+                                                when (val result = embeddedModuleManager.openMedia(
+                                                    ModuleMediaRequest(source, mediaItem.url, mediaItem.title)
+                                                )) {
+                                                    is ModuleMediaResult.Opened -> {
+                                                        showDdtvPrototypeDialog = false
+                                                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                                    }
+                                                    is ModuleMediaResult.Unavailable -> ddtvLaunchError = result.reason
+                                                    is ModuleMediaResult.Rejected -> ddtvLaunchError = result.reason
+                                                }
+                                            }
+                                        }
                                     }
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(3.dp)
