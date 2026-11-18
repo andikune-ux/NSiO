@@ -7,6 +7,9 @@ import com.example.embedded.api.ModuleMetadata
 import com.example.embedded.api.ModuleMediaBridge
 import com.example.embedded.api.ModuleMediaBridgeRegistry
 import com.example.embedded.modules.ddtv.DdtvModule
+import com.example.embedded.modules.ddtv.server.DdtvCategory
+import com.example.embedded.modules.ddtv.server.DdtvStream
+import org.json.JSONObject
 import com.example.embedded.storage.ModuleStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +49,23 @@ class EmbeddedModuleManager(
     val states: StateFlow<List<EmbeddedModuleState>> = _states.asStateFlow()
 
     fun availableMediaSources() = mediaBridge.availableSources()
+
+    private fun activeDdtvModule(): DdtvModule {
+        check("dev.andikune.nsio.ddtv" in running) { "Jalankan modul DDTV sebelum menghubungkan server." }
+        return modules["dev.andikune.nsio.ddtv"] as? DdtvModule
+            ?: error("Modul DDTV tidak ditemukan.")
+    }
+
+    suspend fun connectDdtvServer(): List<DdtvCategory> = activeDdtvModule().connectServer()
+
+    suspend fun fetchDdtvPage(category: DdtvCategory, page: Int = 1): List<JSONObject> =
+        activeDdtvModule().fetchPage(category, page)
+
+    suspend fun fetchDdtvDetail(videoId: Long, videoType: Int): JSONObject =
+        activeDdtvModule().fetchDetail(videoId, videoType)
+
+    fun resolveDdtvStreams(detail: JSONObject): List<DdtvStream> =
+        activeDdtvModule().resolveStreams(detail)
 
     suspend fun openMedia(request: com.example.embedded.api.ModuleMediaRequest) =
         mediaBridge.open(request)

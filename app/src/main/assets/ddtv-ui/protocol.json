@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "envelope": "iv+ciphertext",
+  "key": "I0z+bHUM/nKN5BnpKZC+62Mv6ivDEmMkj9I/JRc/mSw=",
+  "publicKey": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0e9vLgTz1h2A6KO/xrCAdU+ZGP92OoS62LjzVYbvZI3EUJrsx98iL61QRKzhzlfKTDCpf2jWNZttY8b3J18XmqgKvvbnhuhvPNgo0+XDefnVdQDY3mSeCeoa4aoL6jg2KhU2qJxEe7XZaTzn6xYSpCAJD/E/v3uylcSlZ4uAhy4B6S/L+lM1xcxezDxsNv/xrapZRsS6qvKCljRY019miCDkDpK2XSehu4V9oUN6nOcxkZcc1CqXpKKZ/yW7Q80G/eEqkh3OUVjuojsmE2bTCesTzJ6SKpdwKTLh+h8B/C3s/LGfngedabJEXlJNVmhgUElxj3SO8F03LLVexWpkewIDAQAB",
+  "bootstrap": [
+    "https://1JZrB8p1FAlEPDRY1c4B36.cc",
+    "https://6yYM7GFUMdnSDU5ubuedRl.cc",
+    "https://yFEZtERmTT3MGmN3GuJMN.cc",
+    "https://1PVQpuidgkJVzksFmnB0QQ.cc",
+    "https://wdiNk4yOqJD3ccqexjaHQ.cc"
+  ]
+}

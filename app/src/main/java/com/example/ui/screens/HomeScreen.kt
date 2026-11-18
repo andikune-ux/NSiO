@@ -115,12 +115,13 @@ import com.example.ui.components.liquidGlass
 import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 import com.example.embedded.engine.EmbeddedModuleManager
+import com.example.embedded.modules.ddtv.server.DdtvCategory
+import org.json.JSONObject
 import com.example.embedded.api.ModuleMediaBridgeRegistry
 import com.example.embedded.api.ModuleMediaRequest
 import com.example.embedded.api.ModuleMediaResult
 import com.example.embedded.api.ModuleMediaSource
 import com.example.embedded.host.CatalogMediaAdapter
-import com.example.embedded.host.ServerMediaAdapter
 import kotlinx.coroutines.launch
 
 @Composable
@@ -188,6 +189,11 @@ fun HomeScreen(
     var showDdtvPrototypeDialog by rememberSaveable { mutableStateOf(false) }
     var ddtvSourceFilter by rememberSaveable { mutableStateOf("ALL") }
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
+    var ddtvServerStatus by rememberSaveable { mutableStateOf("Belum terhubung") }
+    var ddtvServerLoading by remember { mutableStateOf(false) }
+    var ddtvServerCategories by remember { mutableStateOf<List<DdtvCategory>>(emptyList()) }
+    var ddtvServerVideos by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var ddtvSelectedCategory by remember { mutableStateOf<DdtvCategory?>(null) }
     val appContext = LocalContext.current
     val ddtvScope = androidx.compose.runtime.rememberCoroutineScope()
     val ddtvMediaBridge = remember(appContext, viewModel, drivePlaylistIds) {
@@ -195,8 +201,7 @@ fun HomeScreen(
             listOf(
                 CatalogMediaAdapter(ModuleMediaSource.DRIVE, { viewModel.mediaList.value }, viewModel::playMedia) { drivePlaylistIds },
                 CatalogMediaAdapter(ModuleMediaSource.CLOUD_STREAM, { viewModel.mediaList.value }, viewModel::playMedia),
-                CatalogMediaAdapter(ModuleMediaSource.FILE_MANAGER, { viewModel.mediaList.value }, viewModel::playMedia),
-                ServerMediaAdapter({ viewModel.mediaList.value }, viewModel::playMedia)
+                CatalogMediaAdapter(ModuleMediaSource.FILE_MANAGER, { viewModel.mediaList.value }, viewModel::playMedia)
             )
         )
     }
@@ -1801,17 +1806,100 @@ fun HomeScreen(
     }
 
     if (showDdtvPrototypeDialog) {
-        val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds, isServerUnlocked) {
+        val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds) {
             mediaList.filter { item ->
                 when (ddtvSourceFilter) {
                     "DRIVE" -> MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
                     "CLOUDSTREAM" -> item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)
                     "FILE" -> item.sourceType.contains("LOCAL", ignoreCase = true) ||
                         item.sourceType.contains("FILE", ignoreCase = true)
-                    "SERVER" -> isServerUnlocked && item.sourceType.contains("SERVER", ignoreCase = true)
-                    else -> item.sourceType != "SERVER" || isServerUnlocked
+                    "SERVER" -> false
+                    else -> item.sourceType != "SERVER"
                 }
             }.take(40)
+        }
+        val connectDdtvServer = {
+            if (!ddtvServerLoading) {
+                ddtvServerLoading = true
+                ddtvServerStatus = "Menghubungkan ke server DDTV..."
+                ddtvScope.launch {
+                    try {
+                        ddtvServerCategories = embeddedModuleManager.connectDdtvServer()
+                        ddtvSelectedCategory = null
+                        ddtvServerVideos = emptyList()
+                        ddtvServerStatus = "Terhubung • ${ddtvServerCategories.size} kategori tersedia"
+                    } catch (failure: Exception) {
+                        ddtvServerStatus = "Gagal terhubung: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                    } finally {
+                        ddtvServerLoading = false
+                    }
+                }
+            }
+        }
+        val loadDdtvCategory: (DdtvCategory) -> Unit = { category ->
+            if (!ddtvServerLoading) {
+                ddtvServerLoading = true
+                ddtvSelectedCategory = category
+                ddtvServerVideos = emptyList()
+                ddtvServerStatus = "Memuat kategori ${category.name}..."
+                ddtvScope.launch {
+                    try {
+                        ddtvServerVideos = embeddedModuleManager.fetchDdtvPage(category, 1)
+                        ddtvServerStatus = "${category.name} • ${ddtvServerVideos.size} video dimuat"
+                    } catch (failure: Exception) {
+                        ddtvServerStatus = "Gagal memuat kategori: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                    } finally {
+                        ddtvServerLoading = false
+                    }
+                }
+            }
+        }
+        val playDdtvVideo: (JSONObject) -> Unit = { video ->
+            val category = ddtvSelectedCategory
+            val videoId = video.optLong("id", video.optLong("video_id", 0L))
+            if (category == null || videoId <= 0L) {
+                ddtvLaunchError = "Identitas video DDTV tidak valid."
+            } else if (!ddtvServerLoading) {
+                ddtvServerLoading = true
+                ddtvServerStatus = "Mengambil detail dan link streaming..."
+                ddtvScope.launch {
+                    try {
+                        val videoType = video.optInt("video_type", category.videoType)
+                        val detail = embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
+                        val stream = embeddedModuleManager.resolveDdtvStreams(detail).firstOrNull()
+                            ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
+                        val headers = stream.headers.entries.joinToString("&") { "${it.key}=${it.value}" }
+                        val title = sequenceOf("title", "name", "video_name")
+                            .map { video.optString(it, "").trim() }
+                            .firstOrNull { it.isNotBlank() }
+                            ?: "DDTV • Video $videoId"
+                        val thumbnail = sequenceOf("cover_url", "cover", "thumbnail", "image")
+                            .map { video.optString(it, "").trim() }
+                            .firstOrNull { it.isNotBlank() }
+                            .orEmpty()
+                        viewModel.playMedia(
+                            MediaItem(
+                                id = "ddtv:$videoId:${System.currentTimeMillis()}",
+                                profileId = activeProfile?.id ?: "ddtv",
+                                title = title,
+                                url = stream.url,
+                                thumbnailUrl = thumbnail,
+                                type = "VIDEO",
+                                sourceType = "DDTV",
+                                category = category.name,
+                                extraInfo = headers
+                            )
+                        )
+                        showDdtvPrototypeDialog = false
+                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                    } catch (failure: Exception) {
+                        ddtvLaunchError = failure.localizedMessage ?: "Gagal membuka video dari server DDTV."
+                        ddtvServerStatus = "Gagal menyiapkan streaming."
+                    } finally {
+                        ddtvServerLoading = false
+                    }
+                }
+            }
         }
         AlertDialog(
             onDismissRequest = {
@@ -1824,15 +1912,11 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.1.0"}")
+                    Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}")
                     Material3Text(
-                        "Adapter aktif: " + ddtvHostSources.joinToString(" • ") { it.name },
+                        "Adapter host: " + ddtvHostSources.joinToString(" • ") { it.name },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
-                    )
-                    Material3Text(
-                        "Pilih sumber media NSiO untuk dibuka melalui player utama.",
-                        style = MaterialTheme.typography.bodySmall
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("ALL" to "Semua", "DRIVE" to "Drive", "CLOUDSTREAM" to "CloudStream").forEach { (key, label) ->
@@ -1842,90 +1926,135 @@ fun HomeScreen(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("FILE" to "File", "SERVER" to "Server").forEach { (key, label) ->
-                            TextButton(onClick = {
-                                if (key == "SERVER" && !isServerUnlocked) {
-                                    pendingPlaylistFilter = "DDTV_SERVER"
-                                    showServerPinDialog = true
-                                } else {
-                                    ddtvSourceFilter = key
-                                }
-                            }) {
-                                Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
-                            }
+                        TextButton(onClick = { ddtvSourceFilter = "FILE" }) {
+                            Material3Text(if (ddtvSourceFilter == "FILE") "• File" else "File")
+                        }
+                        TextButton(onClick = {
+                            ddtvSourceFilter = "SERVER"
+                            if (ddtvServerCategories.isEmpty()) connectDdtvServer()
+                        }) {
+                            Material3Text(if (ddtvSourceFilter == "SERVER") "• DDTV Server" else "DDTV Server")
                         }
                     }
-                    TextButton(onClick = {
-                        ddtvLocalFilePicker.launch(arrayOf("video/*", "audio/*"))
-                    }) {
-                        Material3Text("Pilih file dari perangkat…")
-                    }
-                    if (ddtvVisibleMedia.isEmpty()) {
+
+                    if (ddtvSourceFilter == "SERVER") {
                         Material3Text(
-                            when (ddtvSourceFilter) {
-                                "DRIVE" -> "Belum ada media Google Drive di katalog. Tambahkan tautan Drive melalui menu Extension atau daftar sumber."
-                                "CLOUDSTREAM" -> "Belum ada konten CloudStream yang tersedia di katalog."
-                                "FILE" -> "Belum ada file lokal yang terdaftar di katalog NSiO."
-                                "SERVER" -> "Belum ada media Server yang terdaftar di katalog NSiO."
-                                else -> "Katalog media masih kosong. Tambahkan sumber media terlebih dahulu."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            "Server bawaan DDTV • protokol v1 • AES-CBC • verifikasi RSA-SHA256",
+                            style = MaterialTheme.typography.bodySmall
                         )
+                        TextButton(enabled = !ddtvServerLoading, onClick = connectDdtvServer) {
+                            Material3Text(if (ddtvServerLoading) "Menghubungkan..." else "Hubungkan / Muat Ulang Server DDTV")
+                        }
+                        Material3Text(
+                            ddtvServerStatus,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (ddtvServerStatus.startsWith("Gagal")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (ddtvServerCategories.isNotEmpty()) {
+                            Material3Text("Kategori DDTV", style = MaterialTheme.typography.titleSmall)
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                ddtvServerCategories.forEach { category ->
+                                    TextButton(
+                                        enabled = !ddtvServerLoading,
+                                        onClick = { loadDdtvCategory(category) }
+                                    ) {
+                                        Material3Text(
+                                            if (ddtvSelectedCategory == category) "• ${category.name}" else category.name
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        ddtvSelectedCategory?.let { category ->
+                            Material3Text("Video • ${category.name}", style = MaterialTheme.typography.titleSmall)
+                            if (ddtvServerVideos.isEmpty() && !ddtvServerLoading) {
+                                Material3Text("Pilih kategori atau muat ulang untuk mengambil daftar video.")
+                            }
+                            ddtvServerVideos.forEach { video ->
+                                val videoId = video.optLong("id", video.optLong("video_id", 0L))
+                                val title = sequenceOf("title", "name", "video_name")
+                                    .map { video.optString(it, "").trim() }
+                                    .firstOrNull { it.isNotBlank() }
+                                    ?: "Video $videoId"
+                                Column(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                                        .clickable(enabled = !ddtvServerLoading) { playDdtvVideo(video) }
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Material3Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Material3Text("ID $videoId • Video Type ${video.optInt("video_type", category.videoType)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                     } else {
-                        ddtvVisibleMedia.forEach { mediaItem ->
-                            Column(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                                    .clickable {
-                                        val source = when {
-                                            MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds) -> ModuleMediaSource.DRIVE
-                                            mediaItem.sourceType.equals("CLOUDSTREAM", true) -> ModuleMediaSource.CLOUD_STREAM
-                                            mediaItem.sourceType.contains("FILE", true) ||
-                                                mediaItem.sourceType.contains("LOCAL", true) ||
-                                                mediaItem.url.startsWith("content://", true) -> ModuleMediaSource.FILE_MANAGER
-                                            mediaItem.sourceType.contains("SERVER", true) -> ModuleMediaSource.SERVER
-                                            else -> null
-                                        }
-                                        if (source == null) {
-                                            viewModel.playMedia(mediaItem)
-                                            showDdtvPrototypeDialog = false
-                                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-                                        } else {
-                                            ddtvScope.launch {
-                                                when (val result = embeddedModuleManager.openMedia(
-                                                    ModuleMediaRequest(source, mediaItem.url, mediaItem.title)
-                                                )) {
-                                                    is ModuleMediaResult.Opened -> {
-                                                        showDdtvPrototypeDialog = false
-                                                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                        TextButton(onClick = {
+                            ddtvLocalFilePicker.launch(arrayOf("video/*", "audio/*"))
+                        }) {
+                            Material3Text("Pilih file dari perangkat…")
+                        }
+                        if (ddtvVisibleMedia.isEmpty()) {
+                            Material3Text(
+                                when (ddtvSourceFilter) {
+                                    "DRIVE" -> "Belum ada media Google Drive di katalog. Tambahkan tautan Drive melalui menu Extension atau daftar sumber."
+                                    "CLOUDSTREAM" -> "Belum ada konten CloudStream yang tersedia di katalog."
+                                    "FILE" -> "Belum ada file lokal yang terdaftar di katalog NSiO."
+                                    else -> "Katalog media masih kosong. Tambahkan sumber media terlebih dahulu."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            ddtvVisibleMedia.forEach { mediaItem ->
+                                Column(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                                        .clickable {
+                                            val source = when {
+                                                MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds) -> ModuleMediaSource.DRIVE
+                                                mediaItem.sourceType.equals("CLOUDSTREAM", true) -> ModuleMediaSource.CLOUD_STREAM
+                                                mediaItem.sourceType.contains("FILE", true) ||
+                                                    mediaItem.sourceType.contains("LOCAL", true) ||
+                                                    mediaItem.url.startsWith("content://", true) -> ModuleMediaSource.FILE_MANAGER
+                                                else -> null
+                                            }
+                                            if (source == null) {
+                                                viewModel.playMedia(mediaItem)
+                                                showDdtvPrototypeDialog = false
+                                                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                            } else {
+                                                ddtvScope.launch {
+                                                    when (val result = embeddedModuleManager.openMedia(
+                                                        ModuleMediaRequest(source, mediaItem.url, mediaItem.title)
+                                                    )) {
+                                                        is ModuleMediaResult.Opened -> {
+                                                            showDdtvPrototypeDialog = false
+                                                            embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                                        }
+                                                        is ModuleMediaResult.Unavailable -> ddtvLaunchError = result.reason
+                                                        is ModuleMediaResult.Rejected -> ddtvLaunchError = result.reason
                                                     }
-                                                    is ModuleMediaResult.Unavailable -> ddtvLaunchError = result.reason
-                                                    is ModuleMediaResult.Rejected -> ddtvLaunchError = result.reason
                                                 }
                                             }
                                         }
-                                    }
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Material3Text(mediaItem.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Material3Text(
-                                    mediaItem.sourceType.ifBlank { "Sumber media" },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Material3Text(mediaItem.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Material3Text(
+                                        mediaItem.sourceType.ifBlank { "Sumber media" },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
                     Material3Text(
                         "Status host: ${if (ddtvModuleState?.running == true) "Aktif" else "Berhenti"} • API ${ddtvModuleState?.metadata?.apiVersion ?: 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Material3Text(
-                        "Server NSiO terhubung melalui adapter khusus: Firebase Storage dan URL HTTP(S) eksternal. Protokol privat MONYET PRO belum diklaim kompatibel.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1970,11 +2099,7 @@ fun HomeScreen(
             expectedPin = settings.serverPin,
             onSuccess = {
                 viewModel.unlockServerAccess()
-                if (pendingPlaylistFilter == "DDTV_SERVER") {
-                    ddtvSourceFilter = "SERVER"
-                } else {
-                    viewModel.selectFilter(pendingPlaylistFilter ?: "SERVER")
-                }
+                viewModel.selectFilter(pendingPlaylistFilter ?: "SERVER")
                 pendingPlaylistFilter = null
                 showServerPinDialog = false
             },
