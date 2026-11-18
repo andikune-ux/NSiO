@@ -1552,7 +1552,7 @@ fun HomeScreen(
                                     }
                                 }
                                 Text(
-                                    "Ubah nama playlist melalui Daftar Playlist → Plugin & Repo → Riwayat Playlist Sumber.",
+                                    "Ubah nama playlist melalui Manajemen Sumber → Plugin & Repo → Riwayat Playlist Sumber.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 9.sp,
                                     lineHeight = 12.sp
@@ -1646,6 +1646,8 @@ fun HomeScreen(
 
                         Box(
                             modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 16.dp, bottom = 16.dp)
                                 .size(54.dp)
                                 .clip(CircleShape)
                                 .background(if (isDark) Color(0xFF17364A).copy(alpha = 0.94f) else Color(0xFFE4F7FF))
