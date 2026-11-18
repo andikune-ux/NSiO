@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
@@ -107,7 +108,17 @@ fun ExtensionScreen(
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
     val mediaList by viewModel.mediaList.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val repositories by viewModel.pluginManager.repositories.collectAsState()
     val playlists = sourcePlaylists.sortedBy { it.name.trim().lowercase() }
+    val enabledPlugins = remember(repositories) {
+        repositories.flatMap { repo ->
+            repo.plugins.filter { entry ->
+                entry.status != 0 && viewModel.pluginManager.isCloudStreamPluginInstalled(entry)
+            }.map { entry ->
+                viewModel.pluginManager.cloudStreamPluginId(entry) to entry.name
+            }
+        }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
+    }
 
     Column(
         modifier = modifier
@@ -153,15 +164,11 @@ fun ExtensionScreen(
             item {
                 val selected = selectedFilter == "ALL"
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
                         .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                        .clickable {
-                            viewModel.selectFilter("ALL")
-                            onNavigateToHome()
-                        }
+                        .clickable { viewModel.selectFilter("ALL"); onNavigateToHome() }
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -175,17 +182,70 @@ fun ExtensionScreen(
                 }
             }
 
+            item {
+                val selected = selectedFilter == "CLOUDSTREAM_ALL"
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                        .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                        .clickable { viewModel.selectFilter("CLOUDSTREAM_ALL"); onNavigateToHome() }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Material3Text("Tampilkan Semua Plugin", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Material3Text("${enabledPlugins.size} plugin aktif", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Plugin aktif", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            item {
+                Material3Text("Plugin CloudStream yang sudah diaktifkan", fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+            }
+            if (enabledPlugins.isEmpty()) {
+                item {
+                    Material3Text("Belum ada plugin CloudStream yang terpasang dan aktif. Aktifkan plugin melalui Extension → Plugin & Repo.",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp))
+                }
+            } else {
+                items(enabledPlugins, key = { it.first }) { (pluginId, pluginName) ->
+                    val filter = "CLOUDSTREAM_PLUGIN:$pluginId"
+                    val selected = selectedFilter == filter
+                    val itemCount = mediaList.count { it.sourceType == "CLOUDSTREAM" && it.pluginId == pluginId }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            .clickable { viewModel.selectFilter(filter); onNavigateToHome() }
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Extension, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Material3Text(pluginName, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Material3Text("${itemCount} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Plugin aktif", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            item {
+                Material3Text("Playlist tersimpan", fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+            }
             if (playlists.isEmpty()) {
                 item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Material3Text(
-                            "Belum ada playlist tersimpan. Playlist yang sudah tersedia akan muncul di sini.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                        Material3Text("Belum ada playlist tersimpan. Playlist yang sudah tersedia akan muncul di sini.",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
@@ -193,22 +253,18 @@ fun ExtensionScreen(
                     val filter = "PLAYLIST:${playlist.id}"
                     val selected = selectedFilter == filter
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                             .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
                             .border(1.dp, if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                            .clickable {
-                                viewModel.selectFilter(filter)
-                                onNavigateToHome()
-                            }
+                            .clickable { viewModel.selectFilter(filter); onNavigateToHome() }
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.FolderOpen, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Material3Text(playlist.name, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                            Material3Text(playlist.name, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                             Material3Text("${playlist.itemCount} media", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (selected) Icon(Icons.Default.LockOpen, contentDescription = "Playlist aktif", tint = MaterialTheme.colorScheme.primary)
