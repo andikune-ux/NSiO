@@ -873,7 +873,6 @@ private fun PluginRepoTab(
 
     LaunchedEffect(nsfwEnabled) {
         viewModel.pluginManager.setNsfwCatalogEnabled(nsfwEnabled)
-        if (!nsfwEnabled && selectedPluginCategory == "NSFW") selectedPluginCategory = "Semua"
     }
 
     fun matchesPluginCategory(entry: com.example.data.plugin.CloudStreamPluginEntry): Boolean {
@@ -904,7 +903,7 @@ private fun PluginRepoTab(
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                (listOf("Semua", "🇮🇩 Indonesia", "🇲🇾 Malaysia", "🇸🇬 Singapura", "🇹🇭 Thailand", "🇯🇵 Jepang", "🇰🇷 Korea Selatan", "🇨🇳 Tiongkok/Taiwan", "🇻🇳 Vietnam", "🇵🇭 Filipina", "🇮🇳 India", "🌐 Global", "Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun") + if (nsfwEnabled) listOf("🔞 NSFW") else emptyList()).forEach { label ->
+                listOf("Semua", "🇮🇩 Indonesia", "🇲🇾 Malaysia", "🇸🇬 Singapura", "🇹🇭 Thailand", "🇯🇵 Jepang", "🇰🇷 Korea Selatan", "🇨🇳 Tiongkok/Taiwan", "🇻🇳 Vietnam", "🇵🇭 Filipina", "🇮🇳 India", "🌐 Global", "Movie", "Seri TV", "Anime", "Drama Asia", "Dubb Indo", "Kartun", "🔞 NSFW").forEach { label ->
                     val category = label.substringAfterLast(" ").let { if (label.startsWith("🇮🇩")) "Indonesia" else if (label.startsWith("🇲🇾")) "Malaysia" else if (label.startsWith("🇸🇬")) "Singapura" else if (label.startsWith("🇹🇭")) "Thailand" else if (label.startsWith("🇯🇵")) "Jepang" else if (label.startsWith("🇰🇷")) "Korea Selatan" else if (label.startsWith("🇨🇳")) "Tiongkok/Taiwan" else if (label.startsWith("🇻🇳")) "Vietnam" else if (label.startsWith("🇵🇭")) "Filipina" else if (label.startsWith("🇮🇳")) "India" else if (label.startsWith("🌐")) "Global" else if (label.startsWith("🔞")) "NSFW" else label }
                     val active = selectedPluginCategory == category
                     Box(
@@ -1109,7 +1108,13 @@ private fun PluginRepoTab(
                         }
                         TextButton(onClick = { showPluginDialog = false; expandedPluginDialog = false }) { Text("Tutup") }
                     }
-                    if (entries.isEmpty() && plugins.isEmpty()) {
+                    if (selectedPluginCategory == "NSFW" && !nsfwEnabled) {
+                        Column(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🔞 Kategori NSFW nonaktif", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("Aktifkan tombol Tampilkan plugin NSFW di halaman repositori untuk melihat daftar plugin kategori ini.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Switch(checked = nsfwEnabled, onCheckedChange = { nsfwEnabled = it })
+                        }
+                    } else if (entries.isEmpty() && plugins.isEmpty()) {
                         Text("Belum ada plugin.")
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
