@@ -1,6 +1,5 @@
 package com.example.embedded.modules.ddtv.server
 
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -10,10 +9,7 @@ import org.junit.Test
 import java.io.IOException
 import java.security.KeyPairGenerator
 import java.security.Signature
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
-@RunWith(RobolectricTestRunner::class)
 class DdtvProtocolTest {
     private val aesKey = ByteArray(32) { (it + 3).toByte() }
 
@@ -22,7 +18,7 @@ class DdtvProtocolTest {
         val iv = ByteArray(16) { (it * 7).toByte() }
         val plain = """{"method":"categories","lang":"id"}"""
         val encoded = DdtvProtocolCodec.encryptPayload(plain, aesKey, iv)
-        val raw = Base64.decode(encoded, Base64.DEFAULT)
+        val raw = DdtvBase64.decode(encoded)
 
         assertTrue(raw.copyOfRange(0, 16).contentEquals(iv))
         assertEquals(plain, DdtvProtocolCodec.decryptPayload(encoded, aesKey))
@@ -41,7 +37,7 @@ class DdtvProtocolTest {
         val response = JSONObject()
             .put("code", 200)
             .put("data", encrypted)
-            .put("s", Base64.encodeToString(signer.sign(), Base64.NO_WRAP))
+            .put("s", DdtvBase64.encode(signer.sign()))
 
         val decoded = DdtvProtocolCodec.decodeResponse(response, aesKey, pair.public) as JSONObject
         assertTrue(decoded.getJSONArray("categories").getJSONObject(0).getInt("id") == 1)
@@ -55,7 +51,7 @@ class DdtvProtocolTest {
         val response = JSONObject()
             .put("code", 0)
             .put("data", encrypted)
-            .put("s", Base64.encodeToString(ByteArray(256), Base64.NO_WRAP))
+            .put("s", DdtvBase64.encode(ByteArray(256)))
 
         var rejected = false
         try {

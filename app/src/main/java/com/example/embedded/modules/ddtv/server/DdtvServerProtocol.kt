@@ -14,7 +14,6 @@ import java.security.Signature
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.X509EncodedKeySpec
 import java.security.KeyFactory
-import android.util.Base64
 import java.util.Locale
 import java.util.regex.Pattern
 import javax.crypto.Cipher
@@ -71,12 +70,12 @@ internal data class DdtvProtocolProfile(
             }
 
             val key = runCatching {
-                Base64.decode(value.getString("key"), Base64.DEFAULT)
+                DdtvBase64.decode(value.getString("key"))
             }.getOrElse { throw IOException("Kunci protokol DDTV tidak valid.", it) }
             if (key.size != 32) throw IOException("Panjang kunci AES DDTV tidak valid.")
 
             val publicKeyBytes = runCatching {
-                Base64.decode(value.getString("publicKey"), Base64.DEFAULT)
+                DdtvBase64.decode(value.getString("publicKey"))
             }.getOrElse { throw IOException("Public key DDTV tidak valid.", it) }
             val publicKey = runCatching {
                 KeyFactory.getInstance("RSA")
@@ -98,6 +97,89 @@ internal data class DdtvProtocolProfile(
 
             return DdtvProtocolProfile(version, envelope, key, publicKey, bootstrap)
         }
+    }
+}
+
+internal object DdtvBase64 {
+    private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    private val reverse = IntArray(128) { -1 }.also { table ->
+        ALPHABET.forEachIndexed { index, char -> table[char.code] = index }
+    }
+
+    fun encode(input: ByteArray): String {
+        if (input.isEmpty()) return ""
+        val output = StringBuilder(((input.size + 2) / 3) * 4)
+        var index = 0
+        while (index < input.size) {
+            val first = input[index].toInt() and 0xff
+            val hasSecond = index + 1 < input.size
+            val hasThird = index + 2 < input.size
+            val second = if (hasSecond) input[index + 1].toInt() and 0xff else 0
+            val third = if (hasThird) input[index + 2].toInt() and 0xff else 0
+
+            output.append(ALPHABET[first ushr 2])
+            output.append(ALPHABET[((first and 0x03) shl 4) or (second ushr 4)])
+            output.append(if (hasSecond) ALPHABET[((second and 0x0f) shl 2) or (third ushr 6)] else '=')
+            output.append(if (hasThird) ALPHABET[third and 0x3f] else '=')
+            index += 3
+        }
+        return output.toString()
+    }
+
+    fun decode(input: String): ByteArray {
+        val compact = input.filterNot(Char::isWhitespace)
+        if (compact.isEmpty()) return ByteArray(0)
+        if (compact.length % 4 == 1) throw IllegalArgumentException("Invalid Base64 length")
+        val normalized = when (compact.length % 4) {
+            2 -> compact + "=="
+            3 -> compact + "="
+            else -> compact
+        }
+        val padding = when {
+            normalized.endsWith("==") -> 2
+            normalized.endsWith("=") -> 1
+            else -> 0
+        }
+        val output = ByteArray(normalized.length / 4 * 3 - padding)
+        var outputIndex = 0
+        var inputIndex = 0
+        while (inputIndex < normalized.length) {
+            val lastBlock = inputIndex + 4 == normalized.length
+            val c0 = normalized[inputIndex]
+            val c1 = normalized[inputIndex + 1]
+            val c2 = normalized[inputIndex + 2]
+            val c3 = normalized[inputIndex + 3]
+            val v0 = valueOf(c0)
+            val v1 = valueOf(c1)
+            val v2 = if (c2 == '=') 0 else valueOf(c2)
+            val v3 = if (c3 == '=') 0 else valueOf(c3)
+
+            if (c0 == '=' || c1 == '=' ||
+                (!lastBlock && (c2 == '=' || c3 == '=')) ||
+                (c2 == '=' && c3 != '=') ||
+                (c2 == '=' && padding != 2) ||
+                (c3 == '=' && padding == 0)
+            ) throw IllegalArgumentException("Invalid Base64 padding")
+
+            if (outputIndex < output.size) {
+                output[outputIndex++] = ((v0 shl 2) or (v1 ushr 4)).toByte()
+            }
+            if (c2 != '=' && outputIndex < output.size) {
+                output[outputIndex++] = (((v1 and 0x0f) shl 4) or (v2 ushr 2)).toByte()
+            }
+            if (c3 != '=' && outputIndex < output.size) {
+                output[outputIndex++] = (((v2 and 0x03) shl 6) or v3).toByte()
+            }
+            inputIndex += 4
+        }
+        return output
+    }
+
+    private fun valueOf(char: Char): Int {
+        if (char.code >= reverse.size || reverse[char.code] < 0) {
+            throw IllegalArgumentException("Invalid Base64 character")
+        }
+        return reverse[char.code]
     }
 }
 
@@ -134,14 +216,14 @@ internal object DdtvProtocolCodec {
         val envelope = ByteArray(iv.size + encrypted.size)
         System.arraycopy(iv, 0, envelope, 0, iv.size)
         System.arraycopy(encrypted, 0, envelope, iv.size, encrypted.size)
-        return Base64.encodeToString(envelope, Base64.NO_WRAP)
+        return DdtvBase64.encode(envelope)
     }
 
     fun decryptPayload(encoded: String, key: ByteArray): String {
         if (encoded.length > MAX_PLAINTEXT_BYTES) {
             throw IOException("Respons DDTV terlalu besar.")
         }
-        val envelope = runCatching { Base64.decode(encoded, Base64.DEFAULT) }
+        val envelope = runCatching { DdtvBase64.decode(encoded) }
             .getOrElse { throw IOException("Envelope respons DDTV bukan Base64 yang valid.", it) }
         if (envelope.size < IV_BYTES + AES_BLOCK_BYTES ||
             (envelope.size - IV_BYTES) % AES_BLOCK_BYTES != 0
@@ -174,7 +256,7 @@ internal object DdtvProtocolCodec {
         val plainText = decryptPayload(response.getString("data"), key)
         val signatureText = response.optString("s", "")
         if (signatureText.isNotEmpty()) {
-            val signatureBytes = runCatching { Base64.decode(signatureText, Base64.DEFAULT) }
+            val signatureBytes = runCatching { DdtvBase64.decode(signatureText) }
                 .getOrElse { throw IOException("Tanda tangan respons DDTV bukan Base64 yang valid.", it) }
             val verifier = Signature.getInstance("SHA256withRSA")
             verifier.initVerify(publicKey)
