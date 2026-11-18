@@ -175,6 +175,7 @@ fun HomeScreen(
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
     var showQuickActions by rememberSaveable { mutableStateOf(false) }
     var showDdtvPrototypeDialog by rememberSaveable { mutableStateOf(false) }
+    var ddtvSourceFilter by rememberSaveable { mutableStateOf("ALL") }
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
     val appContext = LocalContext.current
     val embeddedModuleManager = remember(appContext) { EmbeddedModuleManager(appContext) }
@@ -1738,36 +1739,95 @@ fun HomeScreen(
     }
 
     if (showDdtvPrototypeDialog) {
+        val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds) {
+            mediaList.filter { item ->
+                when (ddtvSourceFilter) {
+                    "DRIVE" -> MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
+                    "CLOUDSTREAM" -> item.sourceType.equals("CLOUDSTREAM", ignoreCase = true)
+                    "FILE" -> item.sourceType.contains("LOCAL", ignoreCase = true) ||
+                        item.sourceType.contains("FILE", ignoreCase = true)
+                    "SERVER" -> item.sourceType.contains("SERVER", ignoreCase = true)
+                    else -> true
+                }
+            }.take(40)
+        }
         AlertDialog(
             onDismissRequest = {
                 showDdtvPrototypeDialog = false
                 embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
             },
-            title = { Material3Text("DDTV Experimental") },
+            title = { Material3Text("DDTV") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Material3Text("DDTV Experimental • Embedded Module Host")
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.1.0"}")
                     Material3Text(
-                        "Status: ${if (ddtvModuleState?.running == true) "Berjalan" else "Berhenti"} • v${ddtvModuleState?.metadata?.version ?: "0.1.0"} • API ${ddtvModuleState?.metadata?.apiVersion ?: 1}",
+                        "Pilih sumber media NSiO untuk dibuka melalui player utama.",
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("ALL" to "Semua", "DRIVE" to "Drive", "CLOUDSTREAM" to "CloudStream").forEach { (key, label) ->
+                            TextButton(onClick = { ddtvSourceFilter = key }) {
+                                Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("FILE" to "File", "SERVER" to "Server").forEach { (key, label) ->
+                            TextButton(onClick = { ddtvSourceFilter = key }) {
+                                Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
+                            }
+                        }
+                    }
+                    if (ddtvVisibleMedia.isEmpty()) {
+                        Material3Text(
+                            when (ddtvSourceFilter) {
+                                "DRIVE" -> "Belum ada media Google Drive di katalog. Tambahkan tautan Drive melalui menu Extension atau daftar sumber."
+                                "CLOUDSTREAM" -> "Belum ada konten CloudStream yang tersedia di katalog."
+                                "FILE" -> "Belum ada file lokal yang terdaftar di katalog NSiO."
+                                "SERVER" -> "Belum ada media Server yang terdaftar di katalog NSiO."
+                                else -> "Katalog media masih kosong. Tambahkan sumber media terlebih dahulu."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        ddtvVisibleMedia.forEach { mediaItem ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                                    .clickable {
+                                        viewModel.playMedia(mediaItem)
+                                        showDdtvPrototypeDialog = false
+                                        embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+                                    }
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Material3Text(mediaItem.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Material3Text(
+                                    mediaItem.sourceType.ifBlank { "Sumber media" },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     Material3Text(
-                        "Prototype native ini belum terhubung ke server, protokol, atau payload DDTV MONYET PRO.",
-                        style = MaterialTheme.typography.bodySmall
+                        "Status host: ${if (ddtvModuleState?.running == true) "Aktif" else "Berhenti"} • API ${ddtvModuleState?.metadata?.apiVersion ?: 1}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Material3Text(
-                        if (ddtvHostSources.isEmpty())
-                            "Adapter host belum aktif. Slot integrasi tersedia untuk Drive, CloudStream, File Manager, dan Server."
-                        else
-                            "Adapter aktif: ${ddtvHostSources.joinToString { it.name }}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Material3Text(
-                        "Penyimpanan modul terpisah. Player utama dan MultiView tidak diubah.",
-                        style = MaterialTheme.typography.bodySmall
+                        "Catatan: ini adalah pusat sumber media NSiO bergaya DDTV. Server, protokol, dan payload asli MONYET PRO belum terhubung.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     ddtvModuleState?.lastError?.let {
-                        Material3Text("Error terakhir: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Material3Text("Error: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             },
@@ -1785,7 +1845,7 @@ fun HomeScreen(
                     TextButton(onClick = {
                         showDdtvPrototypeDialog = false
                         embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
-                    }) { Material3Text("Tutup Modul") }
+                    }) { Material3Text("Tutup") }
                 }
             }
         )
