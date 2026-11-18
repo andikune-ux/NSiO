@@ -1667,8 +1667,6 @@ fun HomeScreen(
                     }
                 }
             }
-        }
-    }
 
     if (showCloudStreamOrderDialog) {
         val orderedIds = orderedCloudStreamPluginFilters.map { it.first }
