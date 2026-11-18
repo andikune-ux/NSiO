@@ -1866,7 +1866,7 @@ fun HomeScreen(
                     try {
                         val videoType = video.optInt("video_type", category.videoType)
                         val detail = embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
-                        val stream = embeddedModuleManager.resolveDdtvStreams(detail).firstOrNull()
+                        val stream = embeddedModuleManager.resolveDdtvStreams(video, detail).firstOrNull()
                             ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
                         val headers = stream.headers.entries.joinToString("&") { "${it.key}=${it.value}" }
                         val title = sequenceOf("title", "name", "video_name")

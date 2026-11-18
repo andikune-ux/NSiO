@@ -61,8 +61,8 @@ class DdtvModule : EmbeddedModule {
     suspend fun fetchDetail(videoId: Long, videoType: Int): JSONObject =
         serverClient?.fetchDetail(videoId, videoType) ?: throw IllegalStateException("DDTV module belum diinisialisasi.")
 
-    fun resolveStreams(detail: JSONObject): List<DdtvStream> =
-        serverClient?.resolveStreams(detail) ?: throw IllegalStateException("DDTV module belum diinisialisasi.")
+    fun resolveStreams(video: JSONObject, detail: JSONObject): List<DdtvStream> =
+        serverClient?.resolveStreams(video, detail) ?: throw IllegalStateException("DDTV module belum diinisialisasi.")
 
     fun availableMediaSources(): Set<ModuleMediaSource> =
         mediaBridge?.availableSources().orEmpty()

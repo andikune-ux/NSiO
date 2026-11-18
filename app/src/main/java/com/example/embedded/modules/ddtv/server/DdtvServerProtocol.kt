@@ -275,16 +275,16 @@ internal object DdtvServerUrlPolicy {
 }
 
 internal object DdtvStreamResolver {
-    fun resolve(detail: JSONObject): List<DdtvStream> {
-        val code = DdtvServerUrlPolicy.validateVideoCode(detail.optString("code", ""))
+    fun resolve(video: JSONObject, detail: JSONObject): List<DdtvStream> {
+        val code = DdtvServerUrlPolicy.validateVideoCode(video.optString("code", ""))
         val domains = linkedSetOf<String>()
-        val domainArray = detail.optJSONArray("domains")
+        val domainArray = video.optJSONArray("domains")
         if (domainArray != null) {
             for (index in 0 until minOf(domainArray.length(), 32)) {
                 domainArray.optString(index, "").takeIf { it.isNotBlank() }?.let(domains::add)
             }
         }
-        detail.optString("domain", "").takeIf { it.isNotBlank() }?.let(domains::add)
+        video.optString("domain", "").takeIf { it.isNotBlank() }?.let(domains::add)
         if (domains.isEmpty()) throw IOException("Alamat streaming DDTV belum tersedia.")
 
         val signature = detail.optString("sig", "")

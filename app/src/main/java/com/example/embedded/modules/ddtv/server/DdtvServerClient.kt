@@ -76,7 +76,7 @@ class DdtvServerClient(context: Context) {
                 ?: throw IOException("Detail video DDTV tidak valid.")
         }
 
-    fun resolveStreams(detail: JSONObject): List<DdtvStream> = DdtvStreamResolver.resolve(detail)
+    fun resolveStreams(video: JSONObject, detail: JSONObject): List<DdtvStream> = DdtvStreamResolver.resolve(video, detail)
 
     private fun invokeMethod(method: String, data: JSONObject): Any {
         val request = JSONObject()

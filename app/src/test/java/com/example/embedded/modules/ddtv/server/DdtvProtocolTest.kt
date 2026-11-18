@@ -84,8 +84,8 @@ class DdtvProtocolTest {
         val streams = DdtvStreamResolver.resolve(
             JSONObject()
                 .put("code", "movie_123")
-                .put("domains", JSONArray().put("media.example.test"))
-                .put("sig", "signature-token")
+                .put("domains", JSONArray().put("media.example.test")),
+            JSONObject().put("sig", "signature-token")
         )
 
         assertEquals(1, streams.size)

@@ -64,8 +64,8 @@ class EmbeddedModuleManager(
     suspend fun fetchDdtvDetail(videoId: Long, videoType: Int): JSONObject =
         activeDdtvModule().fetchDetail(videoId, videoType)
 
-    fun resolveDdtvStreams(detail: JSONObject): List<DdtvStream> =
-        activeDdtvModule().resolveStreams(detail)
+    fun resolveDdtvStreams(video: JSONObject, detail: JSONObject): List<DdtvStream> =
+        activeDdtvModule().resolveStreams(video, detail)
 
     suspend fun openMedia(request: com.example.embedded.api.ModuleMediaRequest) =
         mediaBridge.open(request)
