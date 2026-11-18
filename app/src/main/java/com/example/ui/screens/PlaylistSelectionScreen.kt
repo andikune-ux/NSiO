@@ -50,10 +50,10 @@ fun PlaylistSelectionScreen(
     val drivePlaylists = remember(playlists, mediaItems) {
         playlists.filter { playlist ->
             playlist.sourceType.equals("DRIVE", ignoreCase = true) ||
-                com.example.data.extractor.MediaSourceClassifier.isGoogleDriveUrl(playlist.url) ||
+                com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(playlist.url) ||
                 mediaItems.any { item ->
                     item.playlistId == playlist.id &&
-                        com.example.data.extractor.MediaSourceClassifier.isDriveMedia(item)
+                        com.example.data.model.MediaSourceClassifier.isDriveMedia(item)
                 }
         }.sortedBy { it.name.lowercase() }
     }
