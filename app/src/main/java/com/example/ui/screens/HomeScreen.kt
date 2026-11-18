@@ -2013,7 +2013,7 @@ fun HomeScreen(
                                         enabled = !ddtvServerLoading,
                                         onClick = { loadDdtvCategory(category) },
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(50))
+                                            .clip(CircleShape)
                                             .background(
                                                 if (selected) MaterialTheme.colorScheme.primaryContainer
                                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
