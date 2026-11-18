@@ -104,11 +104,11 @@ fun BottomNavGlassBar(
                     onClick = { onNavigate(NavDestination.HOME) }
                 )
                 BottomNavItem(
-                    title = "Extension",
+                    title = "Manajemen Sumber",
                     selectedIcon = Icons.Filled.Extension,
                     unselectedIcon = Icons.Outlined.Extension,
                     isSelected = currentDestination == NavDestination.EXTENSION,
-                    testTag = "bottom_nav_extension",
+                    testTag = "bottom_nav_source_management",
                     index = 1,
                     focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
