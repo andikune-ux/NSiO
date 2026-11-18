@@ -131,13 +131,13 @@ fun SourceManagementScreen(
         // Header Title
         Column(modifier = Modifier.padding(bottom = 8.dp)) {
             Text(
-                text = "Menu Extension",
+                text = "Daftar Playlist",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Pusat Manajemen Sumber Konten Video, Foto & Ekstensi CloudStream",
+                text = "Kelola playlist, sumber konten, dan plugin CloudStream dalam satu tempat.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
