@@ -1868,7 +1868,6 @@ fun HomeScreen(
                         val detail = embeddedModuleManager.fetchDdtvDetail(videoId, videoType)
                         val stream = embeddedModuleManager.resolveDdtvStreams(video, detail).firstOrNull()
                             ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
-                        val headers = stream.headers.entries.joinToString("&") { "${it.key}=${it.value}" }
                         val title = sequenceOf("title", "name", "video_name")
                             .map { video.optString(it, "").trim() }
                             .firstOrNull { it.isNotBlank() }
@@ -1877,8 +1876,8 @@ fun HomeScreen(
                             .map { video.optString(it, "").trim() }
                             .firstOrNull { it.isNotBlank() }
                             .orEmpty()
-                        viewModel.playMedia(
-                            MediaItem(
+                        viewModel.playDdtvMedia(
+                            item = MediaItem(
                                 id = "ddtv:$videoId:${System.currentTimeMillis()}",
                                 profileId = activeProfile?.id ?: "ddtv",
                                 title = title,
@@ -1886,9 +1885,10 @@ fun HomeScreen(
                                 thumbnailUrl = thumbnail,
                                 type = "VIDEO",
                                 sourceType = "DDTV",
-                                category = category.name,
-                                extraInfo = headers
-                            )
+                                category = category.name
+                            ),
+                            headers = stream.headers,
+                            streamType = stream.manifestType
                         )
                         showDdtvPrototypeDialog = false
                         embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
