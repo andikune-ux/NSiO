@@ -1617,6 +1617,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Resolve a saved or freshly searched CloudStream item for an independent Multiview slot.
+     * Uses the installed plugin runtime already owned by NSiO.
+     */
+    suspend fun resolveCloudStreamForMultiview(item: MediaItem): List<com.example.data.plugin.CloudStreamStream> {
+        require(item.sourceType == "CLOUDSTREAM") { "Item bukan sumber CloudStream." }
+        require(item.pluginId.isNotBlank()) { "ID plugin asal tidak tersedia." }
+        val entry = pluginManager.findCloudStreamPlugin(item.pluginId)
+            ?: throw IllegalStateException("Plugin asal tidak ditemukan atau belum terpasang.")
+        val metadata = runCatching { org.json.JSONObject(item.extraInfo) }.getOrNull()
+        val providerName: String = metadata?.optString("providerName")
+            ?.takeIf { it.isNotBlank() }
+            ?: item.extraInfo.takeIf { metadata == null && it.isNotBlank() }
+            ?: throw IllegalStateException("Nama provider CloudStream tidak tersedia.")
+        val playbackData = metadata?.optString("playbackData")
+            ?.takeIf { it.isNotBlank() }
+            ?: run {
+                val content = pluginManager.loadCloudStreamContent(entry, providerName, item.url)
+                content.dataUrl?.takeIf { it.isNotBlank() }
+                    ?: content.episodes.firstOrNull()?.data?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("Provider tidak menyediakan data pemutaran.")
+            }
+        return pluginManager.loadCloudStreamLinks(entry, providerName, playbackData)
+            .filter { it.url.isNotBlank() }
+            .distinctBy { it.url to it.referer }
+            .sortedWith(compareByDescending<com.example.data.plugin.CloudStreamStream> { it.quality }.thenBy { it.name })
+            .also { streams ->
+                if (streams.isEmpty()) throw IllegalStateException("Plugin tidak menemukan stream yang dapat diputar.")
+            }
+    }
+
     // --- Player Management ---
     /**
      * Opens NSiO's normal PlayerScreen for a resolved external/CloudStream stream.

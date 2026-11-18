@@ -69,6 +69,7 @@ import com.example.ui.components.NavDestination
 import com.example.ui.components.VerticalNavToolbar
 import com.example.ui.screens.ExtensionScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SettingsScreen
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
     private var isPipMode by mutableStateOf(false)
     @Volatile private var coreStarted = false
 
+    @androidx.media3.common.util.UnstableApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -215,6 +217,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean) {
     val context = LocalContext.current
@@ -225,6 +228,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
     val statusMessage by viewModel.statusMessage.collectAsState()
     var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
     var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
+    var showMultiview by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(settings.displayMode) {
@@ -249,7 +253,9 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
             Box(Modifier.fillMaxSize()) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
-                if (currentlyPlaying != null) {
+                if (showMultiview) {
+                    MultiviewScreen(viewModel = viewModel, onClose = { showMultiview = false })
+                } else if (currentlyPlaying != null) {
                     PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() }, isInPipMode = isPipMode)
                 } else {
                     Scaffold(
@@ -262,13 +268,13 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
                             if (isLandscape) {
                                 Box(Modifier.fillMaxSize()) {
-                                    AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                    AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
                                     VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize()) {
                                     Box(Modifier.fillMaxSize().padding(bottom = 48.05.dp)) {
-                                        AppNavContent(currentNav, viewModel, devMode) { currentNav = it }
+                                        AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
                                     }
                                     BottomNavSafeAreaGlass(Modifier.align(Alignment.BottomCenter))
                                     BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter))
@@ -420,7 +426,8 @@ private fun AppNavContent(
     destination: NavDestination,
     viewModel: MainViewModel,
     devMode: Boolean,
-    onNavigate: (NavDestination) -> Unit
+    onNavigate: (NavDestination) -> Unit,
+    onNavigateToMultiview: () -> Unit
 ) {
     AnimatedContent(
         targetState = destination,
@@ -431,7 +438,8 @@ private fun AppNavContent(
         when (targetDest) {
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
-                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) }
+                onNavigateToExtension = { onNavigate(NavDestination.EXTENSION) },
+                onNavigateToMultiview = onNavigateToMultiview
             )
             NavDestination.EXTENSION -> ExtensionScreen(
                 viewModel = viewModel,

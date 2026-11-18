@@ -43,7 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash .github/scripts/compute-nsio-version.sh
+          TAG_VERSION="${RELEASE_TAG#v.}"
+          NSIO_BUILD_NUMBER="${TAG_VERSION##*.}" bash .github/scripts/compute-nsio-version.sh
           test "$RELEASE_TAG" = "$NSIO_VERSION_TAG"
           CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$CURRENT_MAIN" = "$GITHUB_SHA"
