@@ -1578,6 +1578,7 @@ fun HomeScreen(
                                     .padding(8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // Daftar Playlist is separate from the source-management tabs inside the screen.
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
