@@ -72,11 +72,9 @@ open class Plugin : BasePlugin() {
 class PluginManager(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("nsio_plugins_prefs", Context.MODE_PRIVATE)
 
-    companion object {
-        private const val NSFW_CATALOG_ENABLED_KEY = "nsfw_catalog_enabled"
-    }
     private val cloudStreamRuntime = CloudStreamPluginRuntime(context)
     companion object {
+        private const val NSFW_CATALOG_ENABLED_KEY = "nsfw_catalog_enabled"
         private const val MAX_CLOUDSTREAM_ARTIFACT_BYTES = 128L * 1024L * 1024L
         const val PLUGINS_KEY = "installed_online_plugins"
         const val PLUGINS_KEY_LOCAL = "installed_local_plugins"
