@@ -109,7 +109,7 @@ object DdtvContentFields {
 
     private fun normalizeImageUrl(raw: String, source: JSONObject): String? {
         val value = raw.replace("&amp;", "&").trim()
-        if (value.length > 8_192 || value.contains('\\n') || value.contains('\\r')) return null
+        if (value.length > 8_192 || value.contains('\n') || value.contains('\r')) return null
         val absolute = when {
             value.startsWith("https://", true) -> value
             value.startsWith("//") -> "https:$value"
