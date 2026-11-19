@@ -220,7 +220,6 @@ fun HomeScreen(
     }
     val embeddedModuleStates by embeddedModuleManager.states.collectAsState()
     val ddtvModuleState = embeddedModuleStates.firstOrNull { it.metadata.id == "dev.andikune.nsio.ddtv" }
-    val ddtvHostSources = remember(embeddedModuleManager) { embeddedModuleManager.availableMediaSources() }
 
     val ddtvLocalFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1675,7 +1674,7 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
                                         .clickable {
                                             showQuickActions = false
-                                             ddtvSourceFilter = "SERVER"
+                                            ddtvSourceFilter = "SERVER"
                                             runCatching {
                                                 embeddedModuleManager.start("dev.andikune.nsio.ddtv")
                                                 showDdtvPrototypeDialog = true
