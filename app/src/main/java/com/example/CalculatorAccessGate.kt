@@ -383,6 +383,7 @@ object SecretCodeRegistry {
     val entries = listOf(
         Entry("000", "Daftar kode rahasia", "Menampilkan daftar kode yang tersedia"),
         Entry("101", "Developer diagnostics", "Menampilkan panel diagnostik aplikasi dan status komponen nyata"),
+        Entry("102", "Pembaruan aplikasi", "Memeriksa update NSiO dan membuka popup untuk mengunduh versi terbaru"),
         Entry("103", "Panduan gestur", "Menampilkan panduan gestur dan navigasi"),
         Entry("104", "Mode tampilan", "Mengganti mode tampilan NSiO"),
         Entry("111", "Riwayat crash", "Menampilkan log crash terakhir"),
