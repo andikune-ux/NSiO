@@ -82,8 +82,8 @@ fun BottomNavGlassBar(
                 .fillMaxWidth()
                 .height(48.dp)
                 .clip(navShape)
-                .background(Color.White)
-                .border(1.dp, Color.White.copy(alpha = 0.62f), navShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f), navShape)
                 .padding(horizontal = 4.dp)
                 .testTag("bottom_nav_glass_bar")
         ) {
@@ -163,8 +163,8 @@ private fun BottomNavItem(
 
     val iconColor by animateColorAsState(
         targetValue = when {
+            isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
             isSelected -> MaterialTheme.colorScheme.primary
-            isFocused -> Color.White
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "bottom_nav_icon_color"
@@ -172,8 +172,8 @@ private fun BottomNavItem(
 
     val textColor by animateColorAsState(
         targetValue = when {
+            isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
             isSelected -> MaterialTheme.colorScheme.primary
-            isFocused -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         label = "bottom_nav_text_color"
@@ -183,7 +183,11 @@ private fun BottomNavItem(
         modifier = modifier
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            
+            .background(
+                if (isFocused) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent,
+                RoundedCornerShape(16.dp)
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -196,7 +200,7 @@ private fun BottomNavItem(
             }
             .focusable(interactionSource = interactionSource)
             .then(
-                if (isFocused) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(16.dp)) else Modifier
+                if (isFocused) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)) else Modifier
             )
             .semantics {
                 role = Role.Button
