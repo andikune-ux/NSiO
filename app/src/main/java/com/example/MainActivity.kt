@@ -97,6 +97,10 @@ class MainActivity : ComponentActivity() {
             var shortcutUpdateChecking by remember { mutableStateOf(false) }
             var shortcutUpdateRelease by remember { mutableStateOf<AppUpdateManager.Release?>(null) }
             var shortcutUpdateMessage by remember { mutableStateOf<String?>(null) }
+            var shortcutDownloadId by remember { mutableStateOf(AppUpdateManager.pendingDownloadId(context)) }
+            var shortcutDownloadVersion by remember { mutableStateOf(AppUpdateManager.pendingVersion(context)) }
+            var shortcutReadyVersion by remember { mutableStateOf<String?>(null) }
+            var shortcutDownloadProgress by remember { mutableStateOf(0) }
             val context = LocalContext.current
 
             if (!unlocked) {
@@ -189,11 +193,11 @@ class MainActivity : ComponentActivity() {
                                     shortcutUpdateMessage = "Izinkan akses penyimpanan NSiO, lalu ketik 102= kembali untuk mengunduh."
                                 } else {
                                     runCatching { AppUpdateManager.startDownload(context, release) }
-                                        .onSuccess { id -> shortcutUpdateMessage = "Unduhan v${release.latestVersion} dimulai. ID unduhan: $id. Pantau notifikasi Android." }
+                                        .onSuccess { id -> shortcutDownloadId = id; shortcutDownloadVersion = release.latestVersion; shortcutReadyVersion = null; shortcutDownloadProgress = 0; shortcutUpdateMessage = "Unduhan v${release.latestVersion} dimulai..." }
                                         .onFailure { shortcutUpdateMessage = "Gagal memulai unduhan: ${it.localizedMessage ?: "periksa izin dan koneksi"}" }
                                 }
                             }) { Text("DOWNLOAD") }
-                        } else if (shortcutUpdateChecking) {
+                        } else if (shortcutDownloadId != null) {\n                            Button(onClick = {}, enabled = false) { Text("MENGUNDUH $shortcutDownloadProgress%") }\n                        } else if (shortcutUpdateChecking) {
                             Button(onClick = {}, enabled = false) { Text("MEMERIKSA...") }
                         } else {
                             Button(onClick = { showShortcutUpdatePopup = false }) { Text("TUTUP") }
