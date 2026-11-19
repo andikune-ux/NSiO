@@ -259,17 +259,19 @@ fun HomeScreen(
         }
     }
     var expandedPlaylistCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var expandedCatalogKey by rememberSaveable { mutableStateOf<String?>(null) }
     var showCloudStreamOrderDialog by rememberSaveable { mutableStateOf(false) }
     var pendingPlaylistFilter by remember { mutableStateOf<String?>(null) }
     var expandedSourceType by rememberSaveable { mutableStateOf<String?>(null) }
     val expandedSearchFocusRequester = remember { FocusRequester() }
 
     // Intercept back button to close the floating curtain if open
-    BackHandler(enabled = isSearchExpanded || showQuickActions || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null) {
+    BackHandler(enabled = isSearchExpanded || showQuickActions || showPlaylistPicker || showCloudStreamOrderDialog || expandedSourceType != null || expandedPlaylistCategory != null || expandedCatalogKey != null) {
         when {
             showCloudStreamOrderDialog -> showCloudStreamOrderDialog = false
             showQuickActions -> showQuickActions = false
             expandedPlaylistCategory != null -> expandedPlaylistCategory = null
+            expandedCatalogKey != null -> expandedCatalogKey = null
             showPlaylistPicker -> showPlaylistPicker = false
             isSearchExpanded -> isSearchExpanded = false
             else -> expandedSourceType = null
@@ -760,7 +762,10 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { expandedSourceType = if (expandedSourceType == sourceType) null else sourceType }
+                                        .clickable {
+                                            expandedCatalogKey = null
+                                            expandedSourceType = if (expandedSourceType == sourceType) null else sourceType
+                                        }
                                         .padding(top = 10.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -835,6 +840,8 @@ fun HomeScreen(
                                     val pluginId = sectionKey.first
                                     val sectionName = sectionKey.second
                                     val sectionItems = memberships.map { it.second }.distinctBy { it.id }
+                                    val sectionCatalogKey = "cloudstream:${pluginId}:${sectionName}"
+                                    val isSectionExpanded = expandedSourceType == sourceType || expandedCatalogKey == sectionCatalogKey
                                     val pluginName = pluginNames[pluginId] ?: sectionItems.firstOrNull()?.extraInfo.orEmpty()
                                     item(
                                         key = "cloudstream_section_header_${pluginId}_${sectionName}",
@@ -864,14 +871,29 @@ fun HomeScreen(
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                             }
-                                            Text(
-                                                text = "${sectionItems.size}",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(
+                                                    text = "${sectionItems.size}",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = if (expandedCatalogKey == sectionCatalogKey) "Tutup" else "Lihat semua",
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clickable {
+                                                            expandedCatalogKey = if (expandedCatalogKey == sectionCatalogKey) null else sectionCatalogKey
+                                                        }
+                                                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                                                        .testTag("see_all_cloudstream_${pluginId}_${sectionName.hashCode()}"),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                         }
                                     }
-                                    if (expandedSourceType == sourceType) {
+                                    if (isSectionExpanded) {
                                         items(
                                             items = sectionItems,
                                             key = { "${pluginId}_${sectionName}_${it.id}" },
@@ -927,6 +949,8 @@ fun HomeScreen(
                                             playlistNames[playlistId]?.lowercase().orEmpty().ifBlank { playlistId.lowercase() }
                                         })
                                 playlistGroups.forEach { (playlistId, playlistItems) ->
+                                    val playlistCatalogKey = "playlist:${sourceType}:${playlistId}"
+                                    val isPlaylistExpanded = expandedSourceType == sourceType || expandedCatalogKey == playlistCatalogKey
                                     val playlistTitle = if (playlistId == "__no_playlist__") {
                                         "Item tanpa playlist"
                                     } else {
@@ -951,14 +975,29 @@ fun HomeScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(
-                                                text = "${playlistItems.size}",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(
+                                                    text = "${playlistItems.size}",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = if (expandedCatalogKey == playlistCatalogKey) "Tutup" else "Lihat semua",
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clickable {
+                                                            expandedCatalogKey = if (expandedCatalogKey == playlistCatalogKey) null else playlistCatalogKey
+                                                        }
+                                                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                                                        .testTag("see_all_playlist_${sourceType}_${playlistId.hashCode()}"),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                         }
                                     }
-                                    if (expandedSourceType == sourceType) {
+                                    if (isPlaylistExpanded) {
                                         items(
                                             items = playlistItems,
                                             key = { it.id },
