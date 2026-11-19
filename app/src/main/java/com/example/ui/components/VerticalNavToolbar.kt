@@ -192,12 +192,18 @@ private fun NavToolbarGlassItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    val isDark = (MaterialTheme.colorScheme.background.red + MaterialTheme.colorScheme.background.green + MaterialTheme.colorScheme.background.blue) < 1.5f
-    val buttonSurface = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White
+    val buttonSurface by animateColorAsState(
+        targetValue = when {
+            isFocused -> MaterialTheme.colorScheme.primaryContainer
+            isSelected -> MaterialTheme.colorScheme.surfaceContainerHigh
+            else -> MaterialTheme.colorScheme.surface
+        },
+        label = "nav_button_surface"
+    )
 
     val contentColor by animateColorAsState(
         targetValue = when {
-            isFocused -> Color.White
+            isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
             isSelected -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
@@ -214,7 +220,7 @@ private fun NavToolbarGlassItem(
                 if (isFocused) {
                     Modifier.border(
                         1.5.dp,
-                        Color.White,
+                        MaterialTheme.colorScheme.primary,
                         RoundedCornerShape(12.dp)
                     )
                 } else {
