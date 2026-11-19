@@ -452,7 +452,7 @@ internal object DdtvStreamResolver {
             .replace("\\\\/", "/")
             .replace("&amp;", "&")
             .replace("&#38;", "&")
-        val matcher = Regex("""https?://[^\\s"'<>\\u0000-\\u001f]+""").findAll(normalized)
+        val matcher = Regex("""https?://[^\s"'<>#]+""").findAll(normalized)
         matcher.forEach { match ->
             if (output.size < 32) {
                 output.add(match.value.trimEnd(',', ';', ')', ']', '}'))
