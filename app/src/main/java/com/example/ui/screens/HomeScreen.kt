@@ -2146,20 +2146,32 @@ fun HomeScreen(
                         if (ddtvDetailVideo != null) {
                             val selectedVideo = ddtvDetailVideo!!
                             val selectedDetail = ddtvDetailPayload
-                            val selectedId = selectedVideo.optLong("id", selectedVideo.optLong("video_id", 0L))
+                            val selectedId = DdtvContentFields.id(selectedVideo)
                             val selectedTitle = DdtvContentFields.title(selectedVideo, selectedId)
                             val selectedPoster = DdtvContentFields.imageUrl(selectedVideo, ddtvDetailPayload)
                             TextButton(onClick = { ddtvDetailVideo = null; ddtvDetailPayload = null }) {
                                 Material3Text("‹ Kembali ke daftar")
                             }
-                            if (selectedPoster.isNotBlank()) {
-                                AsyncImage(
-                                    model = selectedPoster,
-                                    contentDescription = selectedTitle,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxWidth().height(210.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                )
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(230.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                if (selectedPoster.isNotBlank()) {
+                                    AsyncImage(
+                                        model = selectedPoster,
+                                        contentDescription = selectedTitle,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Movie,
+                                        contentDescription = "Poster belum tersedia",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.align(Alignment.Center).size(42.dp)
+                                    )
+                                }
                             }
                             Material3Text(selectedTitle, style = MaterialTheme.typography.headlineSmall)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
