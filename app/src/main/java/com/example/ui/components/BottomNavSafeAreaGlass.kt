@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun BottomNavSafeAreaGlass(modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
     val transition = rememberInfiniteTransition(label = "bottom_safe_glass")
     val reflectionPosition by transition.animateFloat(
         initialValue = -0.85f,
@@ -40,7 +41,6 @@ fun BottomNavSafeAreaGlass(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(48.05.dp)
             .drawBehind {
-                val scheme = MaterialTheme.colorScheme
                 drawRect(scheme.surface.copy(alpha = 0.90f))
                 val sweepX = size.width * reflectionPosition
                 drawRect(
