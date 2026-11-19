@@ -2066,25 +2066,6 @@ fun HomeScreen(
                         .verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("ALL" to "Semua", "DRIVE" to "Drive", "CLOUDSTREAM" to "CloudStream").forEach { (key, label) ->
-                            TextButton(onClick = { ddtvSourceFilter = key }) {
-                                Material3Text(if (ddtvSourceFilter == key) "• $label" else label)
-                            }
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { ddtvSourceFilter = "FILE" }) {
-                            Material3Text(if (ddtvSourceFilter == "FILE") "• File" else "File")
-                        }
-                        TextButton(onClick = {
-                            ddtvSourceFilter = "SERVER"
-                            if (ddtvServerCategories.isEmpty()) connectDdtvServer()
-                        }) {
-                            Material3Text(if (ddtvSourceFilter == "SERVER") "• DDTV Server" else "DDTV Server")
-                        }
-                    }
-
                     if (ddtvSourceFilter == "SERVER") {
                         Material3Text(
                             "Jelajahi katalog DDTV dan pilih konten untuk melihat detail atau memutarnya.",
@@ -2092,7 +2073,7 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         TextButton(enabled = !ddtvServerLoading, onClick = connectDdtvServer) {
-                            Material3Text(if (ddtvServerLoading) "Menghubungkan..." else "Hubungkan / Muat Ulang Server DDTV")
+                            Material3Text(if (ddtvServerLoading) "Memuat katalog..." else "Muat Ulang Katalog")
                         }
                         Material3Text(
                             ddtvServerStatus,
