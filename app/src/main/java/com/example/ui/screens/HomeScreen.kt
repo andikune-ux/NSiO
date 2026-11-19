@@ -1675,6 +1675,7 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
                                         .clickable {
                                             showQuickActions = false
+                                             ddtvSourceFilter = "SERVER"
                                             runCatching {
                                                 embeddedModuleManager.start("dev.andikune.nsio.ddtv")
                                                 showDdtvPrototypeDialog = true
@@ -2039,7 +2040,7 @@ fun HomeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Material3Text("DDTV", style = MaterialTheme.typography.titleLarge)
                         Material3Text(
-                            "Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}",
+                            "Katalog video • streaming",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2053,7 +2054,7 @@ fun HomeScreen(
                                 ddtvLaunchError = it.localizedMessage ?: "DDTV gagal dimulai ulang."
                                 showDdtvPrototypeDialog = false
                             }
-                        }) { Material3Text("Mulai Ulang") }
+                        }) { Material3Text("Muat Ulang") }
                         TextButton(onClick = {
                             showDdtvPrototypeDialog = false
                             embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
@@ -2066,12 +2067,6 @@ fun HomeScreen(
                         .verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Material3Text("Embedded Module • v${ddtvModuleState?.metadata?.version ?: "0.2.0"}")
-                    Material3Text(
-                        "Adapter host: " + ddtvHostSources.joinToString(" • ") { it.name },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("ALL" to "Semua", "DRIVE" to "Drive", "CLOUDSTREAM" to "CloudStream").forEach { (key, label) ->
                             TextButton(onClick = { ddtvSourceFilter = key }) {
