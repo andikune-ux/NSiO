@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Photo
@@ -60,7 +61,8 @@ fun MediaGridCard(
     onLongClick: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
-    onFavorite: (() -> Unit)? = null
+    onFavorite: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -115,6 +117,20 @@ fun MediaGridCard(
                             )
                         )
                 )
+
+                onRename?.let { rename ->
+                    IconButton(
+                        onClick = rename,
+                        modifier = Modifier.align(Alignment.TopStart).padding(4.dp).size(22.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Ubah nama media",
+                            tint = Color.White.copy(alpha = 0.94f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
 
                 // Favorite control: compact icon only, without an outer pill/background.
                 IconButton(
