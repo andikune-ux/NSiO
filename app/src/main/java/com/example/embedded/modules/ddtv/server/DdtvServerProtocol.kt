@@ -33,15 +33,16 @@ data class DdtvCategory(
         fun fromJson(value: JSONObject): DdtvCategory {
             val ids = value.optJSONArray("category_id")
                 ?: value.optJSONArray("category_ids")
+                ?: value.optJSONArray("type_ids")
                 ?: JSONArray().apply {
-                    val categoryId = value.opt("category_id")?.takeUnless { it == JSONObject.NULL }
+                    val categoryId = sequenceOf("category_id", "type_id", "id").mapNotNull { key -> value.opt(key)?.takeUnless { it == JSONObject.NULL } }.firstOrNull()
                     if (categoryId != null) put(categoryId)
                 }
-            val name = sequenceOf("name", "title", "category_name", "label")
+            val name = sequenceOf("name", "title", "category_name", "type_name", "type_title", "label")
                 .map { value.optString(it, "").trim() }
                 .firstOrNull { it.isNotBlank() }
                 ?: "Kategori"
-            val id = value.optString("id", value.optString("category", "")).trim()
+            val id = sequenceOf("id", "category", "category_id", "type_id").map { value.optString(it, "").trim() }.firstOrNull { it.isNotBlank() } ?: ""
             val videoType = value.optInt("video_type", value.optInt("type", 0))
             return DdtvCategory(id, name, videoType, ids.toString(), ids.length() > 0)
         }
