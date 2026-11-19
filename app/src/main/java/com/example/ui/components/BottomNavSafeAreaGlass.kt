@@ -40,15 +40,16 @@ fun BottomNavSafeAreaGlass(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(48.05.dp)
             .drawBehind {
-                drawRect(Color.White.copy(alpha = 0.10f))
+                val scheme = MaterialTheme.colorScheme
+                drawRect(scheme.surface.copy(alpha = 0.90f))
                 val sweepX = size.width * reflectionPosition
                 drawRect(
                     brush = Brush.linearGradient(
                         colorStops = arrayOf(
                             0.00f to Color.Transparent,
-                            0.28f to Color(0xFF72D8FF).copy(alpha = 0.13f),
-                            0.48f to Color(0xFFB9A0FF).copy(alpha = 0.17f),
-                            0.66f to Color(0xFFFFC6E8).copy(alpha = 0.12f),
+                            0.30f to scheme.primary.copy(alpha = 0.10f),
+                            0.52f to scheme.secondary.copy(alpha = 0.12f),
+                            0.72f to scheme.tertiary.copy(alpha = 0.08f),
                             1.00f to Color.Transparent
                         ),
                         start = Offset(sweepX - size.width * 0.58f, 0f),
@@ -58,14 +59,14 @@ fun BottomNavSafeAreaGlass(modifier: Modifier = Modifier) {
                 drawRect(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.10f),
+                            scheme.onSurface.copy(alpha = 0.035f),
                             Color.Transparent,
-                            Color(0xFFB8DFFF).copy(alpha = 0.05f)
+                            scheme.primary.copy(alpha = 0.035f)
                         )
                     )
                 )
                 drawLine(
-                    color = Color.White.copy(alpha = 0.30f),
+                    color = scheme.outline.copy(alpha = 0.72f),
                     start = Offset(0f, 0f),
                     end = Offset(size.width, 0f),
                     strokeWidth = 0.7.dp.toPx()
