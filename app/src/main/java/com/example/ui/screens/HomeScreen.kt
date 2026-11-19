@@ -119,6 +119,7 @@ import com.example.ui.components.liquidGlassTvFocusable
 import com.example.ui.theme.CyanPrimary
 import com.example.embedded.engine.EmbeddedModuleManager
 import com.example.embedded.modules.ddtv.server.DdtvCategory
+import com.example.embedded.modules.ddtv.server.DdtvContentFields
 import org.json.JSONObject
 import com.example.embedded.api.ModuleMediaBridgeRegistry
 import com.example.embedded.api.ModuleMediaRequest
@@ -193,7 +194,7 @@ fun HomeScreen(
     var showPlaylistPicker by rememberSaveable { mutableStateOf(false) }
     var showQuickActions by rememberSaveable { mutableStateOf(false) }
     var showDdtvPrototypeDialog by rememberSaveable { mutableStateOf(false) }
-    var ddtvSourceFilter by rememberSaveable { mutableStateOf("ALL") }
+    var ddtvSourceFilter by rememberSaveable { mutableStateOf("SERVER") }
     var ddtvLaunchError by remember { mutableStateOf<String?>(null) }
     var ddtvServerStatus by rememberSaveable { mutableStateOf("Belum terhubung") }
     var ddtvServerLoading by remember { mutableStateOf(false) }
@@ -1874,6 +1875,11 @@ fun HomeScreen(
                 }
             }
         }
+        LaunchedEffect(showDdtvPrototypeDialog, ddtvSourceFilter) {
+            if (showDdtvPrototypeDialog && ddtvSourceFilter == "SERVER" &&
+                ddtvServerCategories.isEmpty() && !ddtvServerLoading
+            ) connectDdtvServer()
+        }
         val loadDdtvCategory: (DdtvCategory) -> Unit = { category ->
             if (!ddtvServerLoading) {
                 ddtvServerLoading = true
@@ -1906,7 +1912,7 @@ fun HomeScreen(
                         val nextVideos = embeddedModuleManager.fetchDdtvPage(category, nextPage)
                         if (nextVideos.isNotEmpty()) {
                             val knownIds = ddtvServerVideos.mapNotNull { item ->
-                                item.optLong("id", item.optLong("video_id", 0L)).takeIf { it > 0L }
+                                DdtvContentFields.id(item).takeIf { it > 0L }
                             }.toHashSet()
                             val uniqueNextVideos = nextVideos.filter { item ->
                                 val id = item.optLong("id", item.optLong("video_id", 0L))
@@ -1928,7 +1934,7 @@ fun HomeScreen(
         }
         val openDdtvDetail: (JSONObject) -> Unit = { video ->
             val category = ddtvSelectedCategory
-            val videoId = video.optLong("id", video.optLong("video_id", 0L))
+            val videoId = DdtvContentFields.id(video)
             if (category == null || videoId <= 0L) {
                 ddtvLaunchError = "Identitas video DDTV tidak valid."
             } else if (!ddtvServerLoading) {
@@ -1966,14 +1972,8 @@ fun HomeScreen(
                         val streams = embeddedModuleManager.resolveDdtvStreams(video, detail)
                         val stream = streams.getOrNull(ddtvSelectedStreamIndex) ?: streams.firstOrNull()
                             ?: throw IllegalStateException("Link streaming DDTV belum tersedia.")
-                        val title = sequenceOf("title", "name", "video_name")
-                            .map { video.optString(it, "").trim() }
-                            .firstOrNull { it.isNotBlank() }
-                            ?: "DDTV • Video $videoId"
-                        val thumbnail = sequenceOf("cover_url", "cover", "thumbnail", "image")
-                            .map { video.optString(it, "").trim() }
-                            .firstOrNull { it.isNotBlank() }
-                            .orEmpty()
+                        val title = DdtvContentFields.title(video, videoId)
+                        val thumbnail = DdtvContentFields.imageUrl(video, ddtvDetailPayload)
                         viewModel.playDdtvMedia(
                             item = MediaItem(
                                 id = "ddtv:$videoId:${System.currentTimeMillis()}",
@@ -2119,13 +2119,8 @@ fun HomeScreen(
                             val selectedVideo = ddtvDetailVideo!!
                             val selectedDetail = ddtvDetailPayload
                             val selectedId = selectedVideo.optLong("id", selectedVideo.optLong("video_id", 0L))
-                            val selectedTitle = sequenceOf("title", "name", "video_name")
-                                .map { selectedVideo.optString(it, "").trim() }
-                                .firstOrNull { it.isNotBlank() } ?: "Video $selectedId"
-                            val selectedPoster = sequenceOf("cover_url", "cover", "thumbnail", "image", "poster")
-                                .map { selectedVideo.optString(it, "").trim() }
-                                .firstOrNull { it.startsWith("https://", true) || it.startsWith("http://", true) }
-                                .orEmpty()
+                            val selectedTitle = DdtvContentFields.title(selectedVideo, selectedId)
+                            val selectedPoster = DdtvContentFields.imageUrl(selectedVideo, ddtvDetailPayload)
                             TextButton(onClick = { ddtvDetailVideo = null; ddtvDetailPayload = null }) {
                                 Material3Text("‹ Kembali ke daftar")
                             }
@@ -2184,33 +2179,27 @@ fun HomeScreen(
                                 }
                             }
                             selectedDetail?.let { detail ->
-                                val metadataKeys = listOf(
-                                    "description", "intro", "content", "desc", "actor", "actors",
-                                    "director", "studio", "publisher", "year", "release_date",
-                                    "duration", "runtime", "tags", "category", "views", "score", "code"
+                                val metadata = listOf(
+                                    "Deskripsi" to arrayOf("description", "intro", "content", "desc", "vod_content", "vod_blurb"),
+                                    "Pemeran" to arrayOf("actor", "actors", "vod_actor", "cast"),
+                                    "Sutradara" to arrayOf("director", "vod_director"),
+                                    "Studio" to arrayOf("studio", "publisher", "vod_publisher", "vod_studio"),
+                                    "Tahun" to arrayOf("year", "release_date", "vod_year"),
+                                    "Durasi" to arrayOf("duration", "runtime", "vod_duration", "vod_time"),
+                                    "Kategori" to arrayOf("tags", "category", "vod_class", "type_name"),
+                                    "Ditonton" to arrayOf("views", "score", "vod_hits", "vod_score"),
+                                    "Kode" to arrayOf("code", "vod_en", "vod_code")
                                 )
-                                metadataKeys.forEach { key ->
-                                    val value = detail.opt(key) ?: selectedVideo.opt(key)
-                                    if (value != null && value != JSONObject.NULL) {
-                                        val display = when (value) {
-                                            is org.json.JSONArray -> (0 until value.length())
-                                                .mapNotNull { value.opt(it)?.toString() }
-                                                .filter { it.isNotBlank() }
-                                                .joinToString(" • ")
-                                            is JSONObject -> sequenceOf("name", "title", "value")
-                                                .map { value.optString(it, "").trim() }
-                                                .firstOrNull { it.isNotBlank() }.orEmpty()
-                                            else -> value.toString()
-                                        }.trim()
-                                        if (display.isNotBlank() && display != "null") {
-                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                Material3Text(
-                                                    key.replace('_', ' ').replaceFirstChar { it.uppercase() },
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Material3Text(display, style = MaterialTheme.typography.bodyMedium)
-                                            }
+                                metadata.forEach { (label, keys) ->
+                                    val display = DdtvContentFields.metadataValue(selectedVideo, detail, *keys)
+                                    if (display.isNotBlank()) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Material3Text(
+                                                label,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Material3Text(display, style = MaterialTheme.typography.bodyMedium)
                                         }
                                     }
                                 }
@@ -2228,55 +2217,71 @@ fun HomeScreen(
                             if (ddtvServerVideos.isEmpty() && !ddtvServerLoading) {
                                 Material3Text("Pilih kategori atau muat ulang untuk mengambil daftar video.")
                             }
-                            ddtvServerVideos.forEach { video ->
-                                val videoId = video.optLong("id", video.optLong("video_id", 0L))
-                                val title = sequenceOf("title", "name", "video_name")
-                                    .map { video.optString(it, "").trim() }
-                                    .firstOrNull { it.isNotBlank() }
-                                    ?: "Video $videoId"
-                                val thumbnail = sequenceOf("cover_url", "cover", "thumbnail", "image", "poster")
-                                    .map { video.optString(it, "").trim() }
-                                    .firstOrNull { it.startsWith("https://", true) || it.startsWith("http://", true) }
-                                    .orEmpty()
+                            ddtvServerVideos.chunked(2).forEach { videoRow ->
                                 Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                                        .clickable(enabled = !ddtvServerLoading) { openDdtvDetail(video) }
-                                        .padding(10.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier.size(width = 132.dp, height = 78.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(MaterialTheme.colorScheme.surface)
-                                    ) {
-                                        if (thumbnail.isNotBlank()) {
-                                            AsyncImage(
-                                                model = thumbnail,
-                                                contentDescription = title,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
+                                    videoRow.forEach { video ->
+                                        val videoId = DdtvContentFields.id(video)
+                                        val title = DdtvContentFields.title(video, videoId)
+                                        val thumbnail = DdtvContentFields.imageUrl(video)
+                                        Column(
+                                            modifier = Modifier.weight(1f)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                                                .clickable(enabled = !ddtvServerLoading) { openDdtvDetail(video) }
+                                                .padding(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth().height(184.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(MaterialTheme.colorScheme.surface)
+                                            ) {
+                                                if (thumbnail.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = thumbnail,
+                                                        contentDescription = title,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        Icons.Default.Movie,
+                                                        contentDescription = "Thumbnail belum tersedia",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.align(Alignment.Center).size(34.dp)
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier.align(Alignment.BottomEnd)
+                                                        .padding(7.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color.Black.copy(alpha = 0.68f))
+                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                ) {
+                                                    Material3Text(
+                                                        "DDTV",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.White
+                                                    )
+                                                }
+                                            }
+                                            Material3Text(
+                                                title,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
                                             )
-                                        } else {
-                                            Icon(Icons.Default.Movie, contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.align(Alignment.Center).size(30.dp))
+                                            Material3Text(
+                                                "ID $videoId",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                                    ) {
-                                        Material3Text(title, style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Material3Text("ID $videoId • Video Type ${video.optInt("video_type", category.videoType)}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Material3Text("Lihat detail dan putar", style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary)
-                                    }
+                                    if (videoRow.size == 1) Spacer(Modifier.weight(1f))
                                 }
                             }
                             val pageSize = if (category.related && category.videoType == 1) 30 else 10
