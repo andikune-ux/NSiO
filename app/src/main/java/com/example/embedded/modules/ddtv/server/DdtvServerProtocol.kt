@@ -364,7 +364,10 @@ internal object DdtvStreamResolver {
         "play", "src", "file", "link", "source", "sources",
         "urls", "streams", "play_link", "playlink", "file_url",
         "source_url", "download_url", "video_path", "url_m3u8",
-        "url_mp4", "playlist", "manifest", "master", "address"
+        "url_mp4", "playlist", "manifest", "master", "address",
+        "vod_play_url", "vod_play_from", "vod_url", "play_urls",
+        "play_url_list", "play_sources", "video_sources", "media_url",
+        "media", "url_list", "playpath", "play_path"
     )
     private val progressiveExtensions = setOf(".mp4", ".m4v", ".mkv", ".webm", ".ts", ".flv", ".mp3", ".m4a")
 
@@ -425,19 +428,34 @@ internal object DdtvStreamResolver {
                     val child = value.opt(key)
                     if (key.lowercase(Locale.ROOT) in urlKeys) {
                         when (child) {
-                            is String -> output.add(child.trim())
+                            is String -> extractUrls(child, output)
                             is JSONArray, is JSONObject -> collectPlaybackUrls(child, output, depth + 1)
                         }
                     } else if (child is JSONObject || child is JSONArray) {
                         collectPlaybackUrls(child, output, depth + 1)
-                    } else if (child is String && child.trim().startsWith("https://", true)) {
-                        // Some DDTV payload revisions use an unlabelled URL field.
-                        output.add(child.trim())
+                    } else if (child is String) {
+                        // Some server revisions put playback URLs in an unlabeled
+                        // field or inside MacCMS-style "name$url#name$url" strings.
+                        extractUrls(child, output)
                     }
                 }
             }
             is JSONArray -> for (index in 0 until minOf(value.length(), 64)) {
                 collectPlaybackUrls(value.opt(index), output, depth + 1)
+            }
+        }
+    }
+
+    private fun extractUrls(raw: String, output: MutableSet<String>) {
+        if (output.size >= 32 || raw.isBlank() || raw.length > 64 * 1024) return
+        val normalized = raw
+            .replace("\\\\/", "/")
+            .replace("&amp;", "&")
+            .replace("&#38;", "&")
+        val matcher = Regex("""https?://[^\\s"'<>\\u0000-\\u001f]+""").findAll(normalized)
+        matcher.forEach { match ->
+            if (output.size < 32) {
+                output.add(match.value.trimEnd(',', ';', ')', ']', '}'))
             }
         }
     }
