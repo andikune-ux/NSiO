@@ -75,6 +75,7 @@ import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.update.AppUpdateManager
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -92,6 +93,10 @@ class MainActivity : ComponentActivity() {
             var unlocked by rememberSaveable { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
+            var showShortcutUpdatePopup by remember { mutableStateOf(false) }
+            var shortcutUpdateChecking by remember { mutableStateOf(false) }
+            var shortcutUpdateRelease by remember { mutableStateOf<AppUpdateManager.Release?>(null) }
+            var shortcutUpdateMessage by remember { mutableStateOf<String?>(null) }
             val context = LocalContext.current
 
             if (!unlocked) {
@@ -105,6 +110,7 @@ class MainActivity : ComponentActivity() {
                         onSecretCode = { code ->
                             val message = when (code) {
                                 "000" -> SecretCodeRegistry.allCodes
+                                "102" -> { showShortcutUpdatePopup = true; shortcutUpdateRelease = null; shortcutUpdateMessage = null; null }
                                 "101" -> {
                                     val state = viewModel.player.playerState.value
                                     developerDiagnostics(context, state, viewModel.mediaList.value.size, viewModel.sourcePlaylists.value.size)
@@ -142,6 +148,63 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 MainApplicationContent(viewModel, isPipMode)
+            }
+
+            LaunchedEffect(showShortcutUpdatePopup) {
+                if (showShortcutUpdatePopup) {
+                    shortcutUpdateChecking = true
+                    shortcutUpdateMessage = "Memeriksa pembaruan NSiO..."
+                    runCatching { AppUpdateManager.checkLatest() }
+                        .onSuccess { release ->
+                            shortcutUpdateRelease = release
+                            shortcutUpdateMessage = if (release.available) "Pembaruan v${release.latestVersion} tersedia." else "NSiO sudah menggunakan versi terbaru (v${release.currentVersion})."
+                        }
+                        .onFailure { error -> shortcutUpdateMessage = "Pemeriksaan gagal: ${error.localizedMessage ?: "periksa koneksi internet"}" }
+                    shortcutUpdateChecking = false
+                }
+            }
+
+            if (showShortcutUpdatePopup) {
+                val release = shortcutUpdateRelease
+                AlertDialog(
+                    onDismissRequest = { if (!shortcutUpdateChecking) showShortcutUpdatePopup = false },
+                    title = { Text("Pembaruan Aplikasi NSiO") },
+                    text = {
+                        Column {
+                            Text(shortcutUpdateMessage ?: "Menyiapkan pemeriksaan...")
+                            if (release?.available == true) {
+                                Material3Text("Versi terpasang: v${release.currentVersion}")
+                                Material3Text("Versi terbaru: v${release.latestVersion}")
+                                Material3Text("Ukuran: ${android.text.format.Formatter.formatShortFileSize(context, release.assetSize)}")
+                                Material3Text(release.notes, modifier = Modifier.verticalScroll(rememberScrollState()))
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (release?.available == true) {
+                            Button(onClick = {
+                                if (!AppUpdateManager.hasUpdateStorageAccess(context)) {
+                                    runCatching { context.startActivity(AppUpdateManager.storagePermissionIntent(context)) }
+                                        .onFailure { shortcutUpdateMessage = "Tidak dapat membuka izin penyimpanan: ${it.localizedMessage}" }
+                                    shortcutUpdateMessage = "Izinkan akses penyimpanan NSiO, lalu ketik 102= kembali untuk mengunduh."
+                                } else {
+                                    runCatching { AppUpdateManager.startDownload(context, release) }
+                                        .onSuccess { id -> shortcutUpdateMessage = "Unduhan v${release.latestVersion} dimulai. ID unduhan: $id. Pantau notifikasi Android." }
+                                        .onFailure { shortcutUpdateMessage = "Gagal memulai unduhan: ${it.localizedMessage ?: "periksa izin dan koneksi"}" }
+                                }
+                            }) { Text("DOWNLOAD") }
+                        } else if (shortcutUpdateChecking) {
+                            Button(onClick = {}, enabled = false) { Text("MEMERIKSA...") }
+                        } else {
+                            Button(onClick = { showShortcutUpdatePopup = false }) { Text("TUTUP") }
+                        }
+                    },
+                    dismissButton = {
+                        if (release?.available == true) {
+                            Button(onClick = { showShortcutUpdatePopup = false }) { Text("NANTI") }
+                        }
+                    }
+                )
             }
 
             secretMessage?.let { message ->
