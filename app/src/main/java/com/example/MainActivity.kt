@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
         hideSystemNotificationBar()
 
         setContent {
+            val context = LocalContext.current
             var unlocked by rememberSaveable { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
@@ -101,7 +102,6 @@ class MainActivity : ComponentActivity() {
             var shortcutDownloadVersion by remember { mutableStateOf(AppUpdateManager.pendingVersion(context)) }
             var shortcutReadyVersion by remember { mutableStateOf<String?>(null) }
             var shortcutDownloadProgress by remember { mutableStateOf(0) }
-            val context = LocalContext.current
 
             if (!unlocked) {
                 MyApplicationTheme(themeMode = "system") {
@@ -168,6 +168,54 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(shortcutDownloadId, shortcutDownloadVersion) {
+                val id = shortcutDownloadId ?: return@LaunchedEffect
+                val version = shortcutDownloadVersion ?: return@LaunchedEffect
+                if (AppUpdateManager.compareVersions(BuildConfig.VERSION_NAME, version) >= 0) {
+                    AppUpdateManager.clearPending(context)
+                    shortcutDownloadId = null
+                    shortcutDownloadVersion = null
+                    shortcutReadyVersion = null
+                    shortcutUpdateMessage = "Pembaruan v$version sudah terpasang."
+                    return@LaunchedEffect
+                }
+                while (true) {
+                    val state = AppUpdateManager.queryDownload(context, id)
+                    if (state == null) {
+                        shortcutUpdateMessage = "Status unduhan tidak ditemukan. Coba cek update kembali."
+                        AppUpdateManager.clearPending(context)
+                        shortcutDownloadId = null
+                        shortcutDownloadVersion = null
+                        break
+                    }
+                    shortcutDownloadProgress = state.progress
+                    when (state.status) {
+                        android.app.DownloadManager.STATUS_SUCCESSFUL -> {
+                            if (AppUpdateManager.finalizeDownloadedApk(context, version) && AppUpdateManager.isDownloadedApkValid(context, version)) {
+                                shortcutReadyVersion = version
+                                shortcutUpdateMessage = "APK v$version selesai diunduh dan lolos validasi."
+                            } else {
+                                shortcutUpdateMessage = "APK selesai diunduh tetapi gagal validasi. Silakan unduh ulang."
+                                AppUpdateManager.clearPending(context)
+                            }
+                            shortcutDownloadId = null
+                            break
+                        }
+                        android.app.DownloadManager.STATUS_FAILED -> {
+                            shortcutUpdateMessage = "Unduhan gagal (kode ${state.reason}). Silakan coba lagi."
+                            AppUpdateManager.clearPending(context)
+                            shortcutDownloadId = null
+                            shortcutDownloadVersion = null
+                            break
+                        }
+                        android.app.DownloadManager.STATUS_PENDING, android.app.DownloadManager.STATUS_RUNNING, android.app.DownloadManager.STATUS_PAUSED -> {
+                            shortcutUpdateMessage = if (state.status == android.app.DownloadManager.STATUS_PAUSED) "Unduhan dijeda (${state.progress}%)." else "Mengunduh NSiO v$version... ${state.progress}%"
+                        }
+                    }
+                    kotlinx.coroutines.delay(500)
+                }
+            }
+
             if (showShortcutUpdatePopup) {
                 val release = shortcutUpdateRelease
                 AlertDialog(
@@ -182,10 +230,20 @@ class MainActivity : ComponentActivity() {
                                 Material3Text("Ukuran: ${android.text.format.Formatter.formatShortFileSize(context, release.assetSize)}")
                                 Material3Text(release.notes, modifier = Modifier.verticalScroll(rememberScrollState()))
                             }
+                            if (shortcutDownloadId != null) Material3Text("Progres unduhan: $shortcutDownloadProgress%")
                         }
                     },
                     confirmButton = {
-                        if (release?.available == true) {
+                        if (shortcutReadyVersion != null) {
+                            Button(onClick = {
+                                when (AppUpdateManager.install(context, shortcutReadyVersion!!)) {
+                                    AppUpdateManager.InstallResult.OPENED -> shortcutUpdateMessage = "Installer Android dibuka. Konfirmasi pemasangan untuk menyelesaikan update."
+                                    AppUpdateManager.InstallResult.PERMISSION_REQUIRED -> shortcutUpdateMessage = "Aktifkan izin Instal aplikasi tidak dikenal untuk NSiO, lalu ketik 102= kembali."
+                                    AppUpdateManager.InstallResult.INVALID_APK -> shortcutUpdateMessage = "APK tidak valid atau tanda tangan tidak cocok. Unduh ulang."
+                                    AppUpdateManager.InstallResult.FAILED -> shortcutUpdateMessage = "Gagal membuka installer Android."
+                                }
+                            }) { Text("INSTALL SEKARANG") }
+                        } else if (release?.available == true && shortcutDownloadId == null) {
                             Button(onClick = {
                                 if (!AppUpdateManager.hasUpdateStorageAccess(context)) {
                                     runCatching { context.startActivity(AppUpdateManager.storagePermissionIntent(context)) }
@@ -197,7 +255,9 @@ class MainActivity : ComponentActivity() {
                                         .onFailure { shortcutUpdateMessage = "Gagal memulai unduhan: ${it.localizedMessage ?: "periksa izin dan koneksi"}" }
                                 }
                             }) { Text("DOWNLOAD") }
-                        } else if (shortcutDownloadId != null) {\n                            Button(onClick = {}, enabled = false) { Text("MENGUNDUH $shortcutDownloadProgress%") }\n                        } else if (shortcutUpdateChecking) {
+                        } else if (shortcutDownloadId != null) {
+                            Button(onClick = {}, enabled = false) { Text("MENGUNDUH $shortcutDownloadProgress%") }
+                        } else if (shortcutUpdateChecking) {
                             Button(onClick = {}, enabled = false) { Text("MEMERIKSA...") }
                         } else {
                             Button(onClick = { showShortcutUpdatePopup = false }) { Text("TUTUP") }
