@@ -112,6 +112,26 @@ class DdtvProtocolTest {
     }
 
     @Test
+    fun streamResolverExtractsUrlsFromMacCmsVodPlayUrlStrings() {
+        val streams = DdtvStreamResolver.resolve(
+            JSONObject(),
+            JSONObject().put(
+                "data",
+                JSONObject().put(
+                    "vod_play_url",
+                    "Main$https://cdn.example.test/video/master.m3u8?token=abc#Backup$https://backup.example.test/video.mp4"
+                )
+            )
+        )
+
+        assertEquals(2, streams.size)
+        assertEquals("https://cdn.example.test/video/master.m3u8?token=abc", streams[0].url)
+        assertEquals("hls", streams[0].manifestType)
+        assertEquals("https://backup.example.test/video.mp4", streams[1].url)
+        assertEquals("progressive", streams[1].manifestType)
+    }
+
+    @Test
     fun streamResolverDoesNotInventAnIndexPlaylistWhenServerReturnsNoUrl() {
         var rejected = false
         try {
