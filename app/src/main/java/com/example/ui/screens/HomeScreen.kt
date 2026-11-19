@@ -142,6 +142,8 @@ fun HomeScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val selectedSort by viewModel.selectedSort.collectAsState()
     var selectedVideoFilters by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var editingDriveMedia by remember { mutableStateOf<MediaItem?>(null) }
+    var editedDriveMediaName by remember { mutableStateOf("") }
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
@@ -879,7 +881,11 @@ fun HomeScreen(
                                                 item = mediaItem,
                                                 onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                 onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                                onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                onDownload = { viewModel.downloadMedia(mediaItem) },
+                                                onRename = if (MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds)) ({
+                                                    editingDriveMedia = mediaItem
+                                                    editedDriveMediaName = mediaItem.title
+                                                }) else null
                                             )
                                         }
                                     } else {
@@ -901,7 +907,11 @@ fun HomeScreen(
                                                         modifier = Modifier.width(148.dp),
                                                         onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                         onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                                        onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                        onDownload = { viewModel.downloadMedia(mediaItem) },
+                                                onRename = if (MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds)) ({
+                                                    editingDriveMedia = mediaItem
+                                                    editedDriveMediaName = mediaItem.title
+                                                }) else null
                                                     )
                                                 }
                                             }
@@ -958,7 +968,11 @@ fun HomeScreen(
                                                 item = mediaItem,
                                                 onClick = { viewModel.playMedia(mediaItem) },
                                                 onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                                onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                onDownload = { viewModel.downloadMedia(mediaItem) },
+                                                onRename = if (MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds)) ({
+                                                    editingDriveMedia = mediaItem
+                                                    editedDriveMediaName = mediaItem.title
+                                                }) else null
                                             )
                                         }
                                     } else {
@@ -978,7 +992,11 @@ fun HomeScreen(
                                                         modifier = Modifier.width(148.dp),
                                                         onClick = { viewModel.playMedia(mediaItem) },
                                                         onLongClick = { viewModel.toggleFavorite(mediaItem) },
-                                                        onDownload = { viewModel.downloadMedia(mediaItem) }
+                                                        onDownload = { viewModel.downloadMedia(mediaItem) },
+                                                onRename = if (MediaSourceClassifier.isDriveMedia(mediaItem, drivePlaylistIds)) ({
+                                                    editingDriveMedia = mediaItem
+                                                    editedDriveMediaName = mediaItem.title
+                                                }) else null
                                                     )
                                                 }
                                             }
@@ -2315,6 +2333,42 @@ fun HomeScreen(
             title = { Material3Text("DDTV Prototype") },
             text = { Material3Text(message) },
             confirmButton = { TextButton(onClick = { ddtvLaunchError = null }) { Material3Text("Tutup") } }
+        )
+    }
+
+    editingDriveMedia?.let { mediaItem ->
+        AlertDialog(
+            onDismissRequest = { editingDriveMedia = null },
+            title = { Material3Text("Ubah nama media Drive") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Material3Text(
+                        "Nama baru hanya berlaku di NSiO. File asli di Google Drive tidak akan diubah.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = editedDriveMediaName,
+                        onValueChange = { editedDriveMediaName = it },
+                        singleLine = true,
+                        label = { Material3Text("Nama video atau foto") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameMedia(mediaItem, editedDriveMediaName)
+                        editingDriveMedia = null
+                    },
+                    enabled = editedDriveMediaName.isNotBlank() &&
+                        editedDriveMediaName.trim() != mediaItem.title
+                ) { Material3Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingDriveMedia = null }) { Material3Text("Batal") }
+            }
         )
     }
 
