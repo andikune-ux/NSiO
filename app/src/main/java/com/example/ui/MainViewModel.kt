@@ -1540,6 +1540,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Rename the catalog title only; the original Drive file and URL remain untouched. */
+    fun renameMedia(item: MediaItem, newName: String) {
+        viewModelScope.launch {
+            val cleanName = newName.trim().take(180)
+            if (cleanName.isBlank()) {
+                showStatus("Nama media tidak boleh kosong")
+                return@launch
+            }
+            if (cleanName == item.title) return@launch
+            val updated = item.copy(title = cleanName)
+            mediaDao.updateMedia(updated)
+            val cloudSyncFailed = authManager.currentUser?.let { user ->
+                runCatching { cloudRepository.saveMediaItem(user.uid, updated) }.isFailure
+            } ?: false
+            showStatus(
+                if (cloudSyncFailed) "Nama media diubah di perangkat, tetapi sinkronisasi Cloud gagal"
+                else "Nama media diubah menjadi '$cleanName'"
+            )
+        }
+    }
+
     fun toggleFavorite(item: MediaItem) {
         viewModelScope.launch {
             val updated = item.copy(isFavorite = !item.isFavorite)
