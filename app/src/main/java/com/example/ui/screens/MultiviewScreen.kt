@@ -66,6 +66,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +90,7 @@ import com.example.player.multiview.MultiviewSourceKind
 import com.example.player.multiview.MultiviewSourceRegistry
 import com.example.player.multiview.MultiviewSourceRequest
 import com.example.ui.MainViewModel
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 private data class MultiviewPluginSearchResult(
@@ -535,15 +537,38 @@ fun MultiviewScreen(
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                                            Text(result.item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.size(width = 76.dp, height = 48.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF080D15)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (!result.item.posterUrl.isNullOrBlank()) {
+                                                    AsyncImage(
+                                                        model = result.item.posterUrl,
+                                                        contentDescription = "Thumbnail ${result.item.title}",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Icon(Icons.Default.Extension, contentDescription = null, tint = Color(0xFF8DE7FF))
+                                                }
+                                            }
+                                            Column(Modifier.weight(1f)) {
+                                                Text(result.item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                Text(
                                                 "${result.item.pluginName} • ${result.item.providerName}",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
-                                            )
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -580,21 +605,37 @@ fun MultiviewScreen(
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Icon(
-                                            when (pickerKind) {
-                                                MultiviewSourceKind.GOOGLE_DRIVE -> Icons.Default.Cloud
-                                                MultiviewSourceKind.CLOUDSTREAM -> Icons.Default.Extension
-                                                MultiviewSourceKind.LOCAL_FILE -> Icons.Default.FolderOpen
-                                                MultiviewSourceKind.FILE_SERVER -> Icons.Default.Cloud
-                                            },
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Box(
+                                            modifier = Modifier.size(width = 76.dp, height = 48.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFF080D15)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (item.thumbnailUrl.isNotBlank()) {
+                                                AsyncImage(
+                                                    model = item.thumbnailUrl,
+                                                    contentDescription = "Thumbnail ${item.title}",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Icon(
+                                                    when (pickerKind) {
+                                                        MultiviewSourceKind.GOOGLE_DRIVE -> Icons.Default.Cloud
+                                                        MultiviewSourceKind.CLOUDSTREAM -> Icons.Default.Extension
+                                                        MultiviewSourceKind.LOCAL_FILE -> Icons.Default.FolderOpen
+                                                        MultiviewSourceKind.FILE_SERVER -> Icons.Default.Cloud
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF8DE7FF)
+                                                )
+                                            }
+                                        }
+                                        Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                         if (selectedIndex in busySlots) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                     }
                                 }
