@@ -1843,6 +1843,23 @@ fun HomeScreen(
         )
     }
 
+    BackHandler(enabled = showDdtvPrototypeDialog) {
+        when {
+            ddtvDetailVideo != null -> {
+                ddtvDetailVideo = null
+                ddtvDetailPayload = null
+            }
+            ddtvSelectedCategory != null -> {
+                ddtvSelectedCategory = null
+                ddtvServerVideos = emptyList()
+            }
+            else -> {
+                showDdtvPrototypeDialog = false
+                embeddedModuleManager.stop("dev.andikune.nsio.ddtv")
+            }
+        }
+    }
+
     if (showDdtvPrototypeDialog) {
         var ddtvCurrentPage by remember { mutableStateOf(1) }
         val ddtvVisibleMedia = remember(mediaList, ddtvSourceFilter, drivePlaylistIds) {
@@ -1863,10 +1880,20 @@ fun HomeScreen(
                 ddtvServerStatus = "Menghubungkan ke server DDTV..."
                 ddtvScope.launch {
                     try {
-                        ddtvServerCategories = embeddedModuleManager.connectDdtvServer()
-                        ddtvSelectedCategory = null
-                        ddtvServerVideos = emptyList()
-                        ddtvServerStatus = "Terhubung • ${ddtvServerCategories.size} kategori tersedia"
+                        val categories = embeddedModuleManager.connectDdtvServer()
+                        ddtvServerCategories = categories
+                        val firstCategory = categories.firstOrNull()
+                        ddtvSelectedCategory = firstCategory
+                        ddtvServerVideos = if (firstCategory != null) {
+                            embeddedModuleManager.fetchDdtvPage(firstCategory, 1)
+                        } else {
+                            emptyList()
+                        }
+                        ddtvServerStatus = if (firstCategory != null) {
+                            "Terhubung • ${categories.size} kategori • ${ddtvServerVideos.size} konten terbaru"
+                        } else {
+                            "Terhubung • belum ada kategori yang tersedia"
+                        }
                     } catch (failure: Exception) {
                         ddtvServerStatus = "Gagal terhubung: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
                     } finally {
@@ -2066,8 +2093,9 @@ fun HomeScreen(
 
                     if (ddtvSourceFilter == "SERVER") {
                         Material3Text(
-                            "Server bawaan DDTV • protokol v1 • AES-CBC • verifikasi RSA-SHA256",
-                            style = MaterialTheme.typography.bodySmall
+                            "Jelajahi katalog DDTV dan pilih konten untuk melihat detail atau memutarnya.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         TextButton(enabled = !ddtvServerLoading, onClick = connectDdtvServer) {
                             Material3Text(if (ddtvServerLoading) "Menghubungkan..." else "Hubungkan / Muat Ulang Server DDTV")
