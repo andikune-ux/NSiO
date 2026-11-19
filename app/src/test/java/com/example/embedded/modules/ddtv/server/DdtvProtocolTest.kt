@@ -119,7 +119,7 @@ class DdtvProtocolTest {
                 "data",
                 JSONObject().put(
                     "vod_play_url",
-                    "Main$https://cdn.example.test/video/master.m3u8?token=abc#Backup$https://backup.example.test/video.mp4"
+                    "Main\$https://cdn.example.test/video/master.m3u8?token=abc#Backup\$https://backup.example.test/video.mp4"
                 )
             )
         )
