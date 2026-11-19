@@ -11,15 +11,23 @@ import java.util.Locale
  */
 object DdtvContentFields {
     private val imageKeys = setOf(
-        "cover_url", "cover", "cover_img", "cover_image", "cover_pic",
-        "thumbnail", "thumbnail_url", "thumb", "thumb_url", "thumb_img",
-        "pic", "pic_url", "pic_thumb", "vod_pic", "vod_pic_thumb",
-        "image", "image_url", "img", "img_url", "poster", "poster_url",
+        "cover_url", "cover", "cover_img", "cover_image", "cover_pic", "cover_path",
+        "thumbnail", "thumbnail_url", "thumb", "thumb_url", "thumb_img", "thumb_path",
+        "pic", "pic_url", "pic_thumb", "pic_path", "vod_pic", "vod_pic_url",
+        "vod_pic_thumb", "vod_pic_slide", "vod_img",
+        "image", "image_url", "image_path", "img", "img_url", "img_path",
+        "poster", "poster_url", "poster_path",
         "photo", "photo_url", "banner", "banner_url", "preview",
         "preview_url", "picture", "picture_url", "snapshot", "snapshot_url"
     )
-    private val imageContainerKeys = setOf("data", "result", "info", "vod", "video", "item", "images", "covers")
-    private val imageBaseKeys = listOf("image_domain", "img_domain", "pic_domain", "cdn", "domain", "host", "base_url")
+    private val imageContainerKeys = setOf(
+        "data", "result", "info", "vod", "video", "item", "images", "covers",
+        "vod_data", "vod_info", "vod_list", "video_info", "content"
+    )
+    private val imageBaseKeys = listOf(
+        "image_domain", "img_domain", "pic_domain", "vod_pic_domain",
+        "image_base", "img_base", "pic_base", "cdn", "domain", "host", "base_url"
+    )
 
     fun id(video: JSONObject): Long {
         return sequenceOf("id", "video_id", "vod_id", "videoId", "vodId")
@@ -129,8 +137,9 @@ object DdtvContentFields {
             val candidate = if (raw.startsWith("https://", true)) raw else "https://$raw"
             runCatching { DdtvServerUrlPolicy.origin(candidate) }.getOrNull()?.let { return it }
         }
-        val domains = source.optJSONArray("domains")
-        if (domains != null) {
+        val domainLists = listOf("domains", "image_urls", "img_urls", "pic_urls", "cdn_urls")
+        for (listKey in domainLists) {
+            val domains = source.optJSONArray(listKey) ?: continue
             for (index in 0 until minOf(domains.length(), 16)) {
                 val raw = domains.optString(index, "").trim()
                 val candidate = if (raw.startsWith("https://", true)) raw else "https://$raw"
