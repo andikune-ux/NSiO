@@ -882,6 +882,7 @@ fun HomeScreen(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(10.dp))
                                                         .clickable {
+                                                            expandedSourceType = null
                                                             expandedCatalogKey = if (expandedCatalogKey == sectionCatalogKey) null else sectionCatalogKey
                                                         }
                                                         .padding(horizontal = 8.dp, vertical = 5.dp)
@@ -986,6 +987,7 @@ fun HomeScreen(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(10.dp))
                                                         .clickable {
+                                                            expandedSourceType = null
                                                             expandedCatalogKey = if (expandedCatalogKey == playlistCatalogKey) null else playlistCatalogKey
                                                         }
                                                         .padding(horizontal = 8.dp, vertical = 5.dp)
