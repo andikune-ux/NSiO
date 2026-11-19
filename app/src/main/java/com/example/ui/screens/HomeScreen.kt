@@ -2200,9 +2200,11 @@ fun HomeScreen(
                                     "Sutradara" to arrayOf("director", "vod_director"),
                                     "Studio" to arrayOf("studio", "publisher", "vod_publisher", "vod_studio"),
                                     "Tahun" to arrayOf("year", "release_date", "vod_year"),
-                                    "Durasi" to arrayOf("duration", "runtime", "vod_duration", "vod_time"),
+                                    "Durasi" to arrayOf("vod_duration", "duration", "runtime", "vod_time"),
                                     "Kategori" to arrayOf("tags", "category", "vod_class", "type_name"),
-                                    "Ditonton" to arrayOf("views", "score", "vod_hits", "vod_score"),
+                                    // DDTV score fields are ratings, not view counters.
+                                    // Never label score/vod_score as "Ditonton".
+                                    "Ditonton" to arrayOf("vod_hits", "hits", "view_count", "views"),
                                     "Kode" to arrayOf("code", "vod_en", "vod_code")
                                 )
                                 metadata.forEach { (label, keys) ->
