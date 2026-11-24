@@ -64,7 +64,7 @@ class PlaybackPolicyTest {
     fun distinguishesSocketTimeoutFromDeviceInternetDisconnect() {
         val message = describeHttpPlaybackFailure(listOf(java.net.SocketTimeoutException("timeout")))
         org.junit.Assert.assertTrue(message.contains("tidak merespons"))
-        org.junit.Assert.assertFalse(message.contains("internet perangkat terputus"))
+        org.junit.Assert.assertTrue(message.contains("belum tentu berarti koneksi internet perangkat terputus"))
     }
 
     @Test
