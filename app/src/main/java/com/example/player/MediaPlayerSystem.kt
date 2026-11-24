@@ -457,7 +457,7 @@ class CS3IPlayer(
                                 }
                             }
                             cause is HttpDataSource.HttpDataSourceException ->
-                                "Koneksi ke server video gagal atau terputus. Periksa koneksi internet dan coba sumber lain."
+                                describeHttpPlaybackFailure(causes)
                             else -> {
                                 val detail = error.message?.takeIf { it.isNotBlank() }
                                     ?: cause?.message?.takeIf { it.isNotBlank() }
