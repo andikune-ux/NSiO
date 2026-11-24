@@ -596,6 +596,42 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     center = Offset(progressX, centerY)
                 )
             }
+            if (isSeeking && duration > 0L) {
+                BoxWithConstraints(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 8.dp, bottom = 22.dp)
+                        .height(36.dp)
+                ) {
+                    val bubbleWidth = 48.dp
+                    val bubbleX = (maxWidth * seekFraction - bubbleWidth / 2)
+                        .coerceIn(0.dp, (maxWidth - bubbleWidth).coerceAtLeast(0.dp))
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).offset(x = bubbleX),
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.Black.copy(alpha = .82f)
+                    ) {
+                        Text(
+                            formatTikTodTime(seekPosition.toLong()),
+                            modifier = Modifier.width(bubbleWidth).padding(horizontal = 3.dp, vertical = 2.dp),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        formatTikTodTime(duration),
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .background(Color.Black.copy(alpha = .72f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
         }
     }
@@ -756,6 +792,18 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 ) { Text("Selesai", color = Color(0xFF80CBC4)) }
             }
         }
+    }
+}
+
+private fun formatTikTodTime(milliseconds: Long): String {
+    val totalSeconds = (milliseconds.coerceAtLeast(0L) / 1000L)
+    val seconds = totalSeconds % 60L
+    val minutes = (totalSeconds / 60L) % 60L
+    val hours = totalSeconds / 3600L
+    return if (hours > 0L) {
+        String.format(java.util.Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(java.util.Locale.ROOT, "%d:%02d", totalSeconds / 60L, seconds)
     }
 }
 
