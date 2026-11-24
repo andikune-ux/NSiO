@@ -1141,13 +1141,14 @@ class CS3IPlayer(
 
     override fun setPlaybackSpeed(speed: Float) {
         val player = exoPlayer ?: return
-        if (speed <= 0f) return
-        player.setPlaybackSpeed(speed)
+        if (!speed.isFinite() || speed <= 0f) return
+        val safeSpeed = speed.coerceIn(0.25f, 8f)
+        player.setPlaybackSpeed(safeSpeed)
         context.getSharedPreferences("nsio_player_preferences", Context.MODE_PRIVATE)
             .edit()
-            .putFloat("preferred_playback_speed", speed)
+            .putFloat("preferred_playback_speed", safeSpeed)
             .apply()
-        _playerState.value = _playerState.value.copy(playbackSpeed = speed)
+        _playerState.value = _playerState.value.copy(playbackSpeed = safeSpeed)
     }
 
     override fun setPreferredAudioLanguage(language: String?) {
