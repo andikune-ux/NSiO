@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -38,6 +42,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val context = LocalContext.current
+    val hostActivity = remember(context) { context.findTikTodActivity() }
+    val originalOrientation = remember(hostActivity) { hostActivity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     val owner = LocalLifecycleOwner.current
     val activeProfile by viewModel.activeProfile.collectAsState()
     val mediaList by viewModel.mediaList.collectAsState()
@@ -62,6 +68,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var speed by remember { mutableFloatStateOf(store.speed()) }
     var quality by remember { mutableStateOf(store.quality()) }
     var resumeOnReturn by remember { mutableStateOf(false) }
+    var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
     var drag by remember { mutableFloatStateOf(0f) }
     val media = feed.getOrNull(index)
@@ -115,6 +122,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 viewModel.player.retry()
             } else next()
         }
+    }
+    DisposableEffect(hostActivity) {
+        onDispose { hostActivity?.requestedOrientation = originalOrientation }
     }
     DisposableEffect(owner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -176,6 +186,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 update = { it.player = viewModel.player.exoPlayer }
             )
             if (!playerState.isPlaying) Icon(Icons.Default.PlayArrow, null, Modifier.align(Alignment.Center).size(56.dp), tint = Color.White)
+            if (playerState.isBuffering) LinearProgressIndicator(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp), color = Color.White, trackColor = Color.White.copy(alpha = .2f))
             Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
                 IconButton(onClick = { viewModel.closePlayer(); onClose() }) { Icon(Icons.Default.ArrowBack, "Keluar", tint = Color.White) }
                 Text(media.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 2)
@@ -206,6 +217,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Kecepatan")
+                TextButton(onClick = {
+                    landscapeMode = !landscapeMode
+                    hostActivity?.requestedOrientation = if (landscapeMode) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }) { Text(if (landscapeMode) "Kembali ke potret" else "Putar ke lanskap") }
                 listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).chunked(3).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         row.forEach { value -> FilterChip(selected = speed == value, onClick = {
@@ -247,4 +262,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }) { Text("Kirim") } },
         dismissButton = { TextButton(onClick = { showComments = false }) { Text("Tutup") } }
     )
+}
+
+
+private fun Context.findTikTodActivity(): Activity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return current as? Activity
 }
