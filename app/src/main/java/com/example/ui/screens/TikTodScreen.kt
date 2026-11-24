@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +25,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -80,7 +83,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var drag by remember { mutableFloatStateOf(0f) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
+    var zoomScale by remember { mutableFloatStateOf(1f) }
+    var zoomOffset by remember { mutableStateOf(Offset.Zero) }
     val media = feed.getOrNull(index)
+
+    LaunchedEffect(media?.id) {
+        zoomScale = 1f
+        zoomOffset = Offset.Zero
+    }
 
     fun startAt(target: Int) {
         if (feed.isEmpty()) return
@@ -188,7 +198,29 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
         } else {
             AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = zoomScale
+                        scaleY = zoomScale
+                        translationX = zoomOffset.x
+                        translationY = zoomOffset.y
+                    }
+                    .pointerInput(media.id) {
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val previousScale = zoomScale
+                            val nextScale = (previousScale * zoom).coerceIn(1f, 5f)
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            val factor = nextScale / previousScale
+                            val nextOffset = (zoomOffset + center - centroid) * factor + centroid - center + pan
+                            val maxX = size.width * (nextScale - 1f) / 2f
+                            val maxY = size.height * (nextScale - 1f) / 2f
+                            zoomScale = nextScale
+                            zoomOffset = if (nextScale <= 1f) Offset.Zero else Offset(
+                                nextOffset.x.coerceIn(-maxX, maxX),
+                                nextOffset.y.coerceIn(-maxY, maxY)
+                            )
+                        }
+                    },
                 factory = { PlayerView(it).apply {
                     useController = false
                     player = viewModel.player.exoPlayer
