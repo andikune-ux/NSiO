@@ -3,10 +3,9 @@ package com.example.player
 /**
  * Converts Google Drive file preview/view URLs to Drive's download endpoint.
  *
- * Do not hard-code a confirmation token: Drive may issue a per-response token
- * and cookie for files that require a download confirmation. Starting at the
- * canonical uc endpoint lets Drive issue its current redirect/confirmation
- * response instead of sending Media3 a stale, fabricated token.
+ * Keep the legacy Drive download endpoint that was used by the working player
+ * before the regression. The playback interceptor handles HTML confirmation
+ * responses and session cookies if Drive still requires an interstitial.
  */
 internal fun normalizePlaybackUrl(url: String): String {
     val normalized = url.trim()
@@ -26,7 +25,7 @@ internal fun normalizePlaybackUrl(url: String): String {
     } else null
 
     return if (!fileId.isNullOrBlank()) {
-        "https://drive.google.com/uc?export=download&id=$fileId"
+        "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
     } else normalized
 }
 
