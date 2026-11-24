@@ -26,8 +26,11 @@ internal class GoogleDriveDownloadInterceptor : Interceptor {
         } finally {
             response.close()
         }
+        // Resolve relative form/link targets against the final URL after redirects,
+        // while retaining the original Range and playback headers.
+        val responseRequest = request.newBuilder().url(response.request.url).build()
         val confirmationRequest = try {
-            buildGoogleDriveConfirmationRequest(request, html)
+            buildGoogleDriveConfirmationRequest(responseRequest, html)
         } catch (error: Exception) {
             val page = describeGoogleDriveHtmlPage(html)
             throw IOException(
@@ -99,10 +102,14 @@ internal fun googleDriveConfirmationRequestOrNull(request: Request, html: String
         val fields = buildList {
             form.select("input[name]").forEach { input ->
                 val type = input.attr("type").lowercase()
-                if (type in setOf("submit", "button", "image", "reset", "file")) return@forEach
+                if (type in setOf("button", "image", "reset", "file")) return@forEach
                 if (type in setOf("checkbox", "radio") && !input.hasAttr("checked")) return@forEach
                 val name = input.attr("name").trim()
                 if (name.isNotEmpty()) add(name to input.attr("value"))
+            }
+            form.select("button[name]").forEach { button ->
+                val name = button.attr("name").trim()
+                if (name.isNotEmpty()) add(name to button.attr("value"))
             }
             form.select("select[name]").forEach { select ->
                 val name = select.attr("name").trim()
