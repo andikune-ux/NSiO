@@ -28,7 +28,15 @@ internal class DriveDownloadInterceptor : Interceptor {
                     it.startsWith("<html", true) ||
                     it.startsWith("<head", true)
             }
-        if (!looksLikeHtml) return response
+        if (!looksLikeHtml) {
+            if (isTextualResponse(contentType)) {
+                response.close()
+                throw DriveDownloadException(
+                    "Google Drive mengirim respons teks ($contentType), bukan data video. Periksa apakah file yang dibagikan memang video."
+                )
+            }
+            return response
+        }
 
         if (request.tag(DriveConfirmationFollowUp::class.java) != null) {
             response.close()
@@ -68,7 +76,19 @@ internal class DriveDownloadInterceptor : Interceptor {
                 "Konfirmasi Google Drive belum berhasil. Respons akhirnya masih berupa HTML, bukan video."
             )
         }
+        if (isTextualResponse(resolvedType)) {
+            resolved.close()
+            throw DriveDownloadException(
+                "Google Drive masih mengirim respons teks ($resolvedType), bukan data video."
+            )
+        }
         return resolved
+    }
+
+    private fun isTextualResponse(contentType: String): Boolean {
+        val mimeType = contentType.substringBefore(';').trim().lowercase()
+        return mimeType.startsWith("text/") ||
+            mimeType in setOf("application/json", "application/xml", "application/xhtml+xml")
     }
 
     private fun isDriveDownloadRequest(host: String, path: String): Boolean {
