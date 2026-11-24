@@ -51,7 +51,9 @@ import com.example.data.model.MediaSourceClassifier
 import com.example.ui.MainViewModel
 import com.example.tiktok.TikTodFeedPolicy
 import com.example.tiktok.TikTodLocalStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 
@@ -92,7 +94,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var resumeOnReturn by remember { mutableStateOf(false) }
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
-    val swipeOffset = remember { Animatable(0f) }
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
+    val swipeAnimationScope = rememberCoroutineScope()
+    var swipeAnimationJob by remember { mutableStateOf<Job?>(null) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
@@ -198,7 +202,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         requireUnconsumed = false,
                         pass = PointerEventPass.Initial
                     )
+                    swipeAnimationJob?.cancel()
+                    swipeAnimationJob = null
                     val pointerId = down.id
+                    var latestDragOffset = 0f
                     var multiTouch = false
                     var verticalDragStarted = false
                     do {
@@ -206,7 +213,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.size > 1) {
                             multiTouch = true
-                            swipeOffset.snapTo(0f)
+                            latestDragOffset = 0f
+                            swipeOffset = 0f
                         }
                         val tracked = event.changes.firstOrNull { it.id == pointerId }
                         if (!multiTouch && tracked != null && tracked.pressed) {
@@ -217,7 +225,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                 kotlin.math.abs(vertical) > kotlin.math.abs(horizontal) * 1.2f
                             ) {
                                 verticalDragStarted = true
-                                swipeOffset.snapTo(vertical)
+                                latestDragOffset = vertical
+                                swipeOffset = vertical
                                 tracked.consume()
                             }
                         }
@@ -225,7 +234,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
                     if (!multiTouch && verticalDragStarted) {
                         val distanceThreshold = (size.height * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
-                        val offset = swipeOffset.value
+                        val offset = latestDragOffset
                         val target = when {
                             offset < -distanceThreshold && index < feed.lastIndex -> index + 1
                             offset < -distanceThreshold && index == feed.lastIndex && feed.isNotEmpty() -> 0
@@ -234,25 +243,35 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         }
                         if (target != null) {
                             val direction = if (offset < 0f) -1f else 1f
-                            swipeOffset.animateTo(direction * size.height.toFloat(), tween(durationMillis = 220))
-                            if (target == 0 && index == feed.lastIndex) {
-                                feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
-                                if (feed.isNotEmpty()) startAt(0)
-                            } else {
-                                startAt(target)
+                            swipeAnimationJob = swipeAnimationScope.launch {
+                                Animatable(offset).animateTo(
+                                    direction * size.height.toFloat(),
+                                    tween(durationMillis = 220)
+                                ) { swipeOffset = value }
+                                if (target == 0 && index == feed.lastIndex) {
+                                    feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
+                                    if (feed.isNotEmpty()) startAt(0)
+                                } else {
+                                    startAt(target)
+                                }
+                                swipeOffset = 0f
                             }
-                            swipeOffset.snapTo(0f)
                         } else {
-                            swipeOffset.animateTo(0f, tween(durationMillis = 180))
+                            swipeAnimationJob = swipeAnimationScope.launch {
+                                Animatable(offset).animateTo(0f, tween(durationMillis = 180)) {
+                                    swipeOffset = value
+                                }
+                                swipeOffset = 0f
+                            }
                         }
                     } else if (multiTouch) {
-                        swipeOffset.snapTo(0f)
+                        swipeOffset = 0f
                     }
                 }
             }
     ) {
         val previewMedia = when {
-            swipeOffset.value < 0f -> feed.getOrNull(index + 1) ?: if (index == feed.lastIndex) feed.firstOrNull() else null
+            swipeOffset < 0f -> feed.getOrNull(index + 1) ?: if (index == feed.lastIndex) feed.firstOrNull() else null
             swipeOffset.value > 0f -> feed.getOrNull(index - 1)
             else -> null
         }
