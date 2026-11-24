@@ -65,7 +65,8 @@ internal class DriveDownloadInterceptor : Interceptor {
 
     private fun isDriveDownloadRequest(host: String, path: String): Boolean {
         val driveHost = host.equals("drive.google.com", true) ||
-            host.equals("drive.usercontent.google.com", true)
+            host.equals("drive.usercontent.google.com", true) ||
+            host.equals("drive.googleusercontent.com", true)
         return driveHost && (
             path.equals("/uc", true) ||
                 path.equals("/download", true) ||
@@ -136,4 +137,5 @@ internal fun resolveConfirmationUrl(
 
 private fun isDriveHost(host: String): Boolean =
     host.equals("drive.google.com", true) ||
-        host.equals("drive.usercontent.google.com", true)
+        host.equals("drive.usercontent.google.com", true) ||
+        host.equals("drive.googleusercontent.com", true)
