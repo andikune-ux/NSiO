@@ -55,7 +55,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.media3.common.Player
 
 @androidx.media3.common.util.UnstableApi
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +104,26 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var zoomOffset by remember { mutableStateOf(Offset.Zero) }
     val media = feed.getOrNull(index)
+    var hasRenderedFirstFrame by remember(media?.id) { mutableStateOf(false) }
+    val thumbnailAlpha by animateFloatAsState(
+        targetValue = if (hasRenderedFirstFrame) 0f else 1f,
+        animationSpec = tween(durationMillis = 260),
+        label = "TikTod thumbnail fade"
+    )
+    val exoPlayer = viewModel.player.exoPlayer
+
+    DisposableEffect(exoPlayer, media?.id) {
+        val expectedMediaId = media?.id
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (expectedMediaId != null && viewModel.currentlyPlaying.value?.id == expectedMediaId) {
+                    hasRenderedFirstFrame = true
+                }
+            }
+        }
+        exoPlayer?.addListener(listener)
+        onDispose { exoPlayer?.removeListener(listener) }
+    }
 
     LaunchedEffect(media?.id) {
         zoomScale = 1f
@@ -370,7 +392,26 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 } },
                 update = { it.player = viewModel.player.exoPlayer }
             )
-            if (!playerState.isPlaying) Icon(
+            // Keep the destination thumbnail above the player until Media3 reports
+            // that an actual video frame has been rendered. This prevents PlayerView
+            // from exposing its black shutter while the next Drive stream prepares.
+            if (thumbnailAlpha > 0.001f) {
+                Box(
+                    Modifier.fillMaxSize()
+                        .graphicsLayer { alpha = thumbnailAlpha }
+                        .background(Color.Black)
+                ) {
+                    if (media.thumbnailUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = media.thumbnailUrl,
+                            contentDescription = "${media.title} - pratinjau",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+            if (!playerState.isPlaying && hasRenderedFirstFrame) Icon(
                 Icons.Default.PlayArrow, null,
                 Modifier.align(Alignment.Center).size(54.dp),
                 tint = Color.White
