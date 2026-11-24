@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
@@ -308,25 +309,52 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             Column(
-                Modifier.align(Alignment.CenterEnd).padding(end = 8.dp, bottom = 26.dp),
+                Modifier.align(Alignment.CenterEnd)
+                    .padding(end = 6.dp, bottom = 28.dp)
+                    .width(54.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(1.dp)
+                verticalArrangement = Arrangement.spacedBy(13.dp)
             ) {
-                IconButton(onClick = { likes = store.addLike(media.id) }) {
-                    Icon(Icons.Default.Favorite, "Suka", tint = Color.White, modifier = Modifier.size(27.dp))
+                // Compact, consistent TikTok-style action rail: icon first, count directly below.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .background(Color.Black.copy(alpha = .16f))
+                            .clickable { likes = store.addLike(media.id) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Favorite, "Suka", tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                    Text(likes.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
-                Text(likes.toString(), color = Color.White, fontSize = 11.sp)
-                Spacer(Modifier.height(10.dp))
-                IconButton(onClick = { comments = store.comments(media.id); showComments = true }) {
-                    Icon(Icons.Default.Comment, "Komentar", tint = Color.White, modifier = Modifier.size(27.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .background(Color.Black.copy(alpha = .16f))
+                            .clickable { comments = store.comments(media.id); showComments = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Comment, "Komentar", tint = Color.White, modifier = Modifier.size(25.dp))
+                    }
+                    Text(comments.size.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
-                Text(comments.size.toString(), color = Color.White, fontSize = 11.sp)
-                Spacer(Modifier.height(10.dp))
-                Text("◉", color = Color.White, fontSize = 25.sp)
-                Text(views.toString(), color = Color.White, fontSize = 11.sp)
-                Spacer(Modifier.height(8.dp))
-                IconButton(onClick = { showOptions = true }) {
-                    Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(25.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .background(Color.Black.copy(alpha = .16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Visibility, "Dilihat", tint = Color.White, modifier = Modifier.size(25.dp))
+                    }
+                    Text(views.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+                Box(
+                    Modifier.size(42.dp).clip(CircleShape)
+                        .background(Color.Black.copy(alpha = .16f))
+                        .clickable { showOptions = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             }
 
