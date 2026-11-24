@@ -28,15 +28,10 @@ internal class DriveDownloadInterceptor : Interceptor {
                     it.startsWith("<html", true) ||
                     it.startsWith("<head", true)
             }
-        if (!looksLikeHtml) {
-            if (isTextualResponse(contentType)) {
-                response.close()
-                throw DriveDownloadException(
-                    "Google Drive mengirim respons teks ($contentType), bukan data video. Periksa apakah file yang dibagikan memang video."
-                )
-            }
-            return response
-        }
+        // A non-HTML response is passed through unchanged. Some legitimate media
+        // endpoints use text-like or generic MIME headers; MIME alone is not proof
+        // that the response is an error page.
+        if (!looksLikeHtml) return response
 
         if (request.tag(DriveConfirmationFollowUp::class.java) != null) {
             response.close()
@@ -76,28 +71,15 @@ internal class DriveDownloadInterceptor : Interceptor {
                 "Konfirmasi Google Drive belum berhasil. Respons akhirnya masih berupa HTML, bukan video."
             )
         }
-        if (isTextualResponse(resolvedType)) {
-            resolved.close()
-            throw DriveDownloadException(
-                "Google Drive masih mengirim respons teks ($resolvedType), bukan data video."
-            )
-        }
         return resolved
     }
 
-    private fun isTextualResponse(contentType: String): Boolean {
-        val mimeType = contentType.substringBefore(';').trim().lowercase()
-        return mimeType.startsWith("text/") ||
-            mimeType in setOf("application/json", "application/xml", "application/xhtml+xml")
-    }
-
-    private fun isDriveDownloadRequest(host: String, path: String): Boolean {
+    internal fun isDriveDownloadRequest(host: String, path: String): Boolean {
         val driveHost = host.equals("drive.google.com", true) ||
             host.equals("drive.usercontent.google.com", true)
         return driveHost && (
             path.equals("/uc", true) ||
-                path.equals("/download", true) ||
-                path.startsWith("/file/d/", true)
+                path.equals("/download", true)
             )
     }
 }
