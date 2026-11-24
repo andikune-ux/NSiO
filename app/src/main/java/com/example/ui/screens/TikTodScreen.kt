@@ -31,12 +31,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +52,8 @@ import com.example.ui.MainViewModel
 import com.example.tiktok.TikTodFeedPolicy
 import com.example.tiktok.TikTodLocalStore
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 
 @androidx.media3.common.util.UnstableApi
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,7 +92,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var resumeOnReturn by remember { mutableStateOf(false) }
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
-    var drag by remember { mutableFloatStateOf(0f) }
+    val swipeOffset = remember { Animatable(0f) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1f) }
@@ -196,34 +200,92 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     )
                     val pointerId = down.id
                     var multiTouch = false
-                    var navigated = false
+                    var verticalDragStarted = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.filter { it.pressed }
                         if (pressed.size > 1) {
                             multiTouch = true
+                            swipeOffset.snapTo(0f)
                         }
                         val tracked = event.changes.firstOrNull { it.id == pointerId }
-                        if (!multiTouch && !navigated && tracked != null && tracked.pressed) {
+                        if (!multiTouch && tracked != null && tracked.pressed) {
                             val delta = tracked.position - down.position
                             val vertical = delta.y
                             val horizontal = delta.x
                             if (kotlin.math.abs(vertical) > viewConfiguration.touchSlop &&
                                 kotlin.math.abs(vertical) > kotlin.math.abs(horizontal) * 1.2f
                             ) {
-                                if (vertical < 0f) {
-                                    if (index < feed.lastIndex) startAt(index + 1) else next()
-                                } else if (index > 0) {
-                                    startAt(index - 1)
-                                }
-                                navigated = true
+                                verticalDragStarted = true
+                                swipeOffset.snapTo(vertical)
                                 tracked.consume()
                             }
                         }
                     } while (event.changes.any { it.pressed })
+
+                    if (!multiTouch && verticalDragStarted) {
+                        val distanceThreshold = (size.height * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
+                        val offset = swipeOffset.value
+                        val target = when {
+                            offset < -distanceThreshold && index < feed.lastIndex -> index + 1
+                            offset < -distanceThreshold && index == feed.lastIndex && feed.isNotEmpty() -> 0
+                            offset > distanceThreshold && index > 0 -> index - 1
+                            else -> null
+                        }
+                        if (target != null) {
+                            val direction = if (offset < 0f) -1f else 1f
+                            swipeOffset.animateTo(direction * size.height.toFloat(), tween(durationMillis = 220))
+                            if (target == 0 && index == feed.lastIndex) {
+                                feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
+                                if (feed.isNotEmpty()) startAt(0)
+                            } else {
+                                startAt(target)
+                            }
+                            swipeOffset.snapTo(0f)
+                        } else {
+                            swipeOffset.animateTo(0f, tween(durationMillis = 180))
+                        }
+                    } else if (multiTouch) {
+                        swipeOffset.snapTo(0f)
+                    }
                 }
             }
     ) {
+        val previewMedia = when {
+            swipeOffset.value < 0f -> feed.getOrNull(index + 1) ?: if (index == feed.lastIndex) feed.firstOrNull() else null
+            swipeOffset.value > 0f -> feed.getOrNull(index - 1)
+            else -> null
+        }
+        if (previewMedia != null && kotlin.math.abs(swipeOffset.value) > 0.5f) {
+            Box(
+                Modifier.fillMaxSize()
+                    .graphicsLayer {
+                        translationY = if (swipeOffset.value < 0f) size.height + swipeOffset.value
+                        else -size.height + swipeOffset.value
+                    }
+                    .background(Color.Black)
+            ) {
+                if (previewMedia.thumbnailUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = previewMedia.thumbnailUrl,
+                        contentDescription = previewMedia.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Box(
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                        .background(Color.Black.copy(alpha = .48f)).padding(18.dp)
+                ) {
+                    Text(previewMedia.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        Box(
+            Modifier.fillMaxSize().graphicsLayer {
+                translationY = swipeOffset.value
+            }
+        ) {
         if (media == null) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Belum ada video Google Drive", color = Color.White)
@@ -466,6 +528,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     center = Offset(progressX, centerY)
                 )
             }
+        }
         }
     }
 
