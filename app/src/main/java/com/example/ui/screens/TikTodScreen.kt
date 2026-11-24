@@ -91,7 +91,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             startAt(0)
         } else {
             val newItems = eligible.filter { item -> feed.none { it.id == item.id } }
-            if (newItems.isNotEmpty()) feed = feed + newItems
+            if (newItems.isNotEmpty()) {
+                // Newly discovered Drive videos are queued immediately after the active video.
+                feed = feed.take(index + 1) + newItems + feed.drop(index + 1)
+            }
         }
     }
     LaunchedEffect(media?.id, currentMedia?.id) {
