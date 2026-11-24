@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -188,14 +189,39 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 )
             }
             .pointerInput(feed, index) {
-                detectVerticalDragGestures(
-                    onVerticalDrag = { _, amount -> drag += amount },
-                    onDragEnd = {
-                        if (drag < -55f) { if (index < feed.lastIndex) startAt(index + 1) else next() }
-                        else if (drag > 55f && index > 0) startAt(index - 1)
-                        drag = 0f
-                    }
-                )
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial
+                    )
+                    val pointerId = down.id
+                    var multiTouch = false
+                    var navigated = false
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.size > 1) {
+                            multiTouch = true
+                        }
+                        val tracked = event.changes.firstOrNull { it.id == pointerId }
+                        if (!multiTouch && !navigated && tracked != null && tracked.pressed) {
+                            val delta = tracked.position - down.position
+                            val vertical = delta.y
+                            val horizontal = delta.x
+                            if (kotlin.math.abs(vertical) > viewConfiguration.touchSlop &&
+                                kotlin.math.abs(vertical) > kotlin.math.abs(horizontal) * 1.2f
+                            ) {
+                                if (vertical < 0f) {
+                                    if (index < feed.lastIndex) startAt(index + 1) else next()
+                                } else if (index > 0) {
+                                    startAt(index - 1)
+                                }
+                                navigated = true
+                                tracked.consume()
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
             }
     ) {
         if (media == null) {
