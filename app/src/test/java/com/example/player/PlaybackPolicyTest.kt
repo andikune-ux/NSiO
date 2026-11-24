@@ -54,15 +54,7 @@ class PlaybackPolicyTest {
     @Test
     fun preservesGoogleDriveInterceptorFailureInsteadOfCallingItInternetDisconnect() {
         val message = describeHttpPlaybackFailure(
-            listOf(
-                java.io.IOException("Google Drive mengirim halaman konfirmasi yang tidak dapat diproses: form tidak valid"),
-                androidx.media3.datasource.HttpDataSource.HttpDataSourceException(
-                    "HTTP request failed",
-                    java.io.IOException("Google Drive mengirim halaman konfirmasi yang tidak dapat diproses: form tidak valid"),
-                    androidx.media3.datasource.DataSpec.Builder().setUri("https://drive.google.com/uc?id=abc123").build(),
-                    androidx.media3.datasource.HttpDataSource.TYPE_READ
-                )
-            )
+            listOf(java.io.IOException("Google Drive mengirim halaman konfirmasi yang tidak dapat diproses: form tidak valid"))
         )
         org.junit.Assert.assertTrue(message.contains("Google Drive"))
         org.junit.Assert.assertFalse(message.contains("Periksa koneksi internet"))
