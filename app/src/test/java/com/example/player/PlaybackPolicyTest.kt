@@ -81,7 +81,7 @@ class PlaybackPolicyTest {
             .build()
         val html = """
             <html><body>
-              <form action="" method="get">
+              <form action="https://drive.usercontent.google.com/open" method="get">
                 <input type="hidden" name="id" value="abc123">
                 <input type="hidden" name="export" value="download">
                 <input type="hidden" name="uuid" value="session-456">
