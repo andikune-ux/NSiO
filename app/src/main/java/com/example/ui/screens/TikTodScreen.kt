@@ -13,8 +13,9 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
@@ -26,7 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -51,7 +54,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val playerState by viewModel.player.playerState.collectAsState()
     val currentMedia by viewModel.currentlyPlaying.collectAsState()
     val store = remember(context) { TikTodLocalStore(context) }
-    val driveIds = remember(playlists) { playlists.filter { it.sourceType.equals("DRIVE", true) || MediaSourceClassifier.isGoogleDriveUrl(it.url) }.mapTo(hashSetOf()) { it.id } }
+    val driveIds = remember(playlists) {
+        playlists.filter { it.sourceType.equals("DRIVE", true) || MediaSourceClassifier.isGoogleDriveUrl(it.url) }
+            .mapTo(hashSetOf()) { it.id }
+    }
     val eligible = remember(mediaList, activeProfile?.id, driveIds) {
         activeProfile?.id?.let { TikTodFeedPolicy.eligible(mediaList, it, driveIds) }.orEmpty()
     }
@@ -71,6 +77,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
     var drag by remember { mutableFloatStateOf(0f) }
+    var seekPosition by remember { mutableFloatStateOf(0f) }
+    var isSeeking by remember { mutableStateOf(false) }
     val media = feed.getOrNull(index)
 
     fun startAt(target: Int) {
@@ -78,6 +86,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         index = target.coerceIn(0, feed.lastIndex)
         retryUsed = false
         countedView = false
+        isSeeking = false
         val item = feed[index]
         viewModel.playMedia(item.copy(progressMs = 0L))
         viewModel.player.setPlaybackSpeed(speed)
@@ -98,10 +107,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             startAt(0)
         } else {
             val newItems = eligible.filter { item -> feed.none { it.id == item.id } }
-            if (newItems.isNotEmpty()) {
-                // Newly discovered Drive videos are queued immediately after the active video.
-                feed = feed.take(index + 1) + newItems + feed.drop(index + 1)
-            }
+            if (newItems.isNotEmpty()) feed = feed.take(index + 1) + newItems + feed.drop(index + 1)
         }
     }
     LaunchedEffect(media?.id, currentMedia?.id) {
@@ -182,88 +188,269 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { PlayerView(it).apply { useController = false; player = viewModel.player.exoPlayer; resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM } },
+                factory = { PlayerView(it).apply {
+                    useController = false
+                    player = viewModel.player.exoPlayer
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                } },
                 update = { it.player = viewModel.player.exoPlayer }
             )
-            if (!playerState.isPlaying) Icon(Icons.Default.PlayArrow, null, Modifier.align(Alignment.Center).size(56.dp), tint = Color.White)
-            if (playerState.isBuffering) LinearProgressIndicator(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp), color = Color.White, trackColor = Color.White.copy(alpha = .2f))
-            Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
-                IconButton(onClick = { viewModel.closePlayer(); onClose() }) { Icon(Icons.Default.ArrowBack, "Keluar", tint = Color.White) }
-                Text(media.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                Text(activeProfile?.name.orEmpty(), color = Color.White.copy(alpha = .7f), style = MaterialTheme.typography.labelSmall)
-            }
-            Column(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { likes = store.addLike(media.id) }) { Icon(Icons.Default.Favorite, "Suka", tint = Color.White) }
-                Text(likes.toString(), color = Color.White)
-                IconButton(onClick = { comments = store.comments(media.id); showComments = true }) { Icon(Icons.Default.Comment, "Komentar", tint = Color.White) }
-                Text(comments.size.toString(), color = Color.White)
-                Text("◉", color = Color.White)
-                Text(views.toString(), color = Color.White)
-                IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White) }
-            }
-            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 14.dp, end = 72.dp, bottom = 18.dp)) {
-                Text("${index + 1} / ${feed.size}", color = Color.White, style = MaterialTheme.typography.labelSmall)
+            if (!playerState.isPlaying) Icon(
+                Icons.Default.PlayArrow, null,
+                Modifier.align(Alignment.Center).size(54.dp),
+                tint = Color.White
+            )
+            if (playerState.isBuffering) {
                 LinearProgressIndicator(
-                    progress = { if (playerState.durationMs > 0) (playerState.currentPositionMs.toFloat() / playerState.durationMs).coerceIn(0f, 1f) else 0f },
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = Color.White, trackColor = Color.White.copy(alpha = .25f)
+                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
+                    color = Color.White, trackColor = Color.White.copy(alpha = .2f)
                 )
             }
+
+            // TikTok-style creator identity and caption: compact, anchored bottom-left.
+            Column(
+                Modifier.align(Alignment.BottomStart)
+                    .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Surface(shape = CircleShape, color = Color.White.copy(alpha = .20f), modifier = Modifier.size(30.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(activeProfile?.avatarEmoji?.takeIf { it.isNotBlank() } ?: "👤", fontSize = 17.sp)
+                        }
+                    }
+                    Text(
+                        activeProfile?.name?.takeIf { it.isNotBlank() } ?: "Profil",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+                Text(
+                    media.title,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2
+                )
+                Text(
+                    "${index + 1} / ${feed.size}",
+                    color = Color.White.copy(alpha = .72f),
+                    fontSize = 10.sp
+                )
+            }
+
+            Column(
+                Modifier.align(Alignment.CenterEnd).padding(end = 8.dp, bottom = 26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                IconButton(onClick = { likes = store.addLike(media.id) }) {
+                    Icon(Icons.Default.Favorite, "Suka", tint = Color.White, modifier = Modifier.size(27.dp))
+                }
+                Text(likes.toString(), color = Color.White, fontSize = 11.sp)
+                Spacer(Modifier.height(10.dp))
+                IconButton(onClick = { comments = store.comments(media.id); showComments = true }) {
+                    Icon(Icons.Default.Comment, "Komentar", tint = Color.White, modifier = Modifier.size(27.dp))
+                }
+                Text(comments.size.toString(), color = Color.White, fontSize = 11.sp)
+                Spacer(Modifier.height(10.dp))
+                Text("◉", color = Color.White, fontSize = 25.sp)
+                Text(views.toString(), color = Color.White, fontSize = 11.sp)
+                Spacer(Modifier.height(8.dp))
+                IconButton(onClick = { showOptions = true }) {
+                    Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(25.dp))
+                }
+            }
+
+            // A real seek control; position is committed only when the drag finishes.
+            val duration = playerState.durationMs.coerceAtLeast(0L)
+            val shownPosition = if (isSeeking) seekPosition else playerState.currentPositionMs.toFloat()
+            Slider(
+                value = if (duration > 0L) shownPosition.coerceIn(0f, duration.toFloat()) else 0f,
+                onValueChange = {
+                    if (duration > 0L) {
+                        isSeeking = true
+                        seekPosition = it
+                    }
+                },
+                onValueChangeFinished = {
+                    if (duration > 0L && isSeeking) viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
+                    isSeeking = false
+                },
+                enabled = duration > 0L && playerState.isSeekable,
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 22.dp)
+                    .height(24.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = Color.White,
+                    inactiveTrackColor = Color.White.copy(alpha = .35f)
+                )
+            )
         }
     }
-    if (showOptions) AlertDialog(
-        onDismissRequest = { showOptions = false },
-        title = { Text("Pengaturan TikTod") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Kecepatan")
-                TextButton(onClick = {
-                    landscapeMode = !landscapeMode
-                    hostActivity?.requestedOrientation = if (landscapeMode) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                }) { Text(if (landscapeMode) "Kembali ke potret" else "Putar ke lanskap") }
-                listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { value -> FilterChip(selected = speed == value, onClick = {
-                            speed = value; store.setSpeed(value); viewModel.player.setPlaybackSpeed(value)
-                        }, label = { Text("${value}×") }) }
+
+    if (showComments && media != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showComments = false },
+            containerColor = Color(0xFF171717),
+            contentColor = Color.White,
+            scrimColor = Color.Black.copy(alpha = .28f),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .35f)) }
+        ) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = 300.dp, max = 560.dp)
+                    .padding(horizontal = 18.dp)
+            ) {
+                Text(
+                    "${comments.size} komentar",
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (comments.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Belum ada komentar. Jadilah yang pertama.", color = Color.White.copy(alpha = .65f), fontSize = 13.sp)
                     }
-                }
-                Divider()
-                Text("Kualitas sumber")
-                listOf("Original", "2160p", "1440p", "1080p", "720p", "480p", "360p").forEach { value ->
-                    Row(Modifier.fillMaxWidth().clickable { quality = value; store.setQuality(value) }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(quality == value, onClick = { quality = value; store.setQuality(value) })
-                        Text(value)
-                    }
-                }
-                Text("Resolusi tidak dipaksakan. Jika file Drive hanya menyediakan satu kualitas, kualitas asli yang diputar.", style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = { showOptions = false }) { Text("Selesai") } }
-    )
-    if (showComments && media != null) AlertDialog(
-        onDismissRequest = { showComments = false },
-        title = { Text("Komentar") },
-        text = {
-            Column {
-                OutlinedTextField(draft, { draft = it }, label = { Text("Tulis komentar") }, modifier = Modifier.fillMaxWidth())
-                LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                    itemsIndexed(comments) { i, comment ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(comment, Modifier.weight(1f))
-                            TextButton(onClick = { comments = store.deleteComment(media.id, i) }) { Text("Hapus") }
+                } else {
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+                        itemsIndexed(comments) { i, comment ->
+                            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Surface(shape = CircleShape, color = Color(0xFF343434), modifier = Modifier.size(34.dp)) {
+                                    Box(contentAlignment = Alignment.Center) { Text("👤", fontSize = 17.sp) }
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text(activeProfile?.name ?: "Pengguna", color = Color.White.copy(alpha = .7f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    Text(comment, color = Color.White, fontSize = 13.sp, lineHeight = 18.sp)
+                                    Text("Komentar lokal", color = Color.White.copy(alpha = .45f), fontSize = 10.sp)
+                                }
+                                TextButton(
+                                    onClick = { comments = store.deleteComment(media.id, i) },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                ) { Text("Hapus", color = Color.White.copy(alpha = .6f), fontSize = 10.sp) }
+                            }
                         }
                     }
                 }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        placeholder = { Text("Tambahkan komentar...", color = Color.White.copy(alpha = .5f), fontSize = 13.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color.White.copy(alpha = .45f),
+                            unfocusedBorderColor = Color.White.copy(alpha = .2f),
+                            cursorColor = Color.White
+                        )
+                    )
+                    TextButton(
+                        enabled = draft.isNotBlank(),
+                        onClick = {
+                            comments = store.addComment(media.id, draft)
+                            draft = ""
+                        }
+                    ) { Text("Kirim", color = Color(0xFF80CBC4), fontWeight = FontWeight.SemiBold) }
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = {
-            if (draft.isNotBlank()) { comments = store.addComment(media.id, draft); draft = "" }
-        }) { Text("Kirim") } },
-        dismissButton = { TextButton(onClick = { showComments = false }) { Text("Tutup") } }
-    )
-}
+        }
+    }
 
+    if (showOptions) {
+        ModalBottomSheet(
+            onDismissRequest = { showOptions = false },
+            containerColor = Color(0xFF171717),
+            contentColor = Color.White,
+            scrimColor = Color.Black.copy(alpha = .28f),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .35f)) }
+        ) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 620.dp)
+                    .navigationBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Pengaturan video", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Orientasi", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text("Mode layar video", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = {
+                        landscapeMode = !landscapeMode
+                        hostActivity?.requestedOrientation = if (landscapeMode) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    }) { Text(if (landscapeMode) "Potret" else "Lanskap", color = Color(0xFF80CBC4)) }
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = .12f))
+                Text("Kecepatan pemutaran", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f, 5f, 6f, 7f, 8f).chunked(4).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        row.forEach { value ->
+                            FilterChip(
+                                selected = speed == value,
+                                onClick = {
+                                    speed = value
+                                    store.setSpeed(value)
+                                    viewModel.player.setPlaybackSpeed(value)
+                                },
+                                label = { Text("${value}×", fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF315D59),
+                                    selectedLabelColor = Color.White,
+                                    labelColor = Color.White.copy(alpha = .85f)
+                                )
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = .12f))
+                Text("Kualitas sumber", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                listOf("Original", "2160p", "1440p", "1080p", "720p", "480p", "360p").chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { value ->
+                            Row(
+                                Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                    .clickable { quality = value; store.setQuality(value) }
+                                    .padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = quality == value,
+                                    onClick = { quality = value; store.setQuality(value) },
+                                    colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF80CBC4), unselectedColor = Color.White.copy(alpha = .6f))
+                                )
+                                Text(value, color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+                Text(
+                    "Pilihan kualitas mengikuti track yang tersedia. Jika Drive hanya menyediakan satu resolusi, video tetap diputar pada kualitas asli.",
+                    color = Color.White.copy(alpha = .55f),
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
+                TextButton(
+                    onClick = { showOptions = false },
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Selesai", color = Color(0xFF80CBC4)) }
+            }
+        }
+    }
+}
 
 private fun Context.findTikTodActivity(): Activity? {
     var current: Context = this
