@@ -3,6 +3,7 @@ package com.example.player
 import java.io.IOException
 import okhttp3.FormBody
 import okhttp3.Interceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -74,8 +75,7 @@ internal fun googleDriveConfirmationRequestOrNull(request: Request, html: String
             }.build()
             builder.method("POST", body).build()
         } else {
-            val urlBuilder = request.url.newBuilder()
-            val actionUrl = okhttp3.HttpUrl.get(action)
+            val actionUrl = action.toHttpUrl()
             val target = actionUrl.newBuilder()
             fields.forEach { (name, value) ->
                 target.removeAllQueryParameters(name).addQueryParameter(name, value)
