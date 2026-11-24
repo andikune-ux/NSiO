@@ -43,6 +43,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val mediaList by viewModel.mediaList.collectAsState()
     val playlists by viewModel.sourcePlaylists.collectAsState()
     val playerState by viewModel.player.playerState.collectAsState()
+    val currentMedia by viewModel.currentlyPlaying.collectAsState()
     val store = remember(context) { TikTodLocalStore(context) }
     val driveIds = remember(playlists) { playlists.filter { it.sourceType.equals("DRIVE", true) || MediaSourceClassifier.isGoogleDriveUrl(it.url) }.mapTo(hashSetOf()) { it.id } }
     val eligible = remember(mediaList, activeProfile?.id, driveIds) {
@@ -92,6 +93,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             val newItems = eligible.filter { item -> feed.none { it.id == item.id } }
             if (newItems.isNotEmpty()) feed = feed + newItems
         }
+    }
+    LaunchedEffect(media?.id, currentMedia?.id) {
+        if (media != null && currentMedia?.id != media.id) startAt(index)
     }
     LaunchedEffect(playerState.isPlaying, media?.id) {
         if (media != null && playerState.isPlaying && !countedView) {
