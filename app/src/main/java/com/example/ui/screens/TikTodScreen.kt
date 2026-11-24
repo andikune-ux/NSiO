@@ -337,14 +337,16 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     val oldCentroid = previousCentroid
                                     if (oldCentroid != null && previousDistance > 0f && distance > 0f) {
                                         val previousScale = zoomScale
-                                        val nextScale = (previousScale * (distance / previousDistance)).coerceIn(1f, 5f)
+                                        val nextScale = (previousScale * (distance / previousDistance)).coerceIn(0.5f, 5f)
                                         val center = Offset(size.width / 2f, size.height / 2f)
                                         val factor = nextScale / previousScale
                                         val nextOffset = (zoomOffset + center - oldCentroid) * factor +
                                             oldCentroid - center + (centroid - oldCentroid)
-                                        val maxX = size.width * (nextScale - 1f) / 2f
-                                        val maxY = size.height * (nextScale - 1f) / 2f
+                                        val maxX = size.width * (nextScale - 1f).coerceAtLeast(0f) / 2f
+                                        val maxY = size.height * (nextScale - 1f).coerceAtLeast(0f) / 2f
                                         zoomScale = nextScale
+                                        // Below the original size, keep the reduced video centered.
+                                        // At 1x and above, allow panning without exposing empty edges.
                                         zoomOffset = if (nextScale <= 1f) Offset.Zero else Offset(
                                             nextOffset.x.coerceIn(-maxX, maxX),
                                             nextOffset.y.coerceIn(-maxY, maxY)
