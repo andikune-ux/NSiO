@@ -406,7 +406,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             } else {
                                 Box(Modifier.fillMaxSize()) {
                                     Box(Modifier.fillMaxSize().padding(bottom = 48.05.dp)) {
-                                        AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
+                                        AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true }, { showTikTod = true })
                                     }
                                     BottomNavSafeAreaGlass(Modifier.align(Alignment.BottomCenter))
                                     BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter))
