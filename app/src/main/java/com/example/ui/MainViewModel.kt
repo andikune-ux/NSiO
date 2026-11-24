@@ -480,6 +480,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var playbackQueueOrder: List<MediaItem> = emptyList()
     private var playbackQueueIndex: Int = -1
     private var handledPlaybackEnd = false
+    @Volatile private var tikTodModeActive = false
+
+    /** TikTod owns feed advancement and must not inherit the regular player's Repeat mode. */
+    fun setTikTodModeActive(active: Boolean) {
+        tikTodModeActive = active
+    }
 
     private fun syncPlaybackQueue(current: MediaItem, forceRebuild: Boolean = false) {
         val drivePlaylistIds = _sourcePlaylists.value
@@ -544,7 +550,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             player.playerState.collect { state ->
                 if (state.playbackEnded && !handledPlaybackEnd) {
                     handledPlaybackEnd = true
-                    handlePlaybackEnded()
+                    if (!tikTodModeActive) handlePlaybackEnded()
                 } else if (!state.playbackEnded) {
                     handledPlaybackEnd = false
                 }

@@ -59,6 +59,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 
 @androidx.media3.common.util.UnstableApi
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,8 +104,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var swipeAnimationJob by remember { mutableStateOf<Job?>(null) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
+    // zoomScale is relative to the initial cover-filled frame (1x). It may
+    // shrink to the full-fit boundary when the user pinches out.
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var zoomOffset by remember { mutableStateOf(Offset.Zero) }
+    var videoAspectRatio by remember { mutableFloatStateOf(0f) }
     val media = feed.getOrNull(index)
     var hasRenderedFirstFrame by remember(media?.id) { mutableStateOf(false) }
     val thumbnailAlpha by animateFloatAsState(
@@ -122,6 +126,17 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     hasRenderedFirstFrame = true
                 }
             }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (expectedMediaId != null && viewModel.currentlyPlaying.value?.id == expectedMediaId &&
+                    videoSize.width > 0 && videoSize.height > 0
+                ) {
+                    var aspect = videoSize.width.toFloat() * videoSize.pixelWidthHeightRatio /
+                        videoSize.height.toFloat()
+                    if (videoSize.unappliedRotationDegrees % 180 != 0) aspect = 1f / aspect
+                    videoAspectRatio = aspect.takeIf { it.isFinite() && it > 0f } ?: 0f
+                }
+            }
         }
         exoPlayer?.addListener(listener)
         onDispose { exoPlayer?.removeListener(listener) }
@@ -130,6 +145,12 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     LaunchedEffect(media?.id) {
         zoomScale = 1f
         zoomOffset = Offset.Zero
+        videoAspectRatio = 0f
+    }
+
+    DisposableEffect(viewModel) {
+        viewModel.setTikTodModeActive(true)
+        onDispose { viewModel.setTikTodModeActive(false) }
     }
 
     fun startAt(target: Int) {
@@ -338,8 +359,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             AndroidView(
                 modifier = Modifier.fillMaxSize()
                     .graphicsLayer {
-                        scaleX = zoomScale
-                        scaleY = zoomScale
+                        val containerAspect = if (size.height > 0f) size.width / size.height else 1f
+                        val aspect = videoAspectRatio.takeIf { it > 0f } ?: containerAspect
+                        val coverScale = maxOf(aspect / containerAspect, containerAspect / aspect)
+                        scaleX = coverScale * zoomScale
+                        scaleY = coverScale * zoomScale
                         translationX = zoomOffset.x
                         translationY = zoomOffset.y
                     }
@@ -360,27 +384,47 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     val distance = kotlin.math.sqrt(dx * dx + dy * dy)
                                     val oldCentroid = previousCentroid
                                     if (oldCentroid != null && previousDistance > 0f && distance > 0f) {
+                                        val containerAspect = size.width.toFloat() / size.height.toFloat()
+                                        val aspect = videoAspectRatio.takeIf { it > 0f } ?: containerAspect
+                                        val coverScale = maxOf(aspect / containerAspect, containerAspect / aspect)
+                                        val minimumZoom = 1f / coverScale
                                         val previousScale = zoomScale
-                                        val nextScale = (previousScale * (distance / previousDistance)).coerceIn(0.5f, 5f)
+                                        val nextScale = (previousScale * (distance / previousDistance))
+                                            .coerceIn(minimumZoom, 5f)
                                         val center = Offset(size.width / 2f, size.height / 2f)
                                         val factor = nextScale / previousScale
-                                        val nextOffset = (zoomOffset + center - oldCentroid) * factor +
-                                            oldCentroid - center + (centroid - oldCentroid)
-                                        val maxX = size.width * (nextScale - 1f).coerceAtLeast(0f) / 2f
-                                        val maxY = size.height * (nextScale - 1f).coerceAtLeast(0f) / 2f
+
+                                        // Keep the image point under the fingers stable while pinching,
+                                        // and translate by the centroid movement for two-finger panning.
+                                        val nextOffset = zoomOffset * factor +
+                                            (centroid - center) - (oldCentroid - center) * factor
+
+                                        // PlayerView uses FIT. These are the dimensions of that fitted
+                                        // image before the cover transform, so bounds follow the real
+                                        // video aspect ratio rather than the full screen rectangle.
+                                        val fitWidth = if (aspect >= containerAspect) {
+                                            size.width.toFloat()
+                                        } else {
+                                            size.height.toFloat() * aspect
+                                        }
+                                        val fitHeight = fitWidth / aspect
+                                        val effectiveScale = coverScale * nextScale
+                                        val maxX = ((fitWidth * effectiveScale - size.width) / 2f).coerceAtLeast(0f)
+                                        val maxY = ((fitHeight * effectiveScale - size.height) / 2f).coerceAtLeast(0f)
+
                                         zoomScale = nextScale
-                                        // Below the original size, keep the reduced video centered.
-                                        // At 1x and above, allow panning without exposing empty edges.
-                                        zoomOffset = if (nextScale <= 1f) Offset.Zero else Offset(
+                                        zoomOffset = Offset(
                                             nextOffset.x.coerceIn(-maxX, maxX),
                                             nextOffset.y.coerceIn(-maxY, maxY)
                                         )
                                     }
                                     previousCentroid = centroid
                                     previousDistance = distance
-                                    // Only pinch gestures are consumed; one-finger feed swipes pass through.
+                                    // Consume only multi-touch input. One-finger tap, hold and feed swipe
+                                    // remain owned by their existing parent gesture handlers.
                                     pressed.forEach { it.consume() }
                                 } else {
+                                    // Reset the baseline whenever the pointer count drops to one.
                                     previousCentroid = null
                                     previousDistance = 0f
                                 }
@@ -390,7 +434,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 factory = { PlayerView(it).apply {
                     useController = false
                     player = viewModel.player.exoPlayer
-                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    // FIT keeps the original uncropped frame available; the Compose cover transform
+                    // recreates the current fill-screen appearance and lets pinch-out reveal the edges.
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 } },
                 update = { it.player = viewModel.player.exoPlayer }
             )
