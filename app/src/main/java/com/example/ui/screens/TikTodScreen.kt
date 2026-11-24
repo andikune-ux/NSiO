@@ -11,7 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -211,19 +213,45 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         translationY = zoomOffset.y
                     }
                     .pointerInput(media.id) {
-                        detectTransformGestures { centroid, pan, zoom, _ ->
-                            val previousScale = zoomScale
-                            val nextScale = (previousScale * zoom).coerceIn(1f, 5f)
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            val factor = nextScale / previousScale
-                            val nextOffset = (zoomOffset + center - centroid) * factor + centroid - center + pan
-                            val maxX = size.width * (nextScale - 1f) / 2f
-                            val maxY = size.height * (nextScale - 1f) / 2f
-                            zoomScale = nextScale
-                            zoomOffset = if (nextScale <= 1f) Offset.Zero else Offset(
-                                nextOffset.x.coerceIn(-maxX, maxX),
-                                nextOffset.y.coerceIn(-maxY, maxY)
-                            )
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            var previousCentroid: Offset? = null
+                            var previousDistance = 0f
+                            do {
+                                val event = awaitPointerEvent()
+                                val pressed = event.changes.filter { it.pressed }
+                                if (pressed.size >= 2) {
+                                    val first = pressed[0].position
+                                    val second = pressed[1].position
+                                    val centroid = Offset((first.x + second.x) / 2f, (first.y + second.y) / 2f)
+                                    val dx = first.x - second.x
+                                    val dy = first.y - second.y
+                                    val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                                    val oldCentroid = previousCentroid
+                                    if (oldCentroid != null && previousDistance > 0f && distance > 0f) {
+                                        val previousScale = zoomScale
+                                        val nextScale = (previousScale * (distance / previousDistance)).coerceIn(1f, 5f)
+                                        val center = Offset(size.width / 2f, size.height / 2f)
+                                        val factor = nextScale / previousScale
+                                        val nextOffset = (zoomOffset + center - oldCentroid) * factor +
+                                            oldCentroid - center + (centroid - oldCentroid)
+                                        val maxX = size.width * (nextScale - 1f) / 2f
+                                        val maxY = size.height * (nextScale - 1f) / 2f
+                                        zoomScale = nextScale
+                                        zoomOffset = if (nextScale <= 1f) Offset.Zero else Offset(
+                                            nextOffset.x.coerceIn(-maxX, maxX),
+                                            nextOffset.y.coerceIn(-maxY, maxY)
+                                        )
+                                    }
+                                    previousCentroid = centroid
+                                    previousDistance = distance
+                                    // Only pinch gestures are consumed; one-finger feed swipes pass through.
+                                    pressed.forEach { it.consume() }
+                                } else {
+                                    previousCentroid = null
+                                    previousDistance = 0f
+                                }
+                            } while (event.changes.any { it.pressed })
                         }
                     },
                 factory = { PlayerView(it).apply {
