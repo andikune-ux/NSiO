@@ -105,7 +105,8 @@ internal fun resolveConfirmationUrl(
     document.select("form[action]").forEach { form ->
         val action = form.attr("abs:action").ifBlank { form.attr("action") }
         val actionUrl = action.toHttpUrlOrNull() ?: return@forEach
-        if (!actionUrl.host.contains("google.com", true) ||
+        if (!(actionUrl.host.equals("drive.google.com", true) ||
+                actionUrl.host.equals("drive.usercontent.google.com", true)) ||
             !(actionUrl.encodedPath.contains("download", true) || actionUrl.encodedPath.equals("/uc", true))
         ) return@forEach
         val builder = actionUrl.newBuilder()
@@ -118,7 +119,7 @@ internal fun resolveConfirmationUrl(
 
     // Drive may issue a one-time download_warning cookie instead of a form token.
     val warningToken = setCookieHeaders.firstNotNullOfOrNull { header ->
-        Regex("(?:^|[,;]\\s*)download_warning_[^=;]+|(?:^|[,;]\\s*)download_warning=([^;]+)")
+        Regex("(?:^|[,;]\\s*)download_warning(?:_[^=;]+)?=([^;]+)")
             .find(header)?.groupValues?.getOrNull(1)
     }?.takeIf { it.isNotBlank() }
     if (warningToken != null) {
