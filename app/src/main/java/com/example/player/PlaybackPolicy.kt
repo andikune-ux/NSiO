@@ -1,9 +1,12 @@
 package com.example.player
 
 /**
- * Converts a public Google Drive preview URL into a direct download endpoint
- * so supported video files can be handled by Media3 instead of an embedded browser.
- * Private files may still require authentication and fail with a native playback error.
+ * Converts Google Drive file preview/view URLs to Drive's download endpoint.
+ *
+ * Do not hard-code a confirmation token: Drive may issue a per-response token
+ * and cookie for files that require a download confirmation. Starting at the
+ * canonical uc endpoint lets Drive issue its current redirect/confirmation
+ * response instead of sending Media3 a stale, fabricated token.
  */
 internal fun normalizePlaybackUrl(url: String): String {
     val normalized = url.trim()
@@ -23,7 +26,7 @@ internal fun normalizePlaybackUrl(url: String): String {
     } else null
 
     return if (!fileId.isNullOrBlank()) {
-        "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+        "https://drive.google.com/uc?export=download&id=$fileId"
     } else normalized
 }
 
