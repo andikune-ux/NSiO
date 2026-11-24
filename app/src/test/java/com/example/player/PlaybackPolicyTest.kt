@@ -5,15 +5,15 @@ import org.junit.Test
 
 class PlaybackPolicyTest {
     @Test
-    fun normalizesDriveFilePreviewAndViewLinksWithoutInventingConfirmationToken() {
-        val expected = "https://drive.google.com/uc?export=download&id=abc_123-xyz"
+    fun restoresLegacyDriveDownloadEndpointForPreviewAndViewLinks() {
+        val expected = "https://drive.usercontent.google.com/download?id=abc_123-xyz&export=download&confirm=t"
         assertEquals(expected, normalizePlaybackUrl("https://drive.google.com/file/d/abc_123-xyz/view?usp=sharing"))
         assertEquals(expected, normalizePlaybackUrl("https://drive.google.com/file/d/abc_123-xyz/preview"))
     }
 
     @Test
     fun normalizesDriveOpenAndUcQueryLinks() {
-        val expected = "https://drive.google.com/uc?export=download&id=abc123"
+        val expected = "https://drive.usercontent.google.com/download?id=abc123&export=download&confirm=t"
         assertEquals(expected, normalizePlaybackUrl("https://drive.google.com/open?id=abc123"))
         assertEquals(expected, normalizePlaybackUrl("https://drive.google.com/uc?export=download&id=abc123"))
     }
@@ -28,7 +28,7 @@ class PlaybackPolicyTest {
     @Test
     fun buildsGoogleDriveConfirmationRequestFromHiddenFormFields() {
         val original = okhttp3.Request.Builder()
-            .url("https://drive.google.com/uc?export=download&id=abc123")
+            .url("https://drive.usercontent.google.com/download?id=abc123&export=download&confirm=t")
             .header("Range", "bytes=0-")
             .build()
         val html = """
