@@ -308,53 +308,93 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 )
             }
 
+            // TikTok-style right action rail: uniform hit areas, clean icons and compact counts.
             Column(
-                Modifier.align(Alignment.CenterEnd)
-                    .padding(end = 6.dp, bottom = 28.dp)
-                    .width(54.dp),
+                Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 94.dp)
+                    .width(52.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(13.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Compact, consistent TikTok-style action rail: icon first, count directly below.
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Visibility,
+                            "Dilihat",
+                            tint = Color.White,
+                            modifier = Modifier.size(29.dp)
+                        )
+                    }
+                    Text(
+                        views.toString(),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .background(Color.Black.copy(alpha = .16f))
+                        Modifier.size(44.dp).clip(CircleShape)
                             .clickable { likes = store.addLike(media.id) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Favorite, "Suka", tint = Color.White, modifier = Modifier.size(26.dp))
+                        Icon(
+                            Icons.Default.Favorite,
+                            "Suka",
+                            tint = Color.White,
+                            modifier = Modifier.size(30.dp)
+                        )
                     }
-                    Text(likes.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        likes.toString(),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .background(Color.Black.copy(alpha = .16f))
-                            .clickable { comments = store.comments(media.id); showComments = true },
+                        Modifier.size(44.dp).clip(CircleShape)
+                            .clickable {
+                                comments = store.comments(media.id)
+                                showComments = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Comment, "Komentar", tint = Color.White, modifier = Modifier.size(25.dp))
+                        Icon(
+                            Icons.Default.Comment,
+                            "Komentar",
+                            tint = Color.White,
+                            modifier = Modifier.size(29.dp)
+                        )
                     }
-                    Text(comments.size.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(48.dp).clip(CircleShape)
-                            .background(Color.Black.copy(alpha = .16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Visibility, "Dilihat", tint = Color.White, modifier = Modifier.size(25.dp))
-                    }
-                    Text(views.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        comments.size.toString(),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
                 Box(
-                    Modifier.size(42.dp).clip(CircleShape)
-                        .background(Color.Black.copy(alpha = .16f))
+                    Modifier.size(44.dp).clip(CircleShape)
                         .clickable { showOptions = true },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(
+                        Icons.Default.MoreVert,
+                        "Opsi",
+                        tint = Color.White,
+                        modifier = Modifier.size(29.dp)
+                    )
                 }
             }
 
