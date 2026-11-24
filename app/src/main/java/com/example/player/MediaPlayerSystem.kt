@@ -262,6 +262,9 @@ class CS3IPlayer(
         // settings survive from plugin resolution into the actual media requests.
         // Creating a fresh OkHttpClient here silently drops that shared session.
         val client = app.baseClient.newBuilder().apply {
+            // Google Drive may answer a valid public download request with an HTML
+            // virus-scan confirmation page. Resolve that page before Media3 sees it.
+            addInterceptor(DriveDownloadInterceptor())
             interceptor?.let(::addInterceptor)
             if (subtitleHeaderMap.isNotEmpty()) {
                 addInterceptor { chain ->
@@ -406,8 +409,9 @@ class CS3IPlayer(
                         // Media3 wraps extractor, manifest, decoder and HTTP failures in
                         // PlaybackException. Try another CloudStream link for any source failure.
                         val causes = generateSequence<Throwable>(error) { it.cause }.toList()
+                        val driveError = causes.filterIsInstance<DriveDownloadException>().firstOrNull()
                         val httpError = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>().firstOrNull()
-                        val cause = httpError ?: error.cause
+                        val cause = driveError ?: httpError ?: error.cause
                         val responseCode = httpError?.responseCode
 
                         // Retry only source/network/parser I/O failures. Decoder, DRM and
@@ -445,6 +449,8 @@ class CS3IPlayer(
 
                         val causeName = cause?.javaClass?.simpleName.orEmpty()
                         val errorDesc = when {
+                            driveError != null -> driveError.message
+                                ?: "Google Drive tidak memberikan data video yang dapat diputar."
                             cause is HttpDataSource.InvalidResponseCodeException -> {
                                 when (cause.responseCode) {
                                     401, 403 -> "Akses ke sumber video ditolak (HTTP ${cause.responseCode}). Link mungkin memerlukan sesi atau token baru."
