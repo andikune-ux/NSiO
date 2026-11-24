@@ -263,6 +263,9 @@ class CS3IPlayer(
         // Creating a fresh OkHttpClient here silently drops that shared session.
         val client = app.baseClient.newBuilder().apply {
             interceptor?.let(::addInterceptor)
+            // Google Drive may answer a public-file download with an HTML interstitial
+            // containing a one-time confirmation token. Resolve it before Media3 sees it.
+            addInterceptor(GoogleDriveDownloadInterceptor())
             if (subtitleHeaderMap.isNotEmpty()) {
                 addInterceptor { chain ->
                     val request = chain.request()
