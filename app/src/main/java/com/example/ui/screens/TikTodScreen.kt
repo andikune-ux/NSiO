@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Comment
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -86,6 +87,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var retryUsed by remember { mutableStateOf(false) }
     var countedView by remember { mutableStateOf(false) }
     var showOptions by remember { mutableStateOf(false) }
+    var isCleanMode by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
     var comments by remember { mutableStateOf(emptyList<String>()) }
@@ -411,12 +413,12 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     }
                 }
             }
-            if (!playerState.isPlaying && hasRenderedFirstFrame) Icon(
+            if (!isCleanMode && !playerState.isPlaying && hasRenderedFirstFrame) Icon(
                 Icons.Default.PlayArrow, null,
                 Modifier.align(Alignment.Center).size(54.dp),
                 tint = Color.White
             )
-            if (playerState.isBuffering) {
+            if (!isCleanMode && playerState.isBuffering) {
                 LinearProgressIndicator(
                     modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
                     color = Color.White, trackColor = Color.White.copy(alpha = .2f)
@@ -424,6 +426,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             // TikTok-style creator identity and caption: compact, anchored bottom-left.
+            if (!isCleanMode) {
             Column(
                 Modifier.align(Alignment.BottomStart)
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
@@ -457,8 +460,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     fontSize = 10.sp
                 )
             }
+            }
 
             // Separate TikTok-style action buttons: each icon has its own background and spacing.
+            if (!isCleanMode) {
             Column(
                 Modifier.align(Alignment.BottomEnd)
                     .padding(end = 9.dp, bottom = 90.dp)
@@ -512,6 +517,23 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                }
+            }
+
+            }
+
+            if (isCleanMode) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd)
+                        .padding(top = 18.dp, end = 14.dp)
+                        .size(34.dp)
+                        .clickable { isCleanMode = false },
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = .38f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Close, contentDescription = "Keluar Clean", tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -726,6 +748,20 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("Pengaturan video", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .clickable { showOptions = false; isCleanMode = true }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Clean Mode", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text("Sembunyikan semua elemen selain video dan seek bar", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+                    }
+                    Icon(Icons.Default.Close, contentDescription = "Aktifkan Clean Mode", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+                HorizontalDivider(color = Color.White.copy(alpha = .12f))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text("Orientasi", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
