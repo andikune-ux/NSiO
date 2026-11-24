@@ -65,4 +65,25 @@ class DriveDownloadInterceptorTest {
             )
         )
     }
+    @Test
+    fun resolvesLegacyGoogleusercontentDownloadHost() {
+        val html = """
+            <html><body>
+              <form action="https://drive.googleusercontent.com/uc" method="get">
+                <input type="hidden" name="id" value="legacy_file">
+                <input type="hidden" name="export" value="download">
+                <input type="hidden" name="confirm" value="legacy_token">
+              </form>
+            </body></html>
+        """.trimIndent()
+
+        val resolved = resolveConfirmationUrl(
+            "https://drive.googleusercontent.com/uc?id=legacy_file".toHttpUrl(),
+            html
+        )
+
+        assertEquals("legacy_file", resolved?.queryParameter("id"))
+        assertEquals("legacy_token", resolved?.queryParameter("confirm"))
+    }
+
 }
