@@ -308,93 +308,61 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 )
             }
 
-            // TikTok-style right action rail: uniform hit areas, clean icons and compact counts.
+            // Separate TikTok-style action buttons: each icon has its own background and spacing.
             Column(
                 Modifier.align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 94.dp)
+                    .padding(end = 9.dp, bottom = 90.dp)
                     .width(52.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Visibility,
-                            "Dilihat",
-                            tint = Color.White,
-                            modifier = Modifier.size(29.dp)
-                        )
-                    }
-                    Text(
-                        views.toString(),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        Modifier.size(44.dp).clip(CircleShape)
-                            .clickable { likes = store.addLike(media.id) },
-                        contentAlignment = Alignment.Center
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = .30f)
                     ) {
-                        Icon(
-                            Icons.Default.Favorite,
-                            "Suka",
-                            tint = Color.White,
-                            modifier = Modifier.size(30.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Visibility, "Dilihat", tint = Color.White, modifier = Modifier.size(25.dp))
+                        }
                     }
-                    Text(
-                        likes.toString(),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text(views.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        Modifier.size(44.dp).clip(CircleShape)
-                            .clickable {
-                                comments = store.comments(media.id)
-                                showComments = true
-                            },
-                        contentAlignment = Alignment.Center
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        modifier = Modifier.size(42.dp).clickable { likes = store.addLike(media.id) },
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = .30f)
                     ) {
-                        Icon(
-                            Icons.Default.Comment,
-                            "Komentar",
-                            tint = Color.White,
-                            modifier = Modifier.size(29.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Favorite, "Suka", tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
                     }
-                    Text(
-                        comments.size.toString(),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text(likes.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape)
-                        .clickable { showOptions = true },
-                    contentAlignment = Alignment.Center
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        modifier = Modifier.size(42.dp).clickable {
+                            comments = store.comments(media.id)
+                            showComments = true
+                        },
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = .30f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Comment, "Komentar", tint = Color.White, modifier = Modifier.size(25.dp))
+                        }
+                    }
+                    Text(comments.size.toString(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Surface(
+                    modifier = Modifier.size(42.dp).clickable { showOptions = true },
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = .30f)
                 ) {
-                    Icon(
-                        Icons.Default.MoreVert,
-                        "Opsi",
-                        tint = Color.White,
-                        modifier = Modifier.size(29.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.MoreVert, "Opsi", tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
                 }
             }
 
