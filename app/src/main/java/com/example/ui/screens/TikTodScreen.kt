@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -301,31 +302,80 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
 
-            // A real seek control; position is committed only when the drag finishes.
+            // Thin TikTok-style seek bar. All positions are mapped to the real media duration.
             val duration = playerState.durationMs.coerceAtLeast(0L)
             val shownPosition = if (isSeeking) seekPosition else playerState.currentPositionMs.toFloat()
-            Slider(
-                value = if (duration > 0L) shownPosition.coerceIn(0f, duration.toFloat()) else 0f,
-                onValueChange = {
-                    if (duration > 0L) {
-                        isSeeking = true
-                        seekPosition = it
-                    }
-                },
-                onValueChangeFinished = {
-                    if (duration > 0L && isSeeking) viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
-                    isSeeking = false
-                },
-                enabled = duration > 0L && playerState.isSeekable,
+            val seekFraction = if (duration > 0L) {
+                (shownPosition / duration.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+            Canvas(
                 modifier = Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 22.dp)
-                    .height(24.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(alpha = .35f)
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, bottom = 22.dp)
+                    .height(14.dp)
+                    .pointerInput(media.id, duration, playerState.isSeekable) {
+                        fun updateFromX(x: Float) {
+                            if (duration > 0L && playerState.isSeekable && size.width > 0) {
+                                val fraction = (x / size.width).coerceIn(0f, 1f)
+                                seekPosition = fraction * duration.toFloat()
+                                isSeeking = true
+                            }
+                        }
+                        detectTapGestures { point ->
+                            updateFromX(point.x)
+                            if (duration > 0L && playerState.isSeekable) {
+                                viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
+                                isSeeking = false
+                            }
+                        }
+                    }
+                    .pointerInput(media.id, duration, playerState.isSeekable) {
+                        fun updateFromX(x: Float) {
+                            if (duration > 0L && playerState.isSeekable && size.width > 0) {
+                                seekPosition = (x / size.width).coerceIn(0f, 1f) * duration.toFloat()
+                                isSeeking = true
+                            }
+                        }
+                        detectDragGestures(
+                            onDragStart = { point -> updateFromX(point.x) },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                updateFromX(change.position.x)
+                            },
+                            onDragEnd = {
+                                if (duration > 0L && isSeeking) {
+                                    viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
+                                }
+                                isSeeking = false
+                            },
+                            onDragCancel = { isSeeking = false }
+                        )
+                    }
+            ) {
+                val centerY = size.height / 2f
+                val startX = 0f
+                val endX = size.width
+                drawLine(
+                    color = Color.White.copy(alpha = .38f),
+                    start = Offset(startX, centerY),
+                    end = Offset(endX, centerY),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
-            )
+                val progressX = size.width * seekFraction
+                drawLine(
+                    color = Color.White,
+                    start = Offset(startX, centerY),
+                    end = Offset(progressX, centerY),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+                drawCircle(
+                    color = Color.White,
+                    radius = 3.dp.toPx(),
+                    center = Offset(progressX, centerY)
+                )
+            }
         }
     }
 
