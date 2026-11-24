@@ -127,7 +127,7 @@ class AppUpdateManagerTest {
         assertFalse(shouldUseNativePlayer("PHOTO", "https://cdn.example/poster.jpg"))
         assertFalse(shouldUseNativePlayer("PHOTO", "https://drive.google.com/file/d/id/preview"))
         assertTrue(shouldUseNativePlayer("VIDEO", "https://drive.google.com/file/d/id/preview"))
-        assertEquals("https://drive.usercontent.google.com/download?id=abc_123-xyz&export=download&confirm=t", normalizePlaybackUrl("https://drive.google.com/file/d/abc_123-xyz/preview"))
+        assertEquals("https://drive.google.com/uc?export=download&id=abc_123-xyz", normalizePlaybackUrl("https://drive.google.com/file/d/abc_123-xyz/preview"))
         assertFalse(shouldUseNativePlayer("VIDEO", "   "))
     }
 
