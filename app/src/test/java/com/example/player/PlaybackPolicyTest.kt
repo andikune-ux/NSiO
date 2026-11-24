@@ -72,4 +72,79 @@ class PlaybackPolicyTest {
         val original = okhttp3.Request.Builder().url("https://example.com/video.mp4").build()
         assertEquals(null, googleDriveConfirmationRequestOrNull(original, "<html></html>"))
     }
+
+    @Test
+    fun acceptsDriveConfirmationFormWhenActionOmitsDownloadAndConfirmField() {
+        val original = okhttp3.Request.Builder()
+            .url("https://drive.usercontent.google.com/download?id=abc123&export=download")
+            .header("Range", "bytes=0-")
+            .build()
+        val html = """
+            <html><body>
+              <form action="" method="get">
+                <input type="hidden" name="id" value="abc123">
+                <input type="hidden" name="export" value="download">
+                <input type="hidden" name="uuid" value="session-456">
+              </form>
+            </body></html>
+        """.trimIndent()
+
+        val resolved = buildGoogleDriveConfirmationRequest(original, html)
+        assertEquals("drive.usercontent.google.com", resolved.url.host)
+        assertEquals("abc123", resolved.url.queryParameter("id"))
+        assertEquals("download", resolved.url.queryParameter("export"))
+        assertEquals("session-456", resolved.url.queryParameter("uuid"))
+        assertEquals("bytes=0-", resolved.header("Range"))
+    }
+
+    @Test
+    fun acceptsGoogleDriveConfirmationLinkWithoutForm() {
+        val original = okhttp3.Request.Builder()
+            .url("https://drive.usercontent.google.com/download?id=abc123&export=download")
+            .build()
+        val html = """
+            <html><body>
+              <a href="https://drive.usercontent.google.com/download?id=abc123&export=download&confirm=token-789">
+                Download
+              </a>
+            </body></html>
+        """.trimIndent()
+
+        val resolved = buildGoogleDriveConfirmationRequest(original, html)
+        assertEquals("token-789", resolved.url.queryParameter("confirm"))
+    }
+
+    @Test
+    fun rejectsConfirmationFormThatPostsToAnUnrelatedHost() {
+        val original = okhttp3.Request.Builder()
+            .url("https://drive.usercontent.google.com/download?id=abc123&export=download")
+            .build()
+        val html = """
+            <html><body>
+              <form action="https://example.com/download" method="get">
+                <input type="hidden" name="id" value="abc123">
+                <input type="hidden" name="export" value="download">
+                <input type="hidden" name="confirm" value="token-789">
+              </form>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(null, googleDriveConfirmationRequestOrNull(original, html))
+    }
+
+    @Test
+    fun resolvesGoogleDriveMetaRefreshConfirmationUrl() {
+        val original = okhttp3.Request.Builder()
+            .url("https://drive.usercontent.google.com/download?id=abc123&export=download")
+            .build()
+        val html = """
+            <html><head>
+              <meta http-equiv="refresh" content="0; url=/download?id=abc123&confirm=token-789">
+            </head></html>
+        """.trimIndent()
+
+        val resolved = buildGoogleDriveConfirmationRequest(original, html)
+        assertEquals("drive.usercontent.google.com", resolved.url.host)
+        assertEquals("token-789", resolved.url.queryParameter("confirm"))
+    }
 }
