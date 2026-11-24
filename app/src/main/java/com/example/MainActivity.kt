@@ -72,6 +72,7 @@ import com.example.ui.screens.PlaylistSelectionScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
+import com.example.ui.screens.TikTodScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -357,6 +358,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
     var crashLog by remember { mutableStateOf(CrashLogStore.read(context)) }
     var currentNav by rememberSaveable { mutableStateOf(NavDestination.HOME) }
     var showMultiview by rememberSaveable { mutableStateOf(false) }
+    var showTikTod by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(settings.displayMode) {
@@ -381,7 +383,9 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
             Box(Modifier.fillMaxSize()) {
                 val isDark = androidx.compose.material3.MaterialTheme.colorScheme.background.red < 0.2f
                 AmbientFluidBackground(isDark = isDark)
-                if (showMultiview) {
+                if (showTikTod) {
+                    TikTodScreen(viewModel = viewModel, onClose = { showTikTod = false })
+                } else if (showMultiview) {
                     MultiviewScreen(viewModel = viewModel, onClose = { showMultiview = false })
                 } else if (currentlyPlaying != null) {
                     PlayerScreen(media = currentlyPlaying!!, viewModel = viewModel, onClose = { viewModel.closePlayer() }, isInPipMode = isPipMode)
@@ -396,7 +400,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             val isLandscape = maxWidth >= maxHeight && maxWidth >= 520.dp
                             if (isLandscape) {
                                 Box(Modifier.fillMaxSize()) {
-                                    AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true })
+                                    AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true }, { showTikTod = true })
                                     VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
                                 }
                             } else {
@@ -555,7 +559,8 @@ private fun AppNavContent(
     viewModel: MainViewModel,
     devMode: Boolean,
     onNavigate: (NavDestination) -> Unit,
-    onNavigateToMultiview: () -> Unit
+    onNavigateToMultiview: () -> Unit,
+    onNavigateToTikTod: () -> Unit
 ) {
     AnimatedContent(
         targetState = destination,
@@ -567,7 +572,8 @@ private fun AppNavContent(
             NavDestination.HOME -> HomeScreen(
                 viewModel = viewModel,
                 onNavigateToExtension = { onNavigate(NavDestination.PLAYLIST) },
-                onNavigateToMultiview = onNavigateToMultiview
+                onNavigateToMultiview = onNavigateToMultiview,
+                onNavigateToTikTod = onNavigateToTikTod
             )
             NavDestination.PLAYLIST -> PlaylistSelectionScreen(viewModel = viewModel, onNavigateToHome = { onNavigate(NavDestination.HOME) }, onNavigateToSourceManagement = { onNavigate(NavDestination.EXTENSION) })
             NavDestination.EXTENSION -> SourceManagementScreen(
