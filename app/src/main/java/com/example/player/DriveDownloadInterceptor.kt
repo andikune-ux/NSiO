@@ -94,11 +94,15 @@ internal fun resolveConfirmationUrl(
     // Some Drive pages expose a direct confirmation anchor.
     document.select("a[href]").firstNotNullOfOrNull { anchor ->
         val href = anchor.attr("abs:href")
-        href.takeIf {
-            it.isNotBlank() &&
-                (it.contains("export=download", true) || it.contains("confirm=", true)) &&
-                (it.contains("drive.google.com", true) || it.contains("usercontent.google.com", true))
-        }
+        val target = href.toHttpUrlOrNull()
+        target?.takeIf {
+            (it.host.equals("drive.google.com", true) ||
+                it.host.equals("drive.usercontent.google.com", true)) &&
+                (it.encodedPath.equals("/uc", true) ||
+                    it.encodedPath.contains("download", true)) &&
+                (it.queryParameter("export") == "download" ||
+                    !it.queryParameter("confirm").isNullOrBlank())
+        }?.toString()
     }?.let { return it }
 
     // Larger files often use a form with hidden id/export/confirm fields.
