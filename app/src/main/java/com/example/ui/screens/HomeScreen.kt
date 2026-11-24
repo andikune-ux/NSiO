@@ -134,6 +134,7 @@ fun HomeScreen(
     viewModel: MainViewModel,
     onNavigateToExtension: () -> Unit,
     onNavigateToMultiview: () -> Unit,
+    onNavigateToTikTod: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val mediaList by viewModel.mediaList.collectAsState()
@@ -1709,6 +1710,21 @@ fun HomeScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                         Icon(Icons.Default.GridView, contentDescription = null, tint = accentColor, modifier = Modifier.size(25.dp))
                                         Text("Multiview", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier.weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+                                        .clickable { showQuickActions = false; onNavigateToTikTod() }
+                                        .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
+                                        .padding(vertical = 12.dp)
+                                        .testTag("quick_action_tiktod"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = accentColor, modifier = Modifier.size(25.dp))
+                                        Text("TikTod", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
