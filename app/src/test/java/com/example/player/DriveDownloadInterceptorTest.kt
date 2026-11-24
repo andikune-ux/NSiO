@@ -6,6 +6,15 @@ import org.junit.Test
 
 class DriveDownloadInterceptorTest {
     @Test
+    fun onlyInterceptsDirectDriveDownloadEndpoints() {
+        val interceptor = DriveDownloadInterceptor()
+        assertEquals(true, interceptor.isDriveDownloadRequest("drive.google.com", "/uc"))
+        assertEquals(true, interceptor.isDriveDownloadRequest("drive.usercontent.google.com", "/download"))
+        assertEquals(false, interceptor.isDriveDownloadRequest("drive.google.com", "/file/d/file_123/view"))
+        assertEquals(false, interceptor.isDriveDownloadRequest("example.com", "/uc"))
+    }
+
+    @Test
     fun resolvesDriveConfirmationAnchor() {
         val html = """
             <html><body>
