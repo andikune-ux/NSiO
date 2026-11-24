@@ -87,6 +87,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var index by remember { mutableIntStateOf(0) }
     var retryUsed by remember { mutableStateOf(false) }
     var countedView by remember { mutableStateOf(false) }
+    var handledEndForMediaId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     var isCleanMode by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
@@ -158,6 +159,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         index = target.coerceIn(0, feed.lastIndex)
         retryUsed = false
         countedView = false
+        handledEndForMediaId = null
         isSeeking = false
         val item = feed[index]
         viewModel.playMedia(item.copy(progressMs = 0L))
@@ -191,8 +193,21 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             countedView = true
         }
     }
-    LaunchedEffect(playerState.playbackEnded, playerState.error, media?.id) {
-        if (media != null && playerState.playbackEnded) {
+    LaunchedEffect(playerState.playbackEnded, playerState.error, media?.id, currentMedia?.id) {
+        // A completion flag alone is not enough: it can briefly outlive the item
+        // that produced it while TikTod is switching to the next feed entry.
+        // Advance only when both the ViewModel item and the actual ExoPlayer
+        // current playback state still identify this item as finished.
+        val activePlayer = viewModel.player.exoPlayer
+        val isCurrentItemActuallyEnded =
+            media != null &&
+            currentMedia?.id == media.id &&
+            activePlayer?.playbackState == Player.STATE_ENDED
+
+        if (media != null && playerState.playbackEnded &&
+            isCurrentItemActuallyEnded && handledEndForMediaId != media.id
+        ) {
+            handledEndForMediaId = media.id
             next()
         } else if (media != null && playerState.error != null && !retryUsed) {
             // Give the first failure one automatic retry. A second failure stays
