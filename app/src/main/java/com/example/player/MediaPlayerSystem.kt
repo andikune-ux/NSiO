@@ -262,9 +262,6 @@ class CS3IPlayer(
         // settings survive from plugin resolution into the actual media requests.
         // Creating a fresh OkHttpClient here silently drops that shared session.
         val client = app.baseClient.newBuilder().apply {
-            // Resolve Drive confirmation pages before Media3 receives an HTML response.
-            // This interceptor is host/path scoped and leaves CloudStream/CDN traffic intact.
-            addInterceptor(DriveDownloadInterceptor())
             interceptor?.let(::addInterceptor)
             if (subtitleHeaderMap.isNotEmpty()) {
                 addInterceptor { chain ->

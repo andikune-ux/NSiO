@@ -490,57 +490,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     color = Color.White, trackColor = Color.White.copy(alpha = .2f)
                 )
             }
-            if (playerState.error != null) {
-                Surface(
-                    modifier = Modifier.align(Alignment.Center)
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    color = Color(0xF01A1A1A),
-                    tonalElevation = 8.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            "Video gagal diputar",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            playerState.error.orEmpty(),
-                            color = Color.White.copy(alpha = .82f),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = { viewModel.player.retry() },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF315D59)
-                                )
-                            ) {
-                                Text("Coba lagi", color = Color.White)
-                            }
-                            OutlinedButton(
-                                onClick = { next() },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text("Lewati")
-                            }
-                        }
-                    }
-                }
-            }
+
 
             // TikTok-style creator identity and caption: compact, anchored bottom-left.
             if (!isCleanMode) {

@@ -65,7 +65,7 @@ class MultiviewSourceContractTest {
         val resolved = (valid as MultiviewResolveResult.Success).source
         assertEquals(MultiviewSourceKind.GOOGLE_DRIVE, resolved.sourceKind)
         assertEquals(
-            "https://drive.google.com/uc?export=download&id=example",
+            "https://drive.usercontent.google.com/download?id=example&export=download&confirm=t",
             resolved.uri.toString()
         )
         assertTrue(invalid is MultiviewResolveResult.Failure)
