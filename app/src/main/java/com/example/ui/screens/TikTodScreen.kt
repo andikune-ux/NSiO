@@ -58,6 +58,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val mediaList by viewModel.mediaList.collectAsState()
     val playlists by viewModel.sourcePlaylists.collectAsState()
     val playerState by viewModel.player.playerState.collectAsState()
+    val latestIsPlaying = rememberUpdatedState(playerState.isPlaying)
     val currentMedia by viewModel.currentlyPlaying.collectAsState()
     val store = remember(context) { TikTodLocalStore(context) }
     val driveIds = remember(playlists) {
@@ -149,7 +150,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
-                    resumeOnReturn = playerState.isPlaying
+                    resumeOnReturn = latestIsPlaying.value
                     viewModel.pausePlaybackForBackground()
                 }
                 Lifecycle.Event.ON_START -> if (resumeOnReturn) {
