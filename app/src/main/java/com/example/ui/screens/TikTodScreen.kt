@@ -272,15 +272,15 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     ) {
         val previewMedia = when {
             swipeOffset < 0f -> feed.getOrNull(index + 1) ?: if (index == feed.lastIndex) feed.firstOrNull() else null
-            swipeOffset.value > 0f -> feed.getOrNull(index - 1)
+            swipeOffset > 0f -> feed.getOrNull(index - 1)
             else -> null
         }
-        if (previewMedia != null && kotlin.math.abs(swipeOffset.value) > 0.5f) {
+        if (previewMedia != null && kotlin.math.abs(swipeOffset) > 0.5f) {
             Box(
                 Modifier.fillMaxSize()
                     .graphicsLayer {
-                        translationY = if (swipeOffset.value < 0f) size.height + swipeOffset.value
-                        else -size.height + swipeOffset.value
+                        translationY = if (swipeOffset < 0f) size.height + swipeOffset
+                        else -size.height + swipeOffset
                     }
                     .background(Color.Black)
             ) {
@@ -302,7 +302,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
         Box(
             Modifier.fillMaxSize().graphicsLayer {
-                translationY = swipeOffset.value
+                translationY = swipeOffset
             }
         ) {
         if (media == null) {
