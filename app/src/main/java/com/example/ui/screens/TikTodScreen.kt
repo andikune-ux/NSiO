@@ -538,7 +538,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         detectTapGestures { point ->
                             updateFromX(point.x)
                             if (duration > 0L && playerState.isSeekable) {
-                                viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
+                                viewModel.player.exoPlayer?.let { player ->
+                                    player.seekTo(seekPosition.toLong())
+                                    player.play()
+                                }
                                 isSeeking = false
                             }
                         }
@@ -558,7 +561,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                             },
                             onDragEnd = {
                                 if (duration > 0L && isSeeking) {
-                                    viewModel.player.exoPlayer?.seekTo(seekPosition.toLong())
+                                    viewModel.player.exoPlayer?.let { player ->
+                                    player.seekTo(seekPosition.toLong())
+                                    player.play()
+                                }
                                 }
                                 isSeeking = false
                             },
