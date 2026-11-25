@@ -1192,7 +1192,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     ) {
                         AvatarGlowFrame(
                             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                            tint = avatarGlowColors[profileIndex],
+                            tint = avatarGlowColors.getOrElse(profileIndex) { Color.Transparent },
                             enabled = profileIndex < 8
                         ) {
                             Surface(
@@ -1232,7 +1232,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                             ) {
                                 Box {
                                     AsyncImage(
-                                        model = yangManaAvatarImages[profileIndex],
+                                        model = yangManaAvatarImages.getOrNull(profileIndex) ?: PRIMARY_PROFILE_AVATAR_URL,
                                         contentDescription = cardName,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize(),
@@ -1256,7 +1256,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Text(
                             cardName,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                            color = yangManaNameColors[profileIndex],
+                            color = yangManaNameColors.getOrElse(profileIndex) { Color(0xFFC98B82) },
                             fontFamily = yangManaNameFont,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
