@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Comment
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
@@ -146,10 +145,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var backAt by remember { mutableLongStateOf(0L) }
     // Category navigation is ready now; Mau Mu and Yang Mana will receive their own feeds later.
     var selectedTikTodCategory by remember { mutableIntStateOf(1) }
-    val yangManaPreferences = remember(context) { context.getSharedPreferences("tiktod_yang_mana", Context.MODE_PRIVATE) }
-    var yangManaNames by remember { mutableStateOf((1..9).map { index -> yangManaPreferences.getString("name_$index", "Profil $index") ?: "Profil $index" }) }
-    var editingYangManaIndex by remember { mutableIntStateOf(-1) }
-    var editingYangManaName by remember { mutableStateOf("") }
+    val yangManaNames = listOf(
+        "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
+        "Manda Amoy", "Via Puten", "Mom Sky", "Ayu"
+    )
+    var isJjCategory by remember { mutableStateOf(false) }
+    var isCategoryFlipRunning by remember { mutableStateOf(false) }
+    val categoryFlipRotation = remember { Animatable(0f) }
+    val categoryFlipScope = rememberCoroutineScope()
     var showYangManaSettings by remember { mutableStateOf(false) }
     var resumeAfterCategory by remember { mutableStateOf(false) }
     val tikTodCategories = listOf("Mau Mu", "Untuk Mu", "Yang Mana")
@@ -968,52 +971,61 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(9) { profileIndex ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    val isJjCard = isJjCategory || isCategoryFlipRunning
+                    val cardName = when {
+                        profileIndex == 8 && isJjCategory -> "Kembali"
+                        profileIndex == 8 -> "Jedag Jedug"
+                        isJjCategory -> "JJ ${yangManaNames[profileIndex]}"
+                        else -> yangManaNames[profileIndex]
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1.08f)
+                            .graphicsLayer {
+                                rotationX = categoryFlipRotation.value
+                                cameraDistance = 12f * density
+                            }
+                            .clickable(enabled = profileIndex == 8 && !isCategoryFlipRunning) {
+                                isCategoryFlipRunning = true
+                                categoryFlipScope.launch {
+                                    categoryFlipRotation.snapTo(0f)
+                                    categoryFlipRotation.animateTo(180f, tween(durationMillis = 170))
+                                    isJjCategory = !isJjCategory
+                                    categoryFlipRotation.animateTo(360f, tween(durationMillis = 170))
+                                    categoryFlipRotation.snapTo(0f)
+                                    isCategoryFlipRunning = false
+                                }
+                            },
+                        shape = RoundedCornerShape(23.dp),
+                        color = Color.White.copy(alpha = 0.10f),
+                        border = BorderStroke(
+                            if (isJjCard) 1.8.dp else 1.dp,
+                            if (isJjCard) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.38f)
+                        ),
+                        shadowElevation = if (isJjCard) 14.dp else 8.dp
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().aspectRatio(1.08f)
-                                .clickable {
-                                    editingYangManaIndex = profileIndex
-                                    editingYangManaName = yangManaNames[profileIndex]
-                                },
-                            shape = RoundedCornerShape(23.dp),
-                            color = Color.White.copy(alpha = 0.10f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.38f)),
-                            shadowElevation = 8.dp
-                        ) {
-                            Box {
-                                AsyncImage(
-                                    model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
-                                    contentDescription = yangManaNames[profileIndex],
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(
-                                    Modifier.fillMaxSize().background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f))
-                                        )
+                        Box {
+                            AsyncImage(
+                                model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
+                                contentDescription = cardName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f))
                                     )
                                 )
-                                Text(
-                                    yangManaNames[profileIndex],
-                                    modifier = Modifier.align(Alignment.BottomStart)
-                                        .padding(start = 12.dp, end = 38.dp, bottom = 11.dp),
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = "Edit nama ${yangManaNames[profileIndex]}",
-                                    tint = Color.White,
-                                    modifier = Modifier.align(Alignment.BottomEnd)
-                                        .padding(end = 10.dp, bottom = 10.dp).size(20.dp)
-                                )
-                            }
+                            )
+                            Text(
+                                cardName,
+                                modifier = Modifier.align(Alignment.BottomStart)
+                                    .padding(start = 12.dp, end = 12.dp, bottom = 11.dp),
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
                         }
                     }
                 }
@@ -1036,37 +1048,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
         }
-    }
-
-    if (editingYangManaIndex in 0..8) {
-        AlertDialog(
-            onDismissRequest = { editingYangManaIndex = -1 },
-            title = { Text("Ubah nama profil") },
-            text = {
-                OutlinedTextField(
-                    value = editingYangManaName,
-                    onValueChange = { editingYangManaName = it },
-                    singleLine = true,
-                    label = { Text("Nama profil") }
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val index = editingYangManaIndex
-                    val updated = yangManaNames.toMutableList()
-                    updated[index] = editingYangManaName.trim().ifBlank { "Profil ${index + 1}" }
-                    yangManaNames = updated
-                    yangManaPreferences.edit().putString("name_${index + 1}", updated[index]).apply()
-                    editingYangManaIndex = -1
-                }) { Text("Simpan") }
-            },
-            dismissButton = {
-                TextButton(onClick = { editingYangManaIndex = -1 }) { Text("Batal") }
-            },
-            containerColor = Color(0xFF202126),
-            titleContentColor = Color.White,
-            textContentColor = Color.White
-        )
     }
 
     if (showYangManaSettings) {
