@@ -77,6 +77,33 @@ import androidx.media3.common.VideoSize
 
 private const val PRIMARY_PROFILE_AVATAR_URL = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg"
 private const val RUBIK_PUDDLES_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/rubikpuddles/RubikPuddles-Regular.ttf"
+private const val POPPINS_BOLD_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf"
+
+@Composable
+private fun rememberTikTodNameFont(): FontFamily? {
+    val context = LocalContext.current.applicationContext
+    var family by remember { mutableStateOf<FontFamily?>(null) }
+    LaunchedEffect(Unit) {
+        family = withContext(Dispatchers.IO) {
+            runCatching {
+                val target = File(context.cacheDir, "poppins-bold.ttf")
+                if (!target.exists() || target.length() == 0L) {
+                    val temp = File(context.cacheDir, "poppins-bold.tmp")
+                    URL(POPPINS_BOLD_FONT_URL).openConnection().apply {
+                        connectTimeout = 10_000
+                        readTimeout = 15_000
+                    }.getInputStream().use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
+                    if (!temp.renameTo(target)) {
+                        temp.copyTo(target, overwrite = true)
+                        temp.delete()
+                    }
+                }
+                FontFamily(Typeface.createFromFile(target))
+            }.getOrNull()
+        }
+    }
+    return family
+}
 
 @Composable
 private fun rememberTikTodDisplayFont(): FontFamily? {
@@ -114,6 +141,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val owner = LocalLifecycleOwner.current
     val activeProfile by viewModel.activeProfile.collectAsState()
     val primaryDisplayFont = rememberTikTodDisplayFont()
+    val yangManaNameFont = rememberTikTodNameFont()
     val mediaList by viewModel.mediaList.collectAsState()
     val playlists by viewModel.sourcePlaylists.collectAsState()
     val playerState by viewModel.player.playerState.collectAsState()
@@ -149,6 +177,18 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val yangManaNames = listOf(
         "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
         "Manda Amoy", "Via Puten", "Mom Sky", "Ayu"
+    )
+    // Fixed muted highlighter/charcoal palette; colors stay with their avatar in both modes.
+    val yangManaNameColors = listOf(
+        Color(0xFFD18BA7), // Balqyz - dusty pink
+        Color(0xFFC9BD69), // BhochiL SD - muted yellow
+        Color(0xFF91B477), // Lhojte Khristain - muted lime
+        Color(0xFF83A9C8), // Rawina - dusty blue
+        Color(0xFFD49A72), // Manda Amoy - muted orange
+        Color(0xFFB49ACB), // Via Puten - dusty purple
+        Color(0xFF82BDB0), // Mom Sky - muted mint
+        Color(0xFFCB91B9), // Ayu - muted magenta
+        Color(0xFFC98B82)  // Jedag Jedug / Kembali - muted coral
     )
     var isJjCategory by remember { mutableStateOf(false) }
     var isCategoryFlipRunning by remember { mutableStateOf(false) }
@@ -1121,9 +1161,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Text(
                             cardName,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                            color = Color.White,
+                            color = yangManaNameColors[profileIndex],
+                            fontFamily = yangManaNameFont,
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
