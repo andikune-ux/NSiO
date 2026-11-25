@@ -83,8 +83,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val eligible = remember(mediaList, activeProfile?.id, driveIds) {
         activeProfile?.id?.let { TikTodFeedPolicy.eligible(mediaList, it, driveIds) }.orEmpty()
     }
-    var feed by remember { mutableStateOf(TikTodFeedPolicy.newCycle(eligible)) }
+    var feed by remember { mutableStateOf(emptyList<com.example.data.model.MediaItem>()) }
     var index by remember { mutableIntStateOf(0) }
+    var sessionInitialized by remember(activeProfile?.id) { mutableStateOf(false) }
     var retryUsed by remember { mutableStateOf(false) }
     var countedView by remember { mutableStateOf(false) }
     var handledEndForMediaId by remember { mutableStateOf<String?>(null) }
@@ -175,43 +176,48 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             if (feed.isNotEmpty()) startAt(0)
         }
     }
-    LaunchedEffect(eligible) {
-        if (feed.isEmpty() && eligible.isNotEmpty()) {
-            feed = TikTodFeedPolicy.newCycle(eligible)
-            startAt(0)
+    LaunchedEffect(eligible, activeProfile?.id) {
+        val profileId = activeProfile?.id ?: return@LaunchedEffect
+        if (eligible.isEmpty()) return@LaunchedEffect
+
+        val pendingNewIds = store.syncEligibleVideos(profileId, eligible.map { it.id })
+        if (!sessionInitialized) {
+            feed = TikTodFeedPolicy.sessionStartOrder(
+                items = eligible,
+                pendingNewIds = pendingNewIds,
+                previousVideoId = store.lastVideoId(profileId)
+            )
+            sessionInitialized = true
+            if (feed.isNotEmpty()) startAt(0)
         } else {
-            val newItems = eligible.filter { item -> feed.none { it.id == item.id } }
-            if (newItems.isNotEmpty()) feed = feed.take(index + 1) + newItems + feed.drop(index + 1)
+            // Do not interrupt the current video. Newly discovered items are
+            // inserted immediately after it and remain prioritized until started.
+            val queuedNewItems = eligible
+                .filter { it.id in pendingNewIds && feed.none { queued -> queued.id == it.id } }
+                .shuffled()
+            if (queuedNewItems.isNotEmpty()) {
+                feed = feed.take(index + 1) + queuedNewItems + feed.drop(index + 1)
+            }
         }
     }
     LaunchedEffect(media?.id, currentMedia?.id) {
         if (media != null && currentMedia?.id != media.id) startAt(index)
     }
-    LaunchedEffect(playerState.isPlaying, media?.id) {
-        if (media != null && playerState.isPlaying && !countedView) {
-            views = store.addView(media.id)
-            countedView = true
+    LaunchedEffect(playerState.isPlaying, media?.id, activeProfile?.id) {
+        val profileId = activeProfile?.id
+        if (media != null && profileId != null && playerState.isPlaying) {
+            // "Viewed" means playback actually started, not that the video completed.
+            store.markVideoStarted(profileId, media.id)
+            if (!countedView) {
+                views = store.addView(media.id)
+                countedView = true
+            }
         }
     }
-    LaunchedEffect(playerState.playbackEnded, playerState.error, media?.id, currentMedia?.id) {
-        // A completion flag alone is not enough: it can briefly outlive the item
-        // that produced it while TikTod is switching to the next feed entry.
-        // Advance only when both the ViewModel item and the actual ExoPlayer
-        // current playback state still identify this item as finished.
-        val activePlayer = viewModel.player.exoPlayer
-        val isCurrentItemActuallyEnded =
-            media != null &&
-            currentMedia?.id == media.id &&
-            activePlayer?.playbackState == Player.STATE_ENDED
-
-        if (media != null && playerState.playbackEnded &&
-            isCurrentItemActuallyEnded && handledEndForMediaId != media.id
-        ) {
-            handledEndForMediaId = media.id
-            next()
-        } else if (media != null && playerState.error != null && !retryUsed) {
-            // Give the first failure one automatic retry. A second failure stays
-            // on this item so the user can read the actual reason and choose.
+    LaunchedEffect(playerState.error, media?.id) {
+        if (media != null && playerState.error != null && !retryUsed) {
+            // Keep the existing single automatic retry. If it fails, the UI
+            // exposes the source error plus explicit Retry and Skip actions.
             retryUsed = true
             delay(900)
             if (viewModel.player.playerState.value.error != null &&
@@ -488,6 +494,47 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 LinearProgressIndicator(
                     modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().height(2.dp),
                     color = Color.White, trackColor = Color.White.copy(alpha = .2f)
+                )
+            }
+            if (!isCleanMode && playerState.error != null && retryUsed) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center)
+                        .fillMaxWidth(.88f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black.copy(alpha = .88f))
+                        .padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Kendala pemutaran media", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        playerState.error ?: "Sumber video gagal diproses.",
+                        color = Color.White.copy(alpha = .82f),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { viewModel.player.retry() }
+                        ) { Text("Coba Lagi", color = Color.White) }
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = { next() }
+                        ) { Text("Lewati") }
+                    }
+                }
+            }
+            if (!isCleanMode && playerState.playbackEnded && playerState.error == null) {
+                Text(
+                    "Video selesai • Geser ke atas untuk video berikutnya",
+                    modifier = Modifier.align(Alignment.Center)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = .72f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
