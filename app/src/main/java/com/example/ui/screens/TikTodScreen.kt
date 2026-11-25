@@ -1585,7 +1585,13 @@ private fun AvatarGlowFrame(
 
     val density = LocalDensity.current
     val tintInt = tint.copy(alpha = 1f).toArgb()
-    val goldBlend = Color.lerp(tint, Color(0xFFFFD36A), 0.48f).toArgb()
+    val gold = Color(0xFFFFD36A)
+    val goldBlend = Color(
+        red = tint.red * 0.52f + gold.red * 0.48f,
+        green = tint.green * 0.52f + gold.green * 0.48f,
+        blue = tint.blue * 0.52f + gold.blue * 0.48f,
+        alpha = 1f
+    ).toArgb()
     val haloRadius = with(density) { 15.dp.toPx() }
     val trailRadius = with(density) { 8.dp.toPx() }
     val corner = with(density) { 23.dp.toPx() }
