@@ -71,6 +71,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 
@@ -987,7 +988,39 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
 
     if (selectedTikTodCategory == 3) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(
+            Modifier.fillMaxSize().background(Color.Black)
+                .pointerInput(selectedTikTodCategory) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val pointerId = down.id
+                        var horizontal = 0f
+                        var recognized = false
+                        var multiTouch = false
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.changes.count { it.pressed } > 1) multiTouch = true
+                            val change = event.changes.firstOrNull { it.id == pointerId }
+                            if (!multiTouch && change != null && change.pressed) {
+                                val delta = change.position - down.position
+                                if (!recognized &&
+                                    kotlin.math.abs(delta.x) > viewConfiguration.touchSlop &&
+                                    kotlin.math.abs(delta.x) > kotlin.math.abs(delta.y) * 1.2f
+                                ) recognized = true
+                                if (recognized) {
+                                    horizontal = delta.x
+                                    change.consume()
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+                        val threshold = maxOf(48.dp.toPx(), size.width * 0.08f)
+                        if (!multiTouch && recognized && kotlin.math.abs(horizontal) >= threshold) {
+                            selectedTikTodCategory = (selectedTikTodCategory + if (horizontal < 0f) 1 else -1)
+                                .coerceIn(0, tikTodCategories.lastIndex)
+                        }
+                    }
+                }
+        ) {
             Row(
                 modifier = Modifier.align(Alignment.TopCenter)
                     .statusBarsPadding()
@@ -1033,55 +1066,67 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         isJjCategory -> "JJ ${yangManaNames[profileIndex]}"
                         else -> yangManaNames[profileIndex]
                     }
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1.08f)
-                            .graphicsLayer {
-                                rotationX = categoryFlipRotation.value
-                                cameraDistance = 12f * density
-                            }
-                            .clickable(enabled = profileIndex == 8 && !isCategoryFlipRunning) {
-                                isCategoryFlipRunning = true
-                                categoryFlipScope.launch {
-                                    categoryFlipRotation.snapTo(0f)
-                                    categoryFlipRotation.animateTo(180f, tween(durationMillis = 170))
-                                    isJjCategory = !isJjCategory
-                                    categoryFlipRotation.animateTo(360f, tween(durationMillis = 170))
-                                    categoryFlipRotation.snapTo(0f)
-                                    isCategoryFlipRunning = false
-                                }
-                            },
-                        shape = RoundedCornerShape(23.dp),
-                        color = Color.White.copy(alpha = 0.10f),
-                        border = BorderStroke(
-                            if (isJjCard) 1.8.dp else 1.dp,
-                            if (isJjCard) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.38f)
-                        ),
-                        shadowElevation = if (isJjCard) 14.dp else 8.dp
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Box {
-                            AsyncImage(
-                                model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
-                                contentDescription = cardName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                Modifier.fillMaxSize().background(
-                                    Brush.verticalGradient(
-                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                .graphicsLayer {
+                                    rotationY = categoryFlipRotation.value
+                                    cameraDistance = 24f * density
+                                }
+                                .clickable(enabled = profileIndex == 8 && !isCategoryFlipRunning) {
+                                    isCategoryFlipRunning = true
+                                    categoryFlipScope.launch {
+                                        categoryFlipRotation.snapTo(0f)
+                                        categoryFlipRotation.animateTo(
+                                            180f,
+                                            spring(dampingRatio = 0.78f, stiffness = 380f)
+                                        )
+                                        isJjCategory = !isJjCategory
+                                        categoryFlipRotation.animateTo(
+                                            360f,
+                                            spring(dampingRatio = 0.78f, stiffness = 380f)
+                                        )
+                                        categoryFlipRotation.snapTo(0f)
+                                        isCategoryFlipRunning = false
+                                    }
+                                },
+                            shape = RoundedCornerShape(23.dp),
+                            color = Color.White.copy(alpha = 0.10f),
+                            border = BorderStroke(
+                                if (isJjCard) 1.8.dp else 1.dp,
+                                if (isJjCard) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.38f)
+                            ),
+                            shadowElevation = if (isJjCard) 14.dp else 8.dp
+                        ) {
+                            Box {
+                                AsyncImage(
+                                    model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
+                                    contentDescription = cardName,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    Modifier.fillMaxSize().background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.30f))
+                                        )
                                     )
                                 )
-                            )
-                            Text(
-                                cardName,
-                                modifier = Modifier.align(Alignment.BottomStart)
-                                    .padding(start = 12.dp, end = 12.dp, bottom = 11.dp),
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                            }
                         }
+                        Text(
+                            cardName,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
                 item {
