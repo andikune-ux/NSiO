@@ -51,6 +51,19 @@ class TikTodFeedPolicyTest {
     }
 
     @Test
+    fun sessionStartAvoidsPreviousVideoEvenWhenOnlyOneFreshItemRemains() {
+        val items = listOf(item("previous"), item("regular"))
+        val result = TikTodFeedPolicy.sessionStartOrder(
+            items = items,
+            pendingNewIds = setOf("previous"),
+            previousVideoId = "previous",
+            random = kotlin.random.Random(2)
+        )
+        assertEquals("regular", result.first().id)
+        assertEquals(items.map { it.id }.toSet(), result.map { it.id }.toSet())
+    }
+
+    @Test
     fun sessionStartFallsBackToAnotherVideoWhenOnlyRegularQueueHasPreviousFirst() {
         val items = listOf(item("old-a"), item("old-b"))
         val result = TikTodFeedPolicy.sessionStartOrder(
