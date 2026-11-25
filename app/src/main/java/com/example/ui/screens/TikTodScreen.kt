@@ -396,7 +396,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         val horizontalThreshold = (size.width * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
                         if (kotlin.math.abs(latestHorizontalOffset) >= horizontalThreshold) {
                             // Swipe changes one category at a time; stop at the first and last category.
-                            selectedTikTodCategory = (selectedTikTodCategory + if (latestHorizontalOffset > 0f) 1 else -1)
+                            selectedTikTodCategory = (selectedTikTodCategory + if (latestHorizontalOffset < 0f) 1 else -1)
                                 .coerceIn(0, tikTodCategories.lastIndex)
                         }
                     } else if (!multiTouch && verticalDragStarted) {
