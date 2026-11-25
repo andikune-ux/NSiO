@@ -149,6 +149,15 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         videoAspectRatio = 0f
     }
 
+    // Keep a small progressive preload for exactly one upcoming Drive video.
+    // The shared player cache is reused when the item becomes the active video.
+    LaunchedEffect(media?.id, index, feed) {
+        val nextItem = feed.getOrNull(index + 1) ?: return@LaunchedEffect
+        if (MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
+            viewModel.player.preloadDriveMedia(nextItem.url, nextItem.id)
+        }
+    }
+
     DisposableEffect(viewModel) {
         viewModel.setTikTodModeActive(true)
         onDispose { viewModel.setTikTodModeActive(false) }
