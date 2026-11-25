@@ -13,6 +13,14 @@ internal object TikTodFeedPolicy {
             .distinctBy { it.id }
             .toList()
 
+    /** A Mau Mu feed is restricted to the single selected avatar, including page-two JJ avatars. */
+    fun forAvatar(items: List<MediaItem>, assignments: Map<String, String>, avatarId: String): List<MediaItem> =
+        if (avatarId.isBlank()) emptyList() else items.filter { assignments[it.id] == avatarId }
+
+    /** Jedag Jedug aggregates all videos owned by any page-two avatar, and nothing from page one. */
+    fun jedagJedug(items: List<MediaItem>, assignments: Map<String, String>): List<MediaItem> =
+        items.filter { assignments[it.id]?.startsWith("p2:") == true }
+
     fun newCycle(items: List<MediaItem>, previousFirstId: String? = null, random: kotlin.random.Random = kotlin.random.Random.Default): List<MediaItem> {
         if (items.isEmpty()) return emptyList()
         val shuffled = items.shuffled(random)
