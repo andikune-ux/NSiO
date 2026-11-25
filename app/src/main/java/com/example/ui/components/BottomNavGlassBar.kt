@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
@@ -65,7 +67,8 @@ import com.example.ui.theme.CyanSecondary
 fun BottomNavGlassBar(
     currentDestination: NavDestination,
     onNavigate: (NavDestination) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPrimaryProfile: Boolean = false
 ) {
     val itemFocusRequesters = remember { List(4) { FocusRequester() } }
     Box(
@@ -134,6 +137,7 @@ fun BottomNavGlassBar(
                     index = 3,
                     focusRequesters = itemFocusRequesters,
                     modifier = Modifier.weight(1f),
+                    isPrimaryProfile = isPrimaryProfile,
                     onClick = { onNavigate(NavDestination.PROFILE) }
                 )
             }
@@ -151,7 +155,8 @@ private fun BottomNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     index: Int,
-    focusRequesters: List<FocusRequester>
+    focusRequesters: List<FocusRequester>,
+    isPrimaryProfile: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -221,12 +226,21 @@ private fun BottomNavItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isSelected) selectedIcon else unselectedIcon,
-                    contentDescription = title,
-                    tint = iconColor,
-                    modifier = Modifier.size(19.dp)
-                )
+                if (title == "Profil" && isPrimaryProfile) {
+                    AsyncImage(
+                        model = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg",
+                        contentDescription = "Avatar Kunti Meong Collection",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(22.dp).clip(CircleShape)
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isSelected) selectedIcon else unselectedIcon,
+                        contentDescription = title,
+                        tint = iconColor,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
             }
         }
     }
