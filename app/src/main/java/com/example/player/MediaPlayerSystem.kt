@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import java.io.IOException
 
 data class PlayerTrackOption(
@@ -811,7 +812,7 @@ class CS3IPlayer(
                     .setPosition(0L)
                     .setLength(DRIVE_PRELOAD_BYTES)
                     .build()
-                CacheWriter(source, request, ByteArray(128 * 1024), null).cache()
+                runInterruptible { CacheWriter(source, request, ByteArray(128 * 1024), null).cache() }
             } catch (error: Exception) {
                 Log.d("NSiOPlayer", "Drive next-item preload stopped: ${error.message}")
             }
