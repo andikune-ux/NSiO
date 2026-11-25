@@ -401,7 +401,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             if (isLandscape) {
                                 Box(Modifier.fillMaxSize()) {
                                     AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true }, { showTikTod = true })
-                                    VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart), isPrimaryProfile = activeProfile?.isDefault == true)
+                                    VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize()) {
@@ -409,7 +409,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                                         AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true }, { showTikTod = true })
                                     }
                                     BottomNavSafeAreaGlass(Modifier.align(Alignment.BottomCenter))
-                                    BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter), isPrimaryProfile = activeProfile?.isDefault == true)
+                                    BottomNavGlassBar(currentNav, { currentNav = it }, Modifier.align(Alignment.BottomCenter))
                                 }
                             }
                         }
