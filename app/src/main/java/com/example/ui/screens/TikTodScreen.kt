@@ -9,6 +9,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -1673,8 +1674,34 @@ private fun withAlpha(color: Int, alpha: Float): Int {
 private fun extractAvatarTint(drawable: Drawable): Color {
     val sample = Bitmap.createBitmap(18, 18, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(sample)
-    drawable.setBounds(0, 0, 18, 18)
-    drawable.draw(canvas)
+    val bitmapDrawable = drawable as? BitmapDrawable
+    val sourceBitmap = bitmapDrawable?.bitmap
+
+    if (sourceBitmap != null) {
+        // Coil may supply HARDWARE bitmaps, which cannot be drawn to a software Canvas.
+        // Copy only those images to a mutable software bitmap before sampling their colors.
+        val softwareBitmap = if (sourceBitmap.config == Bitmap.Config.HARDWARE) {
+            sourceBitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            sourceBitmap
+        }
+        if (softwareBitmap != null) {
+            val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG or AndroidPaint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(
+                softwareBitmap,
+                null,
+                android.graphics.Rect(0, 0, 18, 18),
+                paint
+            )
+            if (softwareBitmap !== sourceBitmap) softwareBitmap.recycle()
+        }
+    } else {
+        // Preserve the drawable's original bounds when sampling non-bitmap drawables.
+        val previousBounds = android.graphics.Rect(drawable.bounds)
+        drawable.setBounds(0, 0, 18, 18)
+        drawable.draw(canvas)
+        drawable.bounds = previousBounds
+    }
 
     var hueX = 0.0
     var hueY = 0.0
