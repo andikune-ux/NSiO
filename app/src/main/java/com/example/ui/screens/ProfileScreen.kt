@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,16 +40,12 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,11 +56,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.graphics.Typeface
-import java.io.File
-import java.net.URL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.data.firebase.AuthState
@@ -75,38 +65,6 @@ import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
 import com.example.ui.theme.AccentGreen
 
-private const val PRIMARY_PROFILE_AVATAR_URL = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg"
-private const val RUBIK_PUDDLES_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/rubikpuddles/RubikPuddles-Regular.ttf"
-
-@Composable
-private fun rememberRubikPuddlesFontFamily(): FontFamily? {
-    val context = LocalContext.current.applicationContext
-    var fontFamily by remember { mutableStateOf<FontFamily?>(null) }
-
-    LaunchedEffect(Unit) {
-        fontFamily = withContext(Dispatchers.IO) {
-            runCatching {
-                val fontFile = File(context.cacheDir, "rubik-puddles-regular.ttf")
-                if (!fontFile.exists() || fontFile.length() == 0L) {
-                    val temporaryFile = File(context.cacheDir, "rubik-puddles-regular.tmp")
-                    URL(RUBIK_PUDDLES_FONT_URL).openConnection().apply {
-                        connectTimeout = 10_000
-                        readTimeout = 15_000
-                    }.getInputStream().use { input ->
-                        temporaryFile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    if (!temporaryFile.renameTo(fontFile)) {
-                        temporaryFile.copyTo(fontFile, overwrite = true)
-                        temporaryFile.delete()
-                    }
-                }
-                FontFamily(Typeface.createFromFile(fontFile))
-            }.getOrNull()
-        }
-    }
-    return fontFamily
-}
-
 @Composable
 fun ProfileScreen(
     viewModel: MainViewModel,
@@ -114,7 +72,6 @@ fun ProfileScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
-    val rubikPuddlesFont = rememberRubikPuddlesFontFamily()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
@@ -362,7 +319,6 @@ fun ProfileScreen(
 
         items(profiles, key = { it.id }) { p ->
             val isActive = activeProfile?.id == p.id
-            val isPrimaryProfile = p.isDefault
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -400,7 +356,7 @@ fun ProfileScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(if (isPrimaryProfile) 52.dp else 44.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant)
                                 .border(
@@ -410,36 +366,17 @@ fun ProfileScreen(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (isPrimaryProfile) {
-                                AsyncImage(
-                                    model = PRIMARY_PROFILE_AVATAR_URL,
-                                    contentDescription = "Avatar Kunti Meong Collection",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
-                                )
-                            } else {
-                                Text(text = p.avatarEmoji, fontSize = 20.sp)
-                            }
+                            Text(text = p.avatarEmoji, fontSize = 20.sp)
                         }
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Material3Text(
-                                    text = if (isPrimaryProfile) "Kunti Meong Collection" else p.name,
-                                    fontSize = if (isPrimaryProfile) 12.sp else 14.sp,
-                                    fontWeight = if (isPrimaryProfile) FontWeight.Medium else FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontFamily = if (isPrimaryProfile) rubikPuddlesFont else null,
-                                    maxLines = 1
+                                Text(
+                                    text = p.name,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
-                                if (isPrimaryProfile) {
-                                    Icon(
-                                        imageVector = Icons.Default.Verified,
-                                        contentDescription = "Terverifikasi",
-                                        tint = Color(0xFF22C55E),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
                                 if (isActive) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Box(
