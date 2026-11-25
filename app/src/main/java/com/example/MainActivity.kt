@@ -401,7 +401,7 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
                             if (isLandscape) {
                                 Box(Modifier.fillMaxSize()) {
                                     AppNavContent(currentNav, viewModel, devMode, { currentNav = it }, { showMultiview = true }, { showTikTod = true })
-                                    VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart))
+                                    VerticalNavToolbar(currentNav, { currentNav = it }, activeProfile?.avatarEmoji ?: "🎬", Modifier.align(Alignment.CenterStart), isPrimaryProfile = activeProfile?.isDefault == true)
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize()) {
