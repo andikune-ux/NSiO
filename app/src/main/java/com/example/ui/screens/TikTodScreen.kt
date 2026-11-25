@@ -1680,7 +1680,10 @@ private fun extractAvatarTint(drawable: Drawable): Color {
     if (sourceBitmap != null) {
         // Coil may supply HARDWARE bitmaps, which cannot be drawn to a software Canvas.
         // Copy only those images to a mutable software bitmap before sampling their colors.
-        val softwareBitmap = if (sourceBitmap.config == Bitmap.Config.HARDWARE) {
+        val isHardwareBitmap =
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                sourceBitmap.config == Bitmap.Config.HARDWARE
+        val softwareBitmap = if (isHardwareBitmap) {
             sourceBitmap.copy(Bitmap.Config.ARGB_8888, false)
         } else {
             sourceBitmap
