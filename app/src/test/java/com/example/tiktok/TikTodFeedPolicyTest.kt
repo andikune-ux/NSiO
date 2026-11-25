@@ -29,6 +29,37 @@ class TikTodFeedPolicyTest {
     }
 
     @Test
+    fun mauMuUsesOnlyTheSelectedAvatarIncludingPageTwoAvatars() {
+        val items = listOf(item("page-one"), item("jj-one"), item("jj-two"))
+        val assignments = mapOf(
+            "page-one" to "p1:balqyz",
+            "jj-one" to "p2:balqyz",
+            "jj-two" to "p2:ayu"
+        )
+        assertEquals(listOf("jj-one"), TikTodFeedPolicy.forAvatar(items, assignments, "p2:balqyz").map { it.id })
+        assertEquals(listOf("page-one"), TikTodFeedPolicy.forAvatar(items, assignments, "p1:balqyz").map { it.id })
+    }
+
+    @Test
+    fun jedagJedugCombinesAllPageTwoAvatarsAndExcludesPageOne() {
+        val items = listOf(item("page-one"), item("jj-one"), item("jj-two"))
+        val assignments = mapOf(
+            "page-one" to "p1:balqyz",
+            "jj-one" to "p2:balqyz",
+            "jj-two" to "p2:ayu"
+        )
+        assertEquals(listOf("jj-one", "jj-two"), TikTodFeedPolicy.jedagJedug(items, assignments).map { it.id })
+    }
+
+    @Test
+    fun unassignedVideosAreNotAddedToAvatarFeeds() {
+        val items = listOf(item("assigned"), item("unassigned"))
+        val assignments = mapOf("assigned" to "p1:balqyz")
+        assertEquals(listOf("assigned"), TikTodFeedPolicy.forAvatar(items, assignments, "p1:balqyz").map { it.id })
+        assertTrue(TikTodFeedPolicy.jedagJedug(items, assignments).isEmpty())
+    }
+
+    @Test
     fun cycleContainsEveryVideoOnce() {
         val source = listOf(item("a"), item("b"), item("c"))
         val result = TikTodFeedPolicy.newCycle(source)
