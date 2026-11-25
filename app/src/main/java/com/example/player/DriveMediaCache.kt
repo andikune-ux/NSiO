@@ -11,6 +11,7 @@ import java.io.File
  * Device-local cache shared by every NSiO player surface.
  * Only Google Drive media is routed through this cache.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal object DriveMediaCache {
     private const val MAX_CACHE_BYTES = 1024L * 1024L * 1024L // 1 GiB
     private const val CACHE_DIRECTORY = "nsio_drive_media_cache"
