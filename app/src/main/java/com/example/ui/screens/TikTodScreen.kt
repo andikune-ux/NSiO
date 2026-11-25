@@ -304,24 +304,33 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     if (!multiTouch && verticalDragStarted) {
                         val distanceThreshold = (size.height * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
                         val offset = latestDragOffset
+                        val refreshAtTop = offset > distanceThreshold && index == 0 && feed.isNotEmpty()
                         val target = when {
                             offset < -distanceThreshold && index < feed.lastIndex -> index + 1
                             offset < -distanceThreshold && index == feed.lastIndex && feed.isNotEmpty() -> 0
                             offset > distanceThreshold && index > 0 -> index - 1
                             else -> null
                         }
-                        if (target != null) {
+                        if (target != null || refreshAtTop) {
                             val direction = if (offset < 0f) -1f else 1f
                             swipeAnimationJob = swipeAnimationScope.launch {
                                 Animatable(offset).animateTo(
                                     direction * size.height.toFloat(),
                                     tween(durationMillis = 220)
                                 ) { swipeOffset = value }
-                                if (target == 0 && index == feed.lastIndex) {
+                                if (refreshAtTop) {
+                                    // Pulling down beyond the first item refreshes only
+                                    // the feed order; all other swipe directions stay unchanged.
+                                    val refreshedFeed = TikTodFeedPolicy.newCycle(eligible, media?.id)
+                                    if (refreshedFeed.isNotEmpty()) {
+                                        feed = refreshedFeed
+                                        startAt(0)
+                                    }
+                                } else if (target == 0 && index == feed.lastIndex) {
                                     feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
                                     if (feed.isNotEmpty()) startAt(0)
                                 } else {
-                                    startAt(target)
+                                    target?.let(::startAt)
                                 }
                                 swipeOffset = 0f
                             }
