@@ -155,6 +155,15 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val eligible = remember(mediaList, activeProfile?.id, driveIds) {
         activeProfile?.id?.let { TikTodFeedPolicy.eligible(mediaList, it, driveIds) }.orEmpty()
     }
+    var avatarAssignments by remember(activeProfile?.id) {
+        mutableStateOf(activeProfile?.id?.let(store::avatarAssignments).orEmpty())
+    }
+    var selectedAvatarId by remember(activeProfile?.id) {
+        mutableStateOf(activeProfile?.id?.let(store::selectedAvatar) ?: "p1:balqyz")
+    }
+    var selectedAssignmentVideoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var assignmentTargetAvatarId by remember { mutableStateOf("p1:balqyz") }
+    var showAssignmentTargetMenu by remember { mutableStateOf(false) }
     var feed by remember { mutableStateOf(emptyList<com.example.data.model.MediaItem>()) }
     var index by remember { mutableIntStateOf(0) }
     var sessionInitialized by remember(activeProfile?.id) { mutableStateOf(false) }
@@ -174,10 +183,26 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var backAt by remember { mutableLongStateOf(0L) }
     // TikTod keeps category navigation independent from the active video feed.
     var selectedTikTodCategory by remember { mutableIntStateOf(2) }
+    val categorySource = remember(eligible, selectedTikTodCategory, selectedAvatarId, avatarAssignments) {
+        when (selectedTikTodCategory) {
+            0 -> eligible.filter { avatarAssignments[it.id] == selectedAvatarId }
+            1 -> eligible.filter { avatarAssignments[it.id]?.startsWith("p2:") == true }
+            2 -> eligible
+            else -> emptyList()
+        }
+    }
     val yangManaNames = listOf(
         "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
         "Manda Amoy", "Via Puten", "Mom Sky", "Ayu"
     )
+    val yangManaAvatarIds = listOf("balqyz", "bhochilsd", "lhojte-khristain", "rawina", "manda-amoy", "via-puten", "mom-sky", "ayu")
+    val avatarTargets = remember(yangManaNames) {
+        buildList {
+            yangManaNames.forEachIndexed { i, name -> add("p1:${yangManaAvatarIds[i]}" to "Halaman 1 • $name") }
+            yangManaNames.forEachIndexed { i, name -> add("p2:${yangManaAvatarIds[i]}" to "Halaman 2 • JJ $name") }
+        }
+    }
+    val avatarTargetLabels = remember(avatarTargets) { avatarTargets.toMap() }
     // Fixed muted highlighter/charcoal palette; colors stay with their avatar in both modes.
     val yangManaNameColors = listOf(
         Color(0xFFD18BA7), // Balqyz - dusty pink
@@ -195,7 +220,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val categoryFlipRotation = remember { Animatable(0f) }
     val categoryFlipScope = rememberCoroutineScope()
     var showYangManaSettings by remember { mutableStateOf(false) }
-    var resumeAfterCategory by remember { mutableStateOf(false) }
     val tikTodCategories = listOf("Mau Mu", "Jedag Jedug", "Untuk Mu", "Yang Mana")
     var swipeOffset by remember { mutableFloatStateOf(0f) }
     val swipeAnimationScope = rememberCoroutineScope()
@@ -241,13 +265,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
 
     LaunchedEffect(selectedTikTodCategory) {
-        if (selectedTikTodCategory != 2) {
-            resumeAfterCategory = playerState.isPlaying
-            if (playerState.isPlaying) viewModel.player.pause()
-        } else if (resumeAfterCategory) {
-            viewModel.player.togglePlayPause()
-            resumeAfterCategory = false
-        }
+        if (selectedTikTodCategory == 3 && playerState.isPlaying) viewModel.player.pause()
     }
 
     LaunchedEffect(media?.id) {
@@ -289,16 +307,22 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     fun next() {
         if (index + 1 < feed.size) startAt(index + 1)
         else {
-            feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
+            feed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
             if (feed.isNotEmpty()) startAt(0)
         }
     }
-    LaunchedEffect(eligible, activeProfile?.id) {
+    LaunchedEffect(eligible, activeProfile?.id, selectedTikTodCategory) {
         val profileId = activeProfile?.id ?: return@LaunchedEffect
-        if (eligible.isEmpty()) return@LaunchedEffect
+        if (selectedTikTodCategory != 2) return@LaunchedEffect
+        if (eligible.isEmpty()) {
+            feed = emptyList()
+            viewModel.player.pause()
+            return@LaunchedEffect
+        }
 
         val pendingNewIds = store.syncEligibleVideos(profileId, eligible.map { it.id })
-        if (!sessionInitialized) {
+        val feedDoesNotMatchForYou = feed.map { it.id }.toSet() != eligible.map { it.id }.toSet()
+        if (!sessionInitialized || feedDoesNotMatchForYou) {
             feed = TikTodFeedPolicy.sessionStartOrder(
                 items = eligible,
                 pendingNewIds = pendingNewIds,
@@ -317,6 +341,20 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
         }
     }
+    LaunchedEffect(selectedTikTodCategory, selectedAvatarId, avatarAssignments, eligible) {
+        if (selectedTikTodCategory == 2) return@LaunchedEffect
+        if (selectedTikTodCategory == 3) {
+            feed = emptyList()
+            index = 0
+            viewModel.player.pause()
+            return@LaunchedEffect
+        }
+        val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
+        feed = nextFeed
+        index = 0
+        if (nextFeed.isNotEmpty()) startAt(0) else viewModel.player.pause()
+    }
+
     LaunchedEffect(media?.id, currentMedia?.id) {
         if (media != null && currentMedia?.id != media.id) startAt(index)
     }
@@ -460,7 +498,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                 if (refreshAtTop) {
                                     // Pulling down beyond the first item refreshes only
                                     // the feed order; all other swipe directions stay unchanged.
-                                    val refreshedFeed = TikTodFeedPolicy.newCycle(eligible, media?.id)
+                                    val refreshedFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
                                     if (refreshedFeed.isNotEmpty()) {
                                         feed = refreshedFeed
                                         startAt(0)
@@ -555,28 +593,34 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
         }
-        if (selectedTikTodCategory == 0 || selectedTikTodCategory == 1) {
+        if (selectedTikTodCategory == 3) {
+            // Yang Mana is the avatar selector; its grid is rendered above the player layer.
+        } else if (media == null) {
             Column(
                 Modifier.align(Alignment.Center).padding(horizontal = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(if (selectedTikTodCategory == 0) "Mau Mu" else "Jedag Jedug", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    if (selectedTikTodCategory == 0)
-                        "Kategori ini belum memiliki aturan dan sumber video yang ditetapkan. Feed Untuk Mu tidak ditampilkan di sini."
-                    else
-                        "Kategori Jedag Jedug berdiri sendiri. Kartu Jedag Jedug di Yang Mana tetap dipertahankan. Sumber dan aturan video kategori ini belum ditetapkan.",
+                    when (selectedTikTodCategory) {
+                        0 -> "Mau Mu"
+                        1 -> "Jedag Jedug"
+                        else -> "Untuk Mu"
+                    },
+                    color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold
+                )
+                Text(
+                    when (selectedTikTodCategory) {
+                        0 -> "Belum ada video yang ditetapkan untuk ${avatarTargetLabels[selectedAvatarId] ?: "Avatar pilihan"}."
+                        1 -> "Belum ada video yang ditetapkan ke Avatar halaman 2 (JJ)."
+                        else -> "Belum ada video Google Drive yang memenuhi syarat."
+                    },
                     color = Color.White.copy(alpha = 0.72f),
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-            }
-        } else if (media == null) {
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Belum ada video Google Drive", color = Color.White)
-                TextButton(onClick = onClose) { Text("Kembali") }
+                if (selectedTikTodCategory == 0) TextButton(onClick = { selectedTikTodCategory = 3 }) { Text("Pilih Avatar") }
             }
         } else {
             AndroidView(
@@ -1117,28 +1161,32 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     rotationY = categoryFlipRotation.value
                                     cameraDistance = 24f * density
                                 }
-                                .clickable(enabled = profileIndex == 8 && !isCategoryFlipRunning) {
-                                    isCategoryFlipRunning = true
-                                    categoryFlipScope.launch {
-                                        categoryFlipRotation.snapTo(0f)
-                                        categoryFlipRotation.animateTo(
-                                            180f,
-                                            spring(dampingRatio = 0.78f, stiffness = 380f)
-                                        )
-                                        isJjCategory = !isJjCategory
-                                        categoryFlipRotation.animateTo(
-                                            360f,
-                                            spring(dampingRatio = 0.78f, stiffness = 380f)
-                                        )
-                                        categoryFlipRotation.snapTo(0f)
-                                        isCategoryFlipRunning = false
+                                .clickable(enabled = !isCategoryFlipRunning) {
+                                    if (profileIndex == 8) {
+                                        isCategoryFlipRunning = true
+                                        categoryFlipScope.launch {
+                                            categoryFlipRotation.snapTo(0f)
+                                            categoryFlipRotation.animateTo(180f, spring(dampingRatio = 0.78f, stiffness = 380f))
+                                            isJjCategory = !isJjCategory
+                                            categoryFlipRotation.animateTo(360f, spring(dampingRatio = 0.78f, stiffness = 380f))
+                                            categoryFlipRotation.snapTo(0f)
+                                            isCategoryFlipRunning = false
+                                        }
+                                    } else {
+                                        val avatarId = "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}"
+                                        selectedAvatarId = avatarId
+                                        activeProfile?.id?.let { store.setSelectedAvatar(it, avatarId) }
                                     }
                                 },
                             shape = RoundedCornerShape(23.dp),
                             color = Color.White.copy(alpha = 0.10f),
                             border = BorderStroke(
-                                if (isJjCard) 1.8.dp else 1.dp,
-                                if (isJjCard) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.38f)
+                                if (isJjCard || (profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}")) 1.8.dp else 1.dp,
+                                when {
+                                    profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}" -> Color(0xFF8DE1C1)
+                                    isJjCard -> Color(0xFFFFD54F)
+                                    else -> Color.White.copy(alpha = 0.38f)
+                                }
                             ),
                             shadowElevation = if (isJjCard) 14.dp else 8.dp
                         ) {
@@ -1192,17 +1240,107 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
 
     if (showYangManaSettings) {
-        AlertDialog(
-            onDismissRequest = { showYangManaSettings = false },
-            title = { Text("Pengaturan Yang Mana") },
-            text = { Text("Pengaturan profil akan ditambahkan setelah isi dan fungsinya ditentukan.") },
-            confirmButton = {
-                TextButton(onClick = { showYangManaSettings = false }) { Text("Tutup") }
+        ModalBottomSheet(
+            onDismissRequest = {
+                showYangManaSettings = false
+                selectedAssignmentVideoIds = emptySet()
+                showAssignmentTargetMenu = false
             },
-            containerColor = Color(0xFF202126),
-            titleContentColor = Color.White,
-            textContentColor = Color.White
-        )
+            containerColor = Color(0xFF17181D),
+            contentColor = Color.White,
+            scrimColor = Color.Black.copy(alpha = 0.62f)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 720.dp).navigationBarsPadding()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Pengaturan pembagian video", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text("Pilih video Drive, lalu tentukan satu Avatar pemilik. Satu video hanya bisa dimiliki satu Avatar.",
+                    color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp, lineHeight = 17.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Avatar tujuan", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Box {
+                        OutlinedButton(onClick = { showAssignmentTargetMenu = true }) {
+                            Text(avatarTargetLabels[assignmentTargetAvatarId] ?: "Belum ditentukan", maxLines = 1)
+                        }
+                        DropdownMenu(expanded = showAssignmentTargetMenu, onDismissRequest = { showAssignmentTargetMenu = false }) {
+                            DropdownMenuItem(text = { Text("Belum ditentukan") }, onClick = {
+                                assignmentTargetAvatarId = ""
+                                showAssignmentTargetMenu = false
+                            })
+                            avatarTargets.forEach { (id, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    assignmentTargetAvatarId = id
+                                    showAssignmentTargetMenu = false
+                                })
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${selectedAssignmentVideoIds.size} video dipilih • ${eligible.size} video tersedia",
+                        modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
+                    TextButton(onClick = {
+                        selectedAssignmentVideoIds = if (selectedAssignmentVideoIds.size == eligible.size) emptySet()
+                        else eligible.map { it.id }.toSet()
+                    }) { Text(if (eligible.isNotEmpty() && selectedAssignmentVideoIds.size == eligible.size) "Batal semua" else "Pilih semua") }
+                }
+                if (eligible.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Text("Belum ada video Drive yang memenuhi syarat untuk dibagi.", color = Color.White.copy(alpha = 0.70f), fontSize = 13.sp)
+                    }
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(eligible, key = { _, item -> item.id }) { _, item ->
+                            val checked = item.id in selectedAssignmentVideoIds
+                            val ownerLabel = avatarTargetLabels[avatarAssignments[item.id]] ?: "Belum ditentukan"
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = if (checked) 0.12f else 0.055f))
+                                    .clickable {
+                                        selectedAssignmentVideoIds = if (checked) selectedAssignmentVideoIds - item.id
+                                        else selectedAssignmentVideoIds + item.id
+                                    }.padding(9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Checkbox(checked = checked, onCheckedChange = { value ->
+                                    selectedAssignmentVideoIds = if (value) selectedAssignmentVideoIds + item.id
+                                    else selectedAssignmentVideoIds - item.id
+                                })
+                                if (item.thumbnailUrl.isNotBlank()) {
+                                    AsyncImage(model = item.thumbnailUrl, contentDescription = "Thumbnail ${item.title}",
+                                        modifier = Modifier.size(width = 92.dp, height = 58.dp).clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop)
+                                } else {
+                                    Box(Modifier.size(width = 92.dp, height = 58.dp).clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                                    }
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(item.title.ifBlank { "Video tanpa judul" }, color = Color.White, fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold, maxLines = 2)
+                                    Text("Saat ini: $ownerLabel", color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+                Button(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    enabled = selectedAssignmentVideoIds.isNotEmpty() && activeProfile != null,
+                    onClick = {
+                        activeProfile?.id?.let { profileId ->
+                            store.assignVideos(profileId, selectedAssignmentVideoIds, assignmentTargetAvatarId)
+                            avatarAssignments = store.avatarAssignments(profileId)
+                            selectedAssignmentVideoIds = emptySet()
+                        }
+                    }
+                ) { Text(if (assignmentTargetAvatarId.isBlank()) "Keluarkan dari Avatar" else "Terapkan ke Avatar") }
+            }
+        }
     }
 
     if (showComments && media != null) {
