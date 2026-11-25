@@ -191,9 +191,20 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             else -> emptyList()
         }
     }
+    // Avatar names and artwork are sourced from the user's icon repository.
     val yangManaNames = listOf(
-        "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
-        "Manda Amoy", "Via Puten", "Mom Sky", "Ayu"
+        "Balqyz", "BhochiL SD", "Khristain", "Rawina",
+        "Amoy", "Via Puten", "MomSky", "Ayu"
+    )
+    val yangManaAvatarImages = listOf(
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/balqyz.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/BhochiL%20SD.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/Khristain.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/Rawina.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/Amoy.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/Via%20Puten.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/MomSky.jpg",
+        "https://raw.githubusercontent.com/andikune-ux/icon/main/Ayu.jpg"
     )
     val yangManaAvatarIds = listOf("balqyz", "bhochilsd", "lhojte-khristain", "rawina", "manda-amoy", "via-puten", "mom-sky", "ayu")
     val avatarTargets = remember(yangManaNames) {
@@ -1192,7 +1203,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         ) {
                             Box {
                                 AsyncImage(
-                                    model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
+                                    model = yangManaAvatarImages[profileIndex],
                                     contentDescription = cardName,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
