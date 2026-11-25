@@ -19,6 +19,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import com.lagradost.cloudstream3.app
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -217,6 +218,7 @@ class CS3IPlayer(
     companion object {
         private val CLEARKEY_UUID: UUID = UUID.fromString("e2719d58-a985-b3c9-781a-b030af78d30e")
         const val DEFAULT_FALLBACK_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        const val DRIVE_PRELOAD_BYTES = 2L * 1024L * 1024L
         const val STANDARD_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 NetStream/2.0"
     }
 
@@ -803,16 +805,14 @@ class CS3IPlayer(
                     .setPosition(0L)
                     .setLength(DRIVE_PRELOAD_BYTES)
                     .build()
-                androidx.media3.datasource.CacheWriter(source, request, ByteArray(128 * 1024), null).cache()
+                CacheWriter(source, request, ByteArray(128 * 1024), null).cache()
             } catch (error: Exception) {
                 Log.d("NSiOPlayer", "Drive next-item preload stopped: ${error.message}")
             }
         }
     }
 
-    private companion object PlaybackCacheLimits {
-        const val DRIVE_PRELOAD_BYTES = 2L * 1024L * 1024L
-    }
+
 
     fun playWithMimeType(
         url: String,
