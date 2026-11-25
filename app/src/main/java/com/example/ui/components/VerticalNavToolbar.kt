@@ -30,8 +30,6 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
 import androidx.compose.material3.MaterialTheme
 import com.example.ui.components.AppText as Text
 import androidx.compose.runtime.Composable
@@ -71,8 +69,7 @@ fun VerticalNavToolbar(
     currentDestination: NavDestination,
     onNavigate: (NavDestination) -> Unit,
     activeProfileAvatar: String,
-    modifier: Modifier = Modifier,
-    isPrimaryProfile: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val homeFocusRequester = remember { FocusRequester() }
     val extensionFocusRequester = remember { FocusRequester() }
@@ -171,7 +168,6 @@ fun VerticalNavToolbar(
                     focusRequester = profileFocusRequester,
                     upFocusRequester = settingsFocusRequester,
                     avatarEmoji = activeProfileAvatar,
-                    isPrimaryProfile = isPrimaryProfile,
                     onClick = { onNavigate(NavDestination.PROFILE) }
                 )
             }
@@ -189,7 +185,6 @@ private fun NavToolbarGlassItem(
     testTag: String,
     onClick: () -> Unit,
     avatarEmoji: String? = null,
-    isPrimaryProfile: Boolean = false,
     focusRequester: FocusRequester,
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null
@@ -248,14 +243,7 @@ private fun NavToolbarGlassItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        if (isPrimaryProfile && title == "Profil") {
-            AsyncImage(
-                model = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg",
-                contentDescription = "Avatar Kunti Meong Collection",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(30.dp).clip(CircleShape)
-            )
-        } else if (avatarEmoji != null && avatarEmoji.isNotEmpty() && title == "Profil") {
+        if (avatarEmoji != null && avatarEmoji.isNotEmpty() && title == "Profil") {
             Text(
                 text = avatarEmoji,
                 fontSize = 21.sp,
