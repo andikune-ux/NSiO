@@ -114,6 +114,7 @@ fun ProfileScreen(
 ) {
     val profiles by viewModel.profiles.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
+    val rubikPuddlesFont = rememberRubikPuddlesFontFamily()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
 
@@ -359,7 +360,6 @@ fun ProfileScreen(
             )
         }
 
-        val rubikPuddlesFont = rememberRubikPuddlesFontFamily()
         items(profiles, key = { it.id }) { p ->
             val isActive = activeProfile?.id == p.id
             val isPrimaryProfile = p.isDefault
