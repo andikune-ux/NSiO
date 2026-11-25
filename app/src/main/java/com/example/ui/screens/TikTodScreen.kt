@@ -83,7 +83,7 @@ private fun rememberTikTodDisplayFont(): FontFamily? {
                     URL(RUBIK_PUDDLES_FONT_URL).openConnection().apply {
                         connectTimeout = 10_000
                         readTimeout = 15_000
-                    }.getInputStream().use { input -> temp.outputStream().use(input::copyTo) }
+                    }.getInputStream().use { input -> temp.outputStream().use { output -> input.copyTo(output) } }
                     if (!temp.renameTo(target)) {
                         temp.copyTo(target, overwrite = true)
                         temp.delete()
