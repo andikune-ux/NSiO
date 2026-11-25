@@ -2102,7 +2102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers)
+            player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers, item.id)
             startPlaybackProgressPersistence(item)
         } else {
             player.clearError()
