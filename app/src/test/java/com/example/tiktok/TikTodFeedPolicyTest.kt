@@ -37,6 +37,34 @@ class TikTodFeedPolicyTest {
     }
 
     @Test
+    fun sessionStartPrioritizesNewItemsAndAvoidsPreviousVideo() {
+        val items = listOf(item("old-a"), item("new-a"), item("new-b"))
+        val result = TikTodFeedPolicy.sessionStartOrder(
+            items = items,
+            pendingNewIds = setOf("new-a", "new-b"),
+            previousVideoId = "new-a",
+            random = kotlin.random.Random(7)
+        )
+        assertTrue(result.first().id != "new-a")
+        assertTrue(result.take(2).all { it.id.startsWith("new-") })
+        assertEquals(items.map { it.id }.toSet(), result.map { it.id }.toSet())
+    }
+
+    @Test
+    fun sessionStartFallsBackToAnotherVideoWhenOnlyRegularQueueHasPreviousFirst() {
+        val items = listOf(item("old-a"), item("old-b"))
+        val result = TikTodFeedPolicy.sessionStartOrder(
+            items = items,
+            pendingNewIds = emptySet(),
+            previousVideoId = resultIdForTest(items),
+            random = kotlin.random.Random(3)
+        )
+        assertTrue(result.first().id != resultIdForTest(items))
+    }
+
+    private fun resultIdForTest(items: List<MediaItem>): String = items.first().id
+
+    @Test
     fun newlyDiscoveredItemsAreReturnedAheadOfExistingQueue() {
         val current = listOf(item("current"), item("later"))
         val added = TikTodFeedPolicy.appendNewItems(current, listOf(item("new")), setOf("already-played"))
