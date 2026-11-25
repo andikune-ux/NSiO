@@ -297,7 +297,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
     BackHandler {
         val now = android.os.SystemClock.elapsedRealtime()
-        if (now - backAt < 650L) {
+        if (backAt != 0L && now - backAt < 1_500L) {
             viewModel.closePlayer()
             onClose()
         } else {
