@@ -1,5 +1,19 @@
 package com.example.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Path
+import android.graphics.PathMeasure
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.drawable.Drawable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -226,6 +240,15 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         Color(0xFFCB91B9), // Ayu - muted magenta
         Color(0xFFC98B82)  // Jedag Jedug / Kembali - muted coral
     )
+    // Warna glow diambil dari sampel warna foto setelah gambar berhasil dimuat.
+    var avatarGlowColors by remember {
+        mutableStateOf(
+            listOf(
+                Color(0xFFD18BA7), Color(0xFFC9BD69), Color(0xFF91B477), Color(0xFF83A9C8),
+                Color(0xFFD49A72), Color(0xFFB49ACB), Color(0xFF82BDB0), Color(0xFFCB91B9)
+            )
+        )
+    }
     var isJjCategory by remember { mutableStateOf(false) }
     var isCategoryFlipRunning by remember { mutableStateOf(false) }
     val categoryFlipRotation = remember { Animatable(0f) }
@@ -1166,55 +1189,67 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                                .graphicsLayer {
-                                    rotationY = categoryFlipRotation.value
-                                    cameraDistance = 24f * density
-                                }
-                                .clickable(enabled = !isCategoryFlipRunning) {
-                                    if (profileIndex == 8) {
-                                        isCategoryFlipRunning = true
-                                        categoryFlipScope.launch {
-                                            categoryFlipRotation.snapTo(0f)
-                                            categoryFlipRotation.animateTo(180f, spring(dampingRatio = 0.78f, stiffness = 380f))
-                                            isJjCategory = !isJjCategory
-                                            categoryFlipRotation.animateTo(360f, spring(dampingRatio = 0.78f, stiffness = 380f))
-                                            categoryFlipRotation.snapTo(0f)
-                                            isCategoryFlipRunning = false
-                                        }
-                                    } else {
-                                        val avatarId = "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}"
-                                        selectedAvatarId = avatarId
-                                        activeProfile?.id?.let { store.setSelectedAvatar(it, avatarId) }
-                                    }
-                                },
-                            shape = RoundedCornerShape(23.dp),
-                            color = Color.White.copy(alpha = 0.10f),
-                            border = BorderStroke(
-                                if (isJjCard || (profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}")) 1.8.dp else 1.dp,
-                                when {
-                                    profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}" -> Color(0xFF8DE1C1)
-                                    isJjCard -> Color(0xFFFFD54F)
-                                    else -> Color.White.copy(alpha = 0.38f)
-                                }
-                            ),
-                            shadowElevation = if (isJjCard) 14.dp else 8.dp
+                        AvatarGlowFrame(
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                            tint = avatarGlowColors[profileIndex],
+                            enabled = profileIndex < 8
                         ) {
-                            Box {
-                                AsyncImage(
-                                    model = yangManaAvatarImages[profileIndex],
-                                    contentDescription = cardName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(
-                                    Modifier.fillMaxSize().background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.30f))
+                            Surface(
+                                modifier = Modifier.fillMaxSize()
+                                    .graphicsLayer {
+                                        rotationY = categoryFlipRotation.value
+                                        cameraDistance = 24f * density
+                                    }
+                                    .clickable(enabled = !isCategoryFlipRunning) {
+                                        if (profileIndex == 8) {
+                                            isCategoryFlipRunning = true
+                                            categoryFlipScope.launch {
+                                                categoryFlipRotation.snapTo(0f)
+                                                categoryFlipRotation.animateTo(180f, spring(dampingRatio = 0.78f, stiffness = 380f))
+                                                isJjCategory = !isJjCategory
+                                                categoryFlipRotation.animateTo(360f, spring(dampingRatio = 0.78f, stiffness = 380f))
+                                                categoryFlipRotation.snapTo(0f)
+                                                isCategoryFlipRunning = false
+                                            }
+                                        } else {
+                                            val avatarId = "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}"
+                                            selectedAvatarId = avatarId
+                                            activeProfile?.id?.let { store.setSelectedAvatar(it, avatarId) }
+                                        }
+                                    },
+                                shape = RoundedCornerShape(23.dp),
+                                color = Color.White.copy(alpha = 0.10f),
+                                border = BorderStroke(
+                                    if (isJjCard || (profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}")) 1.8.dp else 1.dp,
+                                    when {
+                                        profileIndex < 8 && selectedAvatarId == "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}" -> Color(0xFF8DE1C1)
+                                        isJjCard -> Color(0xFFFFD54F)
+                                        else -> Color.White.copy(alpha = 0.38f)
+                                    }
+                                ),
+                                shadowElevation = if (isJjCard) 14.dp else 8.dp
+                            ) {
+                                Box {
+                                    AsyncImage(
+                                        model = yangManaAvatarImages[profileIndex],
+                                        contentDescription = cardName,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                        onSuccess = { result ->
+                                            val tint = extractAvatarTint(result.result.drawable)
+                                            avatarGlowColors = avatarGlowColors.toMutableList().also { colors ->
+                                                if (profileIndex < colors.size) colors[profileIndex] = tint
+                                            }
+                                        }
+                                    )
+                                    Box(
+                                        Modifier.fillMaxSize().background(
+                                            Brush.verticalGradient(
+                                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.30f))
+                                            )
                                         )
                                     )
-                                )
+                                }
                             }
                         }
                         Text(
@@ -1525,6 +1560,142 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
         }
     }
+}
+
+
+@Composable
+private fun AvatarGlowFrame(
+    modifier: Modifier = Modifier,
+    tint: Color,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val rotation = remember { Animatable(0f) }
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            rotation.snapTo(0f)
+            return@LaunchedEffect
+        }
+        // Same linear 360-degree path animation used by HOME.iO NeonFocusBorder.
+        while (true) {
+            rotation.snapTo(0f)
+            rotation.animateTo(360f, tween(2500, easing = LinearEasing))
+        }
+    }
+
+    val density = LocalDensity.current
+    val tintInt = tint.copy(alpha = 1f).toArgb()
+    val goldBlend = Color.lerp(tint, Color(0xFFFFD36A), 0.48f).toArgb()
+    val haloRadius = with(density) { 15.dp.toPx() }
+    val trailRadius = with(density) { 8.dp.toPx() }
+    val corner = with(density) { 23.dp.toPx() }
+
+    Box(modifier.graphicsLayer { clip = false }) {
+        if (enabled) {
+            Canvas(Modifier.matchParentSize()) {
+                drawIntoCanvas { canvas ->
+                    val native = canvas.nativeCanvas
+                    val outset = haloRadius * 0.48f
+                    val glowRect = RectF(-outset, -outset, size.width + outset, size.height + outset)
+                    val glowCorner = corner + outset
+
+                    // Broad, soft photo-tinted light outside the card.
+                    val broadHalo = AndroidPaint().apply {
+                        isAntiAlias = true
+                        style = AndroidPaint.Style.STROKE
+                        strokeWidth = with(density) { 8.dp.toPx() }
+                        color = tintInt
+                        alpha = 118
+                        maskFilter = BlurMaskFilter(haloRadius, BlurMaskFilter.Blur.NORMAL)
+                    }
+                    native.drawRoundRect(glowRect, glowCorner, glowCorner, broadHalo)
+
+                    val nearHalo = AndroidPaint().apply {
+                        isAntiAlias = true
+                        style = AndroidPaint.Style.STROKE
+                        strokeWidth = with(density) { 3.dp.toPx() }
+                        color = tintInt
+                        alpha = 155
+                        maskFilter = BlurMaskFilter(trailRadius, BlurMaskFilter.Blur.NORMAL)
+                    }
+                    native.drawRoundRect(glowRect, glowCorner, glowCorner, nearHalo)
+
+                    // Gold + image-tint trail follows the same measured rounded path as HOME.iO.
+                    val path = Path().apply {
+                        addRoundRect(glowRect, glowCorner, glowCorner, Path.Direction.CW)
+                    }
+                    val pathMeasure = PathMeasure(path, false)
+                    val pathLength = pathMeasure.length
+                    val dotCount = 30
+                    val tailLength = 0.34f
+                    val headPosition = rotation.value / 360f
+                    val trailPaint = AndroidPaint().apply { isAntiAlias = true }
+                    for (i in 0 until dotCount) {
+                        val t = headPosition - (i.toFloat() / dotCount) * tailLength
+                        val wrapped = ((t % 1f) + 1f) % 1f
+                        val point = FloatArray(2)
+                        pathMeasure.getPosTan(wrapped * pathLength, point, null)
+                        val linear = 1f - i.toFloat() / dotCount
+                        val alpha = (linear * linear * 0.88f + linear * 0.12f).coerceIn(0f, 1f)
+                        val radius = trailRadius * (0.42f + 0.58f * linear)
+                        trailPaint.shader = RadialGradient(
+                            point[0], point[1], radius,
+                            intArrayOf(
+                                withAlpha(goldBlend, alpha),
+                                withAlpha(tintInt, alpha * 0.72f),
+                                withAlpha(goldBlend, alpha * 0.28f),
+                                withAlpha(goldBlend, 0f)
+                            ),
+                            floatArrayOf(0f, 0.32f, 0.72f, 1f),
+                            Shader.TileMode.CLAMP
+                        )
+                        trailPaint.maskFilter = BlurMaskFilter(radius * 0.55f, BlurMaskFilter.Blur.NORMAL)
+                        native.drawCircle(point[0], point[1], radius, trailPaint)
+                    }
+                }
+            }
+        }
+        content()
+    }
+}
+
+private fun withAlpha(color: Int, alpha: Float): Int {
+    val a = (alpha * 255f).toInt().coerceIn(0, 255)
+    return (color and 0x00FFFFFF) or (a shl 24)
+}
+
+private fun extractAvatarTint(drawable: Drawable): Color {
+    val sample = Bitmap.createBitmap(18, 18, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(sample)
+    drawable.setBounds(0, 0, 18, 18)
+    drawable.draw(canvas)
+
+    var hueX = 0.0
+    var hueY = 0.0
+    var saturationTotal = 0.0
+    var valueTotal = 0.0
+    var weightTotal = 0.0
+    val hsv = FloatArray(3)
+    for (y in 0 until 18) {
+        for (x in 0 until 18) {
+            val pixel = sample.getPixel(x, y)
+            android.graphics.Color.colorToHSV(pixel, hsv)
+            if (hsv[1] < 0.16f || hsv[2] < 0.12f || hsv[2] > 0.97f) continue
+            val weight = hsv[1].toDouble() * (0.35 + hsv[2].toDouble() * 0.65)
+            val radians = Math.toRadians(hsv[0].toDouble())
+            hueX += kotlin.math.cos(radians) * weight
+            hueY += kotlin.math.sin(radians) * weight
+            saturationTotal += hsv[1] * weight
+            valueTotal += hsv[2] * weight
+            weightTotal += weight
+        }
+    }
+    sample.recycle()
+    if (weightTotal <= 0.0) return Color(0xFFD6B56C)
+    val hue = ((Math.toDegrees(kotlin.math.atan2(hueY, hueX)) + 360.0) % 360.0).toFloat()
+    val saturation = (saturationTotal / weightTotal).toFloat().coerceIn(0.34f, 0.78f)
+    val value = (valueTotal / weightTotal).toFloat().coerceIn(0.68f, 0.92f)
+    return Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
 }
 
 private fun formatTikTodTime(milliseconds: Long): String {
