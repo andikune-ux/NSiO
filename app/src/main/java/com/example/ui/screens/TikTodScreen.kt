@@ -144,7 +144,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
     // TikTod keeps category navigation independent from the active video feed.
-    var selectedTikTodCategory by remember { mutableIntStateOf(1) }
+    var selectedTikTodCategory by remember { mutableIntStateOf(2) }
     val yangManaNames = listOf(
         "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
         "Manda Amoy", "Via Puten", "Mom Sky", "Ayu"
@@ -155,7 +155,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val categoryFlipScope = rememberCoroutineScope()
     var showYangManaSettings by remember { mutableStateOf(false) }
     var resumeAfterCategory by remember { mutableStateOf(false) }
-    val tikTodCategories = listOf("Mau Mu", "Untuk Mu", "Yang Mana")
+    val tikTodCategories = listOf("Mau Mu", "Jedag Jedug", "Untuk Mu", "Yang Mana")
     var swipeOffset by remember { mutableFloatStateOf(0f) }
     val swipeAnimationScope = rememberCoroutineScope()
     var swipeAnimationJob by remember { mutableStateOf<Job?>(null) }
@@ -200,7 +200,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
 
     LaunchedEffect(selectedTikTodCategory) {
-        if (selectedTikTodCategory != 1) {
+        if (selectedTikTodCategory != 2) {
             resumeAfterCategory = playerState.isPlaying
             if (playerState.isPlaying) viewModel.player.pause()
         } else if (resumeAfterCategory) {
@@ -395,8 +395,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     if (!multiTouch && horizontalDragStarted) {
                         val horizontalThreshold = (size.width * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
                         if (kotlin.math.abs(latestHorizontalOffset) >= horizontalThreshold) {
-                            // Swipe right from the default center tab opens Yang Mana;
-                            // swipe left opens Mau Mu. Do not wrap at either edge.
+                            // Swipe changes one category at a time; stop at the first and last category.
                             selectedTikTodCategory = (selectedTikTodCategory + if (latestHorizontalOffset > 0f) 1 else -1)
                                 .coerceIn(0, tikTodCategories.lastIndex)
                         }
@@ -486,8 +485,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             Row(
                 modifier = Modifier.align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 8.dp, start = 18.dp, end = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                    .padding(top = 8.dp, start = 10.dp, end = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 tikTodCategories.forEachIndexed { categoryIndex, category ->
@@ -515,15 +514,18 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
         }
-        if (selectedTikTodCategory == 0) {
+        if (selectedTikTodCategory == 0 || selectedTikTodCategory == 1) {
             Column(
                 Modifier.align(Alignment.Center).padding(horizontal = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Mau Mu", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(if (selectedTikTodCategory == 0) "Mau Mu" else "Jedag Jedug", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "Kategori ini belum memiliki aturan dan sumber video yang ditetapkan. Feed Untuk Mu tidak ditampilkan di sini.",
+                    if (selectedTikTodCategory == 0)
+                        "Kategori ini belum memiliki aturan dan sumber video yang ditetapkan. Feed Untuk Mu tidak ditampilkan di sini."
+                    else
+                        "Kategori Jedag Jedug berdiri sendiri. Kartu Jedag Jedug di Yang Mana tetap dipertahankan. Sumber dan aturan video kategori ini belum ditetapkan.",
                     color = Color.White.copy(alpha = 0.72f),
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
@@ -950,13 +952,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
 
 
-    if (selectedTikTodCategory == 2) {
+    if (selectedTikTodCategory == 3) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             Row(
                 modifier = Modifier.align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 8.dp, start = 18.dp, end = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                    .padding(top = 8.dp, start = 10.dp, end = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 tikTodCategories.forEachIndexed { categoryIndex, category ->
