@@ -21,6 +21,39 @@ internal class TikTodLocalStore(context: Context) {
     fun lastVideoId(profileId: String): String? =
         prefs.getString("last_video:$profileId", null)?.takeIf(String::isNotBlank)
 
+    /** Video-to-avatar ownership is stored locally per NSiO profile. Each video has at most one owner. */
+    fun avatarAssignments(profileId: String): Map<String, String> = runCatching {
+        val json = JSONObject(prefs.getString("avatar_assignments:$profileId", "{}").orEmpty())
+        buildMap {
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val mediaId = keys.next()
+                val avatarId = json.optString(mediaId)
+                if (mediaId.isNotBlank() && avatarId.isNotBlank()) put(mediaId, avatarId)
+            }
+        }
+    }.getOrDefault(emptyMap())
+
+    fun assignVideos(profileId: String, mediaIds: Collection<String>, avatarId: String) {
+        val json = JSONObject().apply {
+            avatarAssignments(profileId).forEach { (mediaId, ownerId) -> put(mediaId, ownerId) }
+        }
+        mediaIds.filter(String::isNotBlank).forEach { mediaId ->
+            if (avatarId.isBlank()) json.remove(mediaId) else json.put(mediaId, avatarId)
+        }
+        prefs.edit().putString("avatar_assignments:$profileId", json.toString()).apply()
+    }
+
+    fun selectedAvatar(profileId: String): String =
+        prefs.getString("selected_avatar:$profileId", "p1:balqyz")
+            ?.takeIf(String::isNotBlank) ?: "p1:balqyz"
+
+    fun setSelectedAvatar(profileId: String, avatarId: String) {
+        if (avatarId.isNotBlank()) {
+            prefs.edit().putString("selected_avatar:$profileId", avatarId).apply()
+        }
+    }
+
     /**
      * Tracks catalog membership separately from view counts. On first use, all
      * eligible items are considered new; later only newly discovered IDs are added.
