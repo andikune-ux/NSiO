@@ -40,7 +40,7 @@ internal object TikTodFeedPolicy {
                 priority[0] = priority[alternative]
                 priority[alternative] = first
             }
-        } else if (priority.size == 1 && priority.first().id == previousVideoId && regular.size > 1) {
+        } else if (priority.size == 1 && priority.first().id == previousVideoId && regular.isNotEmpty()) {
             val alternative = regular.firstOrNull { it.id != previousVideoId }
             if (alternative != null) {
                 return listOf(alternative) + priority + regular.filterNot { it.id == alternative.id }
