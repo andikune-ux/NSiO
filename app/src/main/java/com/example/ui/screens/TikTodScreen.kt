@@ -41,6 +41,12 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import android.graphics.Typeface
+import java.io.File
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -61,6 +67,35 @@ import androidx.compose.animation.core.tween
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 
+private const val PRIMARY_PROFILE_AVATAR_URL = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg"
+private const val RUBIK_PUDDLES_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/rubikpuddles/RubikPuddles-Regular.ttf"
+
+@Composable
+private fun rememberTikTodDisplayFont(): FontFamily? {
+    val context = LocalContext.current.applicationContext
+    var family by remember { mutableStateOf<FontFamily?>(null) }
+    LaunchedEffect(Unit) {
+        family = withContext(Dispatchers.IO) {
+            runCatching {
+                val target = File(context.cacheDir, "rubik-puddles-regular.ttf")
+                if (!target.exists() || target.length() == 0L) {
+                    val temp = File(context.cacheDir, "rubik-puddles-regular.tmp")
+                    URL(RUBIK_PUDDLES_FONT_URL).openConnection().apply {
+                        connectTimeout = 10_000
+                        readTimeout = 15_000
+                    }.getInputStream().use { input -> temp.outputStream().use(input::copyTo) }
+                    if (!temp.renameTo(target)) {
+                        temp.copyTo(target, overwrite = true)
+                        temp.delete()
+                    }
+                }
+                FontFamily(Typeface.createFromFile(target))
+            }.getOrNull()
+        }
+    }
+    return family
+}
+
 @androidx.media3.common.util.UnstableApi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +105,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val originalOrientation = remember(hostActivity) { hostActivity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     val owner = LocalLifecycleOwner.current
     val activeProfile by viewModel.activeProfile.collectAsState()
+    val primaryDisplayFont = rememberTikTodDisplayFont()
     val mediaList by viewModel.mediaList.collectAsState()
     val playlists by viewModel.sourcePlaylists.collectAsState()
     val playerState by viewModel.player.playerState.collectAsState()
@@ -566,19 +602,42 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
+                val isPrimaryProfile = activeProfile?.isDefault == true
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Surface(shape = CircleShape, color = Color.White.copy(alpha = .20f), modifier = Modifier.size(30.dp)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(activeProfile?.avatarEmoji?.takeIf { it.isNotBlank() } ?: "👤", fontSize = 17.sp)
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = .20f),
+                        modifier = Modifier.size(if (isPrimaryProfile) 34.dp else 30.dp)
+                    ) {
+                        if (isPrimaryProfile) {
+                            AsyncImage(
+                                model = PRIMARY_PROFILE_AVATAR_URL,
+                                contentDescription = "Avatar Kunti Meong Collection",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(activeProfile?.avatarEmoji?.takeIf { it.isNotBlank() } ?: "👤", fontSize = 17.sp)
+                            }
                         }
                     }
                     Text(
-                        activeProfile?.name?.takeIf { it.isNotBlank() } ?: "Profil",
+                        if (isPrimaryProfile) "Kunti Meong Collection" else activeProfile?.name?.takeIf { it.isNotBlank() } ?: "Profil",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = if (isPrimaryProfile) 12.sp else 13.sp,
                         fontWeight = FontWeight.SemiBold,
+                        fontFamily = if (isPrimaryProfile) primaryDisplayFont else null,
                         maxLines = 1
                     )
+                    if (isPrimaryProfile) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.Verified,
+                            contentDescription = "Terverifikasi",
+                            tint = Color(0xFF22C55E),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
                 Text(
                     media.title,
