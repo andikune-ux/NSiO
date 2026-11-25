@@ -18,6 +18,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import com.lagradost.cloudstream3.app
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -91,7 +92,8 @@ data class PlayerState(
 
 interface IPlayer {
     val playerState: StateFlow<PlayerState>
-    fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap())
+    fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap(), mediaCacheKey: String? = null)
+    fun preloadDriveMedia(url: String, mediaId: String)
     fun togglePlayPause()
     fun pause()
     fun stop()
@@ -208,6 +210,9 @@ class CS3IPlayer(
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
     private lateinit var mediaSourceFactory: DefaultMediaSourceFactory
+    private var activeMediaCacheKey: String? = null
+    private var lastMediaCacheKey: String? = null
+    private var drivePreloadJob: Job? = null
 
     companion object {
         private val CLEARKEY_UUID: UUID = UUID.fromString("e2719d58-a985-b3c9-781a-b030af78d30e")
@@ -310,7 +315,14 @@ class CS3IPlayer(
         httpDataSourceFactory = createHttpDataSourceFactory(null)
         val dataSourceFactory = object : DataSource.Factory {
             override fun createDataSource(): DataSource {
-                return DefaultDataSource.Factory(context, httpDataSourceFactory).createDataSource()
+                val upstreamFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+                return if (activeMediaCacheKey != null) {
+                    CacheDataSource.Factory()
+                        .setCache(DriveMediaCache.get(context))
+                        .setUpstreamDataSourceFactory(upstreamFactory)
+                        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                        .createDataSource()
+                } else upstreamFactory.createDataSource()
             }
         }
         mediaSourceFactory = DefaultMediaSourceFactory(context)
@@ -769,10 +781,37 @@ class CS3IPlayer(
         }
     }
 
-    override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>) {
+    override fun play(url: String, title: String, startPositionMs: Long, requestHeaders: Map<String, String>, mediaCacheKey: String?) {
         attemptedPluginStreamKeys.clear()
         cloudStreamRefreshInProgress = false
-        playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList())
+        playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList(), mediaCacheKey = mediaCacheKey)
+    }
+
+    override fun preloadDriveMedia(url: String, mediaId: String) {
+        if (url.isBlank() || mediaId.isBlank() || !com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url)) return
+        drivePreloadJob?.cancel()
+        drivePreloadJob = coroutineScope.launch(Dispatchers.IO) {
+            val source = CacheDataSource.Factory()
+                .setCache(DriveMediaCache.get(context))
+                .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                .createDataSource()
+            try {
+                val request = androidx.media3.datasource.DataSpec.Builder()
+                    .setUri(Uri.parse(normalizePlaybackUrl(url.trim())))
+                    .setKey(mediaId)
+                    .setPosition(0L)
+                    .setLength(DRIVE_PRELOAD_BYTES)
+                    .build()
+                androidx.media3.datasource.CacheWriter(source, request, ByteArray(128 * 1024), null).cache()
+            } catch (error: Exception) {
+                Log.d("NSiOPlayer", "Drive next-item preload stopped: ${error.message}")
+            }
+        }
+    }
+
+    private companion object PlaybackCacheLimits {
+        const val DRIVE_PRELOAD_BYTES = 2L * 1024L * 1024L
     }
 
     fun playWithMimeType(
@@ -783,10 +822,11 @@ class CS3IPlayer(
         mimeType: String? = null,
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
         videoInterceptor: okhttp3.Interceptor? = null,
-        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList()
+        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = emptyList(),
+        mediaCacheKey: String? = null
     ) {
         attemptedPluginStreamKeys.clear()
-        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams)
+        playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams, mediaCacheKey)
     }
 
     private fun buildSubtitleConfigurations(
@@ -879,7 +919,8 @@ class CS3IPlayer(
         mimeType: String?,
         externalSubtitles: List<com.example.data.plugin.CloudStreamSubtitle> = emptyList(),
         videoInterceptor: okhttp3.Interceptor? = null,
-        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = lastPluginStreams
+        pluginStreams: List<com.example.data.plugin.CloudStreamStream> = lastPluginStreams,
+        mediaCacheKey: String? = lastMediaCacheKey
     ) {
         if (lastTitle.isNotBlank() && title != lastTitle) {
             userExternalSubtitles.clear()
@@ -888,6 +929,8 @@ class CS3IPlayer(
         }
         lastUrl = url
         lastTitle = title
+        lastMediaCacheKey = mediaCacheKey?.takeIf { com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url) }
+        activeMediaCacheKey = lastMediaCacheKey
         repeatPointA = null
         repeatPointB = null
         _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
@@ -934,6 +977,7 @@ class CS3IPlayer(
                 val mediaItemBuilder = ExoMediaItem.Builder()
                     .setUri(normalizePlaybackUrl(url.trim()))
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+                lastMediaCacheKey?.let(mediaItemBuilder::setCustomCacheKey)
                 mimeType?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMimeType)
                 if (drmInfo != null) {
                     val drmUuid = runCatching { UUID.fromString(drmInfo.uuid) }.getOrNull()
