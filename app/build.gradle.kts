@@ -211,3 +211,10 @@ androidComponents {
     }
   }
 }
+
+// Robolectric downloads its Android SDK runtime at test execution time.
+// Use Maven Central's canonical hostname instead of repo1.maven.org to avoid
+// intermittent artifact-fetch failures on CI runners.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+  systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+}
