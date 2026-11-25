@@ -160,7 +160,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
     DisposableEffect(viewModel) {
         viewModel.setTikTodModeActive(true)
-        onDispose { viewModel.setTikTodModeActive(false) }
+        onDispose {
+            viewModel.player.cancelDrivePreload()
+            viewModel.setTikTodModeActive(false)
+        }
     }
 
     fun startAt(target: Int) {
@@ -242,6 +245,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     resumeOnReturn = latestIsPlaying.value
+                    viewModel.player.cancelDrivePreload()
                     viewModel.pausePlaybackForBackground()
                 }
                 Lifecycle.Event.ON_START -> if (resumeOnReturn) {
