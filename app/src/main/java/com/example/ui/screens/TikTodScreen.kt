@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -17,10 +18,15 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Comment
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
@@ -37,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalContext
@@ -139,6 +146,12 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var backAt by remember { mutableLongStateOf(0L) }
     // Category navigation is ready now; Mau Mu and Yang Mana will receive their own feeds later.
     var selectedTikTodCategory by remember { mutableIntStateOf(1) }
+    val yangManaPreferences = remember(context) { context.getSharedPreferences("tiktod_yang_mana", Context.MODE_PRIVATE) }
+    var yangManaNames by remember { mutableStateOf((1..9).map { index -> yangManaPreferences.getString("name_$index", "Profil $index") ?: "Profil $index" }) }
+    var editingYangManaIndex by remember { mutableIntStateOf(-1) }
+    var editingYangManaName by remember { mutableStateOf("") }
+    var showYangManaSettings by remember { mutableStateOf(false) }
+    var resumeAfterCategory by remember { mutableStateOf(false) }
     val tikTodCategories = listOf("Mau Mu", "Untuk Mu", "Yang Mana")
     var swipeOffset by remember { mutableFloatStateOf(0f) }
     val swipeAnimationScope = rememberCoroutineScope()
@@ -181,6 +194,16 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
         exoPlayer?.addListener(listener)
         onDispose { exoPlayer?.removeListener(listener) }
+    }
+
+    LaunchedEffect(selectedTikTodCategory) {
+        if (selectedTikTodCategory != 1) {
+            resumeAfterCategory = playerState.isPlaying
+            if (playerState.isPlaying) viewModel.player.pause()
+        } else if (resumeAfterCategory) {
+            viewModel.player.togglePlayPause()
+            resumeAfterCategory = false
+        }
     }
 
     LaunchedEffect(media?.id) {
@@ -902,6 +925,162 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
         }
         }
+    }
+
+
+    if (selectedTikTodCategory == 2) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            Row(
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, start = 18.dp, end = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                tikTodCategories.forEachIndexed { categoryIndex, category ->
+                    val selected = selectedTikTodCategory == categoryIndex
+                    Column(
+                        modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = category,
+                            color = if (selected) Color.White else Color.White.copy(alpha = 0.68f),
+                            fontSize = if (selected) 15.sp else 13.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1
+                        )
+                        Box(
+                            Modifier.width(if (selected) 22.dp else 0.dp)
+                                .height(2.dp).clip(CircleShape)
+                                .background(if (selected) Color.White else Color.Transparent)
+                        )
+                    }
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 66.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(9) { profileIndex ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1.08f)
+                                .clickable {
+                                    editingYangManaIndex = profileIndex
+                                    editingYangManaName = yangManaNames[profileIndex]
+                                },
+                            shape = RoundedCornerShape(23.dp),
+                            color = Color.White.copy(alpha = 0.10f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.38f)),
+                            shadowElevation = 8.dp
+                        ) {
+                            Box {
+                                AsyncImage(
+                                    model = "https://picsum.photos/seed/nsio-yangmana-${profileIndex + 1}/640/640",
+                                    contentDescription = yangManaNames[profileIndex],
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    Modifier.fillMaxSize().background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f))
+                                        )
+                                    )
+                                )
+                                Text(
+                                    yangManaNames[profileIndex],
+                                    modifier = Modifier.align(Alignment.BottomStart)
+                                        .padding(start = 12.dp, end = 38.dp, bottom = 11.dp),
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Edit nama ${yangManaNames[profileIndex]}",
+                                    tint = Color.White,
+                                    modifier = Modifier.align(Alignment.BottomEnd)
+                                        .padding(end = 10.dp, bottom = 10.dp).size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1.08f)
+                            .clickable { showYangManaSettings = true },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Pengaturan",
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text("Pengaturan", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (editingYangManaIndex in 0..8) {
+        AlertDialog(
+            onDismissRequest = { editingYangManaIndex = -1 },
+            title = { Text("Ubah nama profil") },
+            text = {
+                OutlinedTextField(
+                    value = editingYangManaName,
+                    onValueChange = { editingYangManaName = it },
+                    singleLine = true,
+                    label = { Text("Nama profil") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val index = editingYangManaIndex
+                    val updated = yangManaNames.toMutableList()
+                    updated[index] = editingYangManaName.trim().ifBlank { "Profil ${index + 1}" }
+                    yangManaNames = updated
+                    yangManaPreferences.edit().putString("name_${index + 1}", updated[index]).apply()
+                    editingYangManaIndex = -1
+                }) { Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingYangManaIndex = -1 }) { Text("Batal") }
+            },
+            containerColor = Color(0xFF202126),
+            titleContentColor = Color.White,
+            textContentColor = Color.White
+        )
+    }
+
+    if (showYangManaSettings) {
+        AlertDialog(
+            onDismissRequest = { showYangManaSettings = false },
+            title = { Text("Pengaturan Yang Mana") },
+            text = { Text("Pengaturan profil akan ditambahkan setelah isi dan fungsinya ditentukan.") },
+            confirmButton = {
+                TextButton(onClick = { showYangManaSettings = false }) { Text("Tutup") }
+            },
+            containerColor = Color(0xFF202126),
+            titleContentColor = Color.White,
+            textContentColor = Color.White
+        )
     }
 
     if (showComments && media != null) {
