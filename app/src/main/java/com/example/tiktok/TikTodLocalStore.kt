@@ -16,6 +16,40 @@ internal class TikTodLocalStore(context: Context) {
     fun addView(mediaId: String): Int = (viewCount(mediaId) + 1).also {
         prefs.edit().putInt("views:$mediaId", it).apply()
     }
+    private fun stringSet(key: String): Set<String> = prefs.getStringSet(key, emptySet())?.toSet().orEmpty()
+
+    fun lastVideoId(profileId: String): String? =
+        prefs.getString("last_video:$profileId", null)?.takeIf(String::isNotBlank)
+
+    /**
+     * Tracks catalog membership separately from view counts. On first use, all
+     * eligible items are considered new; later only newly discovered IDs are added.
+     */
+    fun syncEligibleVideos(profileId: String, eligibleIds: List<String>): Set<String> {
+        val knownKey = "known_videos:$profileId"
+        val pendingKey = "new_videos:$profileId"
+        val current = eligibleIds.toSet()
+        val known = stringSet(knownKey)
+        val pending = stringSet(pendingKey).toMutableSet().apply {
+            retainAll(current)
+            addAll(current - known)
+        }
+        prefs.edit()
+            .putStringSet(knownKey, current)
+            .putStringSet(pendingKey, pending)
+            .apply()
+        return pending
+    }
+
+    fun markVideoStarted(profileId: String, mediaId: String) {
+        val pendingKey = "new_videos:$profileId"
+        val pending = stringSet(pendingKey).toMutableSet().apply { remove(mediaId) }
+        prefs.edit()
+            .putStringSet(pendingKey, pending)
+            .putString("last_video:$profileId", mediaId)
+            .apply()
+    }
+
     fun speed(): Float = prefs.getFloat("speed", 1f).coerceIn(0.5f, 8f)
     fun setSpeed(value: Float) { prefs.edit().putFloat("speed", value.coerceIn(0.5f, 8f)).apply() }
     fun quality(): String = prefs.getString("quality", "Original") ?: "Original"
