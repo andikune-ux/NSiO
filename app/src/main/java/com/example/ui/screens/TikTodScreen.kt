@@ -137,6 +137,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var resumeOnReturn by remember { mutableStateOf(false) }
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
+    // Category navigation is ready now; Mau Mu and Yang Mana will receive their own feeds later.
+    var selectedTikTodCategory by remember { mutableIntStateOf(1) }
+    val tikTodCategories = listOf("Mau Mu", "Untuk Mu", "Yang Mana")
     var swipeOffset by remember { mutableFloatStateOf(0f) }
     val swipeAnimationScope = rememberCoroutineScope()
     var swipeAnimationJob by remember { mutableStateOf<Job?>(null) }
@@ -325,8 +328,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     swipeAnimationJob = null
                     val pointerId = down.id
                     var latestDragOffset = 0f
+                    var latestHorizontalOffset = 0f
                     var multiTouch = false
                     var verticalDragStarted = false
+                    var horizontalDragStarted = false
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressed = event.changes.filter { it.pressed }
@@ -340,18 +345,32 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                             val delta = tracked.position - down.position
                             val vertical = delta.y
                             val horizontal = delta.x
-                            if (kotlin.math.abs(vertical) > viewConfiguration.touchSlop &&
+                            if (!horizontalDragStarted && kotlin.math.abs(vertical) > viewConfiguration.touchSlop &&
                                 kotlin.math.abs(vertical) > kotlin.math.abs(horizontal) * 1.2f
                             ) {
                                 verticalDragStarted = true
                                 latestDragOffset = vertical
                                 swipeOffset = vertical
                                 tracked.consume()
+                            } else if (!verticalDragStarted && kotlin.math.abs(horizontal) > viewConfiguration.touchSlop &&
+                                kotlin.math.abs(horizontal) > kotlin.math.abs(vertical) * 1.2f
+                            ) {
+                                horizontalDragStarted = true
+                                latestHorizontalOffset = horizontal
+                                tracked.consume()
                             }
                         }
                     } while (event.changes.any { it.pressed })
 
-                    if (!multiTouch && verticalDragStarted) {
+                    if (!multiTouch && horizontalDragStarted) {
+                        val horizontalThreshold = (size.width * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
+                        if (kotlin.math.abs(latestHorizontalOffset) >= horizontalThreshold) {
+                            // Swipe right from the default center tab opens Yang Mana;
+                            // swipe left opens Mau Mu. Do not wrap at either edge.
+                            selectedTikTodCategory = (selectedTikTodCategory + if (latestHorizontalOffset > 0f) 1 else -1)
+                                .coerceIn(0, tikTodCategories.lastIndex)
+                        }
+                    } else if (!multiTouch && verticalDragStarted) {
                         val distanceThreshold = (size.height * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
                         val offset = latestDragOffset
                         val refreshAtTop = offset > distanceThreshold && index == 0 && feed.isNotEmpty()
@@ -433,6 +452,39 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 translationY = swipeOffset
             }
         ) {
+        if (!isCleanMode) {
+            Row(
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, start = 18.dp, end = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                tikTodCategories.forEachIndexed { categoryIndex, category ->
+                    val selected = selectedTikTodCategory == categoryIndex
+                    Column(
+                        modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = category,
+                            color = if (selected) Color.White else Color.White.copy(alpha = 0.68f),
+                            fontSize = if (selected) 15.sp else 13.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(if (selected) 22.dp else 0.dp)
+                                .height(2.dp)
+                                .clip(CircleShape)
+                                .background(if (selected) Color.White else Color.Transparent)
+                        )
+                    }
+                }
+            }
+        }
         if (media == null) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Belum ada video Google Drive", color = Color.White)
