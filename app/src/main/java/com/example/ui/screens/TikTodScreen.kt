@@ -143,7 +143,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var resumeOnReturn by remember { mutableStateOf(false) }
     var landscapeMode by remember { mutableStateOf(false) }
     var backAt by remember { mutableLongStateOf(0L) }
-    // Category navigation is ready now; Mau Mu and Yang Mana will receive their own feeds later.
+    // TikTod keeps category navigation independent from the active video feed.
     var selectedTikTodCategory by remember { mutableIntStateOf(1) }
     val yangManaNames = listOf(
         "Balqyz", "BhochiL SD", "Lhojte Khristain", "Rawina",
@@ -384,6 +384,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                 horizontalDragStarted = true
                                 latestHorizontalOffset = horizontal
                                 tracked.consume()
+                            } else if (horizontalDragStarted) {
+                                // Track the full swipe distance after the gesture is recognized.
+                                latestHorizontalOffset = horizontal
+                                tracked.consume()
                             }
                         }
                     } while (event.changes.any { it.pressed })
@@ -511,7 +515,22 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
         }
-        if (media == null) {
+        if (selectedTikTodCategory == 0) {
+            Column(
+                Modifier.align(Alignment.Center).padding(horizontal = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Mau Mu", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Kategori ini belum memiliki aturan dan sumber video yang ditetapkan. Feed Untuk Mu tidak ditampilkan di sini.",
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        } else if (media == null) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Belum ada video Google Drive", color = Color.White)
                 TextButton(onClick = onClose) { Text("Kembali") }
