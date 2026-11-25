@@ -95,6 +95,7 @@ interface IPlayer {
     val playerState: StateFlow<PlayerState>
     fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap(), mediaCacheKey: String? = null)
     fun preloadDriveMedia(url: String, mediaId: String)
+    fun cancelDrivePreload()
     fun togglePlayPause()
     fun pause()
     fun stop()
@@ -789,6 +790,11 @@ class CS3IPlayer(
         playInternal(url, title, startPositionMs, requestHeaders, null, pluginStreams = emptyList(), mediaCacheKey = mediaCacheKey)
     }
 
+    override fun cancelDrivePreload() {
+        drivePreloadJob?.cancel()
+        drivePreloadJob = null
+    }
+
     override fun preloadDriveMedia(url: String, mediaId: String) {
         if (url.isBlank() || mediaId.isBlank() || !com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url)) return
         drivePreloadJob?.cancel()
@@ -1063,7 +1069,7 @@ class CS3IPlayer(
     override fun retry() {
         if (lastUrl.isNotEmpty()) {
             val current = exoPlayer?.currentPosition?.takeIf { it > 0L } ?: lastPositionMs
-            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams)
+            playWithMimeType(lastUrl, lastTitle, current.coerceAtLeast(0L), lastHeaders, lastMimeType, lastExternalSubtitles, lastVideoInterceptor, lastPluginStreams, lastMediaCacheKey)
         }
     }
 
