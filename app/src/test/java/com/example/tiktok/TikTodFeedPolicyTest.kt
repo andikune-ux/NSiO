@@ -37,6 +37,21 @@ class TikTodFeedPolicyTest {
     }
 
     @Test
+    fun refreshedCycleDoesNotStartWithCurrentVideoWhenAlternativesExist() {
+        val items = listOf(item("current"), item("other-a"), item("other-b"))
+        repeat(20) { seed ->
+            val result = TikTodFeedPolicy.newCycle(
+                items = items,
+                previousFirstId = "current",
+                random = kotlin.random.Random(seed)
+            )
+            assertTrue(result.first().id != "current")
+            assertEquals(items.map { it.id }.toSet(), result.map { it.id }.toSet())
+            assertEquals(result.size, result.map { it.id }.distinct().size)
+        }
+    }
+
+    @Test
     fun sessionStartPrioritizesNewItemsAndAvoidsPreviousVideo() {
         val items = listOf(item("old-a"), item("new-a"), item("new-b"))
         val result = TikTodFeedPolicy.sessionStartOrder(
