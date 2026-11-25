@@ -88,7 +88,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var sessionInitialized by remember(activeProfile?.id) { mutableStateOf(false) }
     var retryUsed by remember { mutableStateOf(false) }
     var countedView by remember { mutableStateOf(false) }
-    var handledEndForMediaId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     var isCleanMode by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
@@ -160,7 +159,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         index = target.coerceIn(0, feed.lastIndex)
         retryUsed = false
         countedView = false
-        handledEndForMediaId = null
         isSeeking = false
         val item = feed[index]
         viewModel.playMedia(item.copy(progressMs = 0L))
@@ -496,7 +494,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     color = Color.White, trackColor = Color.White.copy(alpha = .2f)
                 )
             }
-            if (!isCleanMode && playerState.error != null && retryUsed) {
+            if (playerState.error != null && retryUsed) {
                 Column(
                     modifier = Modifier.align(Alignment.Center)
                         .fillMaxWidth(.88f)
