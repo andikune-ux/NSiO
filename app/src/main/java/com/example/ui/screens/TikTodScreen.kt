@@ -185,8 +185,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var selectedTikTodCategory by remember { mutableIntStateOf(2) }
     val categorySource = remember(eligible, selectedTikTodCategory, selectedAvatarId, avatarAssignments) {
         when (selectedTikTodCategory) {
-            0 -> eligible.filter { avatarAssignments[it.id] == selectedAvatarId }
-            1 -> eligible.filter { avatarAssignments[it.id]?.startsWith("p2:") == true }
+            0 -> TikTodFeedPolicy.forAvatar(eligible, avatarAssignments, selectedAvatarId)
+            1 -> TikTodFeedPolicy.jedagJedug(eligible, avatarAssignments)
             2 -> eligible
             else -> emptyList()
         }
