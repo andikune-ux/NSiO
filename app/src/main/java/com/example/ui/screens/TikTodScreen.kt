@@ -947,6 +947,40 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     )
                 }
             }
+            // Draw category navigation last inside the video layer so PlayerView cannot cover it.
+            if (!isCleanMode) {
+                Row(
+                    modifier = Modifier.align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, start = 10.dp, end = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tikTodCategories.forEachIndexed { categoryIndex, category ->
+                        val selected = selectedTikTodCategory == categoryIndex
+                        Column(
+                            modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = category,
+                                color = if (selected) Color.White else Color.White.copy(alpha = 0.68f),
+                                fontSize = if (selected) 15.sp else 13.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(if (selected) 22.dp else 0.dp)
+                                    .height(2.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) Color.White else Color.Transparent)
+                            )
+                        }
+                    }
+                }
+            }
         }
         }
     }
