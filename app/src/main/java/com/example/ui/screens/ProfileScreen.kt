@@ -1,5 +1,15 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -74,6 +84,63 @@ fun ProfileScreen(
     val activeProfile by viewModel.activeProfile.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
+    val context = LocalContext.current
+    val restoreScope = androidx.compose.runtime.rememberCoroutineScope()
+    val restorePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
+            if (!isBackupInProgress) {
+                isBackupInProgress = true
+                restoreScope.launch {
+                    try {
+                        val jsonContent = withContext(Dispatchers.IO) {
+                            context.contentResolver.openInputStream(uri)?.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(8 * 1024)
+                                var total = 0
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    require(total <= 64 * 1024 * 1024) {
+                                        "File backup melebihi batas 64 MB."
+                                    }
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toString(Charsets.UTF_8.name())
+                            } ?: throw IllegalArgumentException("File tidak dapat dibuka.")
+                        }
+                        viewModel.restoreBackup(jsonContent) { res ->
+                            backupStatusMessage = res.message
+                            isBackupInProgress = false
+                        }
+                    } catch (e: Exception) {
+                        backupStatusMessage = "Gagal membaca file backup: ${e.localizedMessage ?: "file tidak valid"}"
+                        isBackupInProgress = false
+                    }
+                }
+            }
+        }
+    }
+
+    fun openRestorePicker() {
+        if (isBackupInProgress) return
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain"))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(
+                    "android.provider.extra.INITIAL_URI",
+                    Uri.parse("content://com.android.externalstorage.documents/document/primary%3A")
+                )
+            }
+        }
+        restorePicker.launch(intent)
+    }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
@@ -595,6 +662,70 @@ fun ProfileScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
+                    }
+                }
+            }
+        }
+
+        // Restore backup file picker
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(
+                        shape = RoundedCornerShape(18.dp),
+                        alpha = 0.10f,
+                        borderAlpha = 0.30f,
+                        elevation = 6.dp
+                    )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Restore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            "3. Pulihkan Backup",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Text(
+                        text = "Pilih file backup JSON atau TXT dari penyimpanan internal. Pemulihan dimulai setelah file dipilih.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { openRestorePicker() },
+                        enabled = !isBackupInProgress,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.height(42.dp)
+                    ) {
+                        if (isBackupInProgress) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Memulihkan...", color = MaterialTheme.colorScheme.onPrimary, fontSize = 12.sp)
+                        } else {
+                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Pilih File untuk Dipulihkan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }
