@@ -22,6 +22,7 @@ import android.content.pm.ActivityInfo
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -48,6 +49,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,6 +66,10 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontFamily
 import android.graphics.Typeface
 import java.io.File
@@ -80,6 +87,7 @@ import com.example.data.model.MediaSourceClassifier
 import com.example.ui.MainViewModel
 import com.example.tiktok.TikTodFeedPolicy
 import com.example.tiktok.TikTodLocalStore
+import com.example.player.CS3IPlayer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -179,6 +187,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var selectedAssignmentVideoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var assignmentTargetAvatarId by remember { mutableStateOf("p1:balqyz") }
     var showAssignmentTargetMenu by remember { mutableStateOf(false) }
+    var activeAssignmentPreviewId by remember { mutableStateOf<String?>(null) }
+    val assignmentPreviewScope = rememberCoroutineScope()
+    val assignmentPreviewPlayer = remember(context) {
+        CS3IPlayer(context.applicationContext, assignmentPreviewScope, manageMediaSessionService = false)
+    }
+    val assignmentPreviewState by assignmentPreviewPlayer.playerState.collectAsState()
+    var showAvatarAppliedDialog by remember { mutableStateOf(false) }
+    var appliedAvatarLabel by remember { mutableStateOf("") }
     var feed by remember { mutableStateOf(emptyList<com.example.data.model.MediaItem>()) }
     var index by remember { mutableIntStateOf(0) }
     var sessionInitialized by remember(activeProfile?.id) { mutableStateOf(false) }
@@ -255,6 +271,37 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val categoryFlipRotation = remember { Animatable(0f) }
     val categoryFlipScope = rememberCoroutineScope()
     var showYangManaSettings by remember { mutableStateOf(false) }
+    DisposableEffect(assignmentPreviewPlayer) {
+        onDispose {
+            assignmentPreviewPlayer.stop()
+            assignmentPreviewPlayer.release()
+        }
+    }
+    LaunchedEffect(showYangManaSettings) {
+        if (!showYangManaSettings) {
+            activeAssignmentPreviewId = null
+            assignmentPreviewPlayer.stop()
+        }
+    }
+    LaunchedEffect(activeAssignmentPreviewId) {
+        if (activeAssignmentPreviewId == null || !showYangManaSettings) return@LaunchedEffect
+        while (true) {
+            delay(2600L)
+            val player = assignmentPreviewPlayer.exoPlayer ?: continue
+            val duration = player.duration
+            if (duration > 1800L && player.isCurrentMediaItemSeekable) {
+                val nextPosition = if (player.currentPosition + 6500L >= duration - 700L) {
+                    0L
+                } else {
+                    player.currentPosition + 6500L
+                }
+                player.pause()
+                player.seekTo(nextPosition)
+                delay(320L)
+                player.play()
+            }
+        }
+    }
     val tikTodCategories = listOf("Mau Mu", "Jedag Jedug", "Untuk Mu", "Yang Mana")
     var swipeOffset by remember { mutableFloatStateOf(0f) }
     val swipeAnimationScope = rememberCoroutineScope()
@@ -1215,7 +1262,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         } else {
                                             val avatarId = "${if (isJjCategory) "p2" else "p1"}:${yangManaAvatarIds[profileIndex]}"
                                             selectedAvatarId = avatarId
-                                            activeProfile?.id?.let { store.setSelectedAvatar(it, avatarId) }
+                                            val profileId = activeProfile?.id
+                                            if (profileId != null) {
+                                                store.setSelectedAvatar(profileId, avatarId)
+                                                appliedAvatarLabel = (if (isJjCategory) "JJ " else "") + yangManaNames[profileIndex]
+                                                showAvatarAppliedDialog = true
+                                            } else {
+                                                Toast.makeText(context, "Profil aktif tidak ditemukan; pilihan belum tersimpan.", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     },
                                 shape = RoundedCornerShape(23.dp),
@@ -1338,41 +1392,164 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Text("Belum ada video Drive yang memenuhi syarat untuk dibagi.", color = Color.White.copy(alpha = 0.70f), fontSize = 13.sp)
                     }
                 } else {
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(eligible, key = { _, item -> item.id }) { _, item ->
-                            val checked = item.id in selectedAssignmentVideoIds
-                            val ownerLabel = avatarTargetLabels[avatarAssignments[item.id]] ?: "Belum ditentukan"
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = if (checked) 0.12f else 0.055f))
-                                    .clickable {
-                                        selectedAssignmentVideoIds = if (checked) selectedAssignmentVideoIds - item.id
-                                        else selectedAssignmentVideoIds + item.id
-                                    }.padding(9.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        @Composable
+                        fun AssignmentVideoColumn(
+                            title: String,
+                            items: List<com.example.data.model.MediaItem>,
+                            selectedColumn: Boolean
+                        ) {
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.White.copy(alpha = 0.055f))
+                                    .padding(7.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
-                                Checkbox(checked = checked, onCheckedChange = { value ->
-                                    selectedAssignmentVideoIds = if (value) selectedAssignmentVideoIds + item.id
-                                    else selectedAssignmentVideoIds - item.id
-                                })
-                                if (item.thumbnailUrl.isNotBlank()) {
-                                    AsyncImage(model = item.thumbnailUrl, contentDescription = "Thumbnail ${item.title}",
-                                        modifier = Modifier.size(width = 92.dp, height = 58.dp).clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop)
-                                } else {
-                                    Box(Modifier.size(width = 92.dp, height = 58.dp).clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                                Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(
+                                    if (selectedColumn) (avatarTargetLabels[assignmentTargetAvatarId] ?: "Tujuan belum ditentukan")
+                                    else "Belum masuk pilihan",
+                                    color = Color.White.copy(alpha = 0.58f),
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text("${items.size} video", color = Color(0xFF9DDCCB), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                LazyColumn(
+                                    Modifier.weight(1f).fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
+                                        val checked = item.id in selectedAssignmentVideoIds
+                                        val isPreview = activeAssignmentPreviewId == item.id
+                                        val ownerLabel = avatarTargetLabels[avatarAssignments[item.id]] ?: "Belum ditentukan"
+                                        Column(
+                                            Modifier.fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color.White.copy(alpha = if (checked) 0.13f else 0.045f))
+                                                .clickable {
+                                                    selectedAssignmentVideoIds = if (checked) {
+                                                        selectedAssignmentVideoIds - item.id
+                                                    } else {
+                                                        selectedAssignmentVideoIds + item.id
+                                                    }
+                                                    if (activeAssignmentPreviewId == item.id) {
+                                                        activeAssignmentPreviewId = null
+                                                        assignmentPreviewPlayer.stop()
+                                                    } else {
+                                                        activeAssignmentPreviewId = item.id
+                                                        assignmentPreviewPlayer.exoPlayer?.volume = 0f
+                                                        assignmentPreviewPlayer.play(
+                                                            item.url,
+                                                            item.title.ifBlank { "Pratinjau video" },
+                                                            0L,
+                                                            mediaCacheKey = "${item.profileId}:${item.id}"
+                                                        )
+                                                    }
+                                                }
+                                                .padding(6.dp),
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Box(
+                                                Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                                                    .clip(RoundedCornerShape(7.dp))
+                                                    .background(Color.Black)
+                                            ) {
+                                                if (isPreview) {
+                                                    AndroidView(
+                                                        factory = { viewContext ->
+                                                            PlayerView(viewContext).apply {
+                                                                player = assignmentPreviewPlayer.exoPlayer
+                                                                useController = false
+                                                                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                                            }
+                                                        },
+                                                        update = { it.player = assignmentPreviewPlayer.exoPlayer },
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                    if (assignmentPreviewState.isBuffering) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.align(Alignment.Center).size(22.dp),
+                                                            color = Color.White,
+                                                            strokeWidth = 2.dp
+                                                        )
+                                                    }
+                                                } else if (item.thumbnailUrl.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = item.thumbnailUrl,
+                                                        contentDescription = "Thumbnail ${item.title}",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        Icons.Default.PlayArrow,
+                                                        contentDescription = "Pratinjau video",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.align(Alignment.Center).size(30.dp)
+                                                    )
+                                                }
+                                                if (isPreview) {
+                                                    Surface(
+                                                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                                                        shape = RoundedCornerShape(5.dp),
+                                                        color = Color.Black.copy(alpha = 0.68f)
+                                                    ) {
+                                                        Text("PREVIEW", modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                            color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Checkbox(
+                                                    checked = checked,
+                                                    onCheckedChange = { value ->
+                                                        selectedAssignmentVideoIds = if (value) selectedAssignmentVideoIds + item.id
+                                                        else selectedAssignmentVideoIds - item.id
+                                                    },
+                                                    modifier = Modifier.size(25.dp),
+                                                    colors = CheckboxDefaults.colors(
+                                                        checkedColor = Color(0xFF78CDB3),
+                                                        uncheckedColor = Color.White.copy(alpha = 0.55f)
+                                                    )
+                                                )
+                                                Text(
+                                                    item.title.ifBlank { "Video tanpa judul" },
+                                                    modifier = Modifier.weight(1f).basicMarquee(iterations = Int.MAX_VALUE),
+                                                    color = Color.White,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Clip,
+                                                    lineHeight = 13.sp
+                                                )
+                                            }
+                                            Text(
+                                                "Pemilik: $ownerLabel",
+                                                color = Color.White.copy(alpha = 0.52f),
+                                                fontSize = 8.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                     }
-                                }
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(item.title.ifBlank { "Video tanpa judul" }, color = Color.White, fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold, maxLines = 2)
-                                    Text("Saat ini: $ownerLabel", color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp, maxLines = 1)
                                 }
                             }
                         }
+                        AssignmentVideoColumn(
+                            title = "Belum dipilih",
+                            items = eligible.filterNot { it.id in selectedAssignmentVideoIds },
+                            selectedColumn = false
+                        )
+                        AssignmentVideoColumn(
+                            title = "Sudah dipilih",
+                            items = eligible.filter { it.id in selectedAssignmentVideoIds },
+                            selectedColumn = true
+                        )
                     }
                 }
                 Button(
@@ -1386,6 +1563,87 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         }
                     }
                 ) { Text(if (assignmentTargetAvatarId.isBlank()) "Keluarkan dari Avatar" else "Terapkan ke Avatar") }
+            }
+        }
+    }
+
+    if (showAvatarAppliedDialog) {
+        Dialog(
+            onDismissRequest = { showAvatarAppliedDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            val dialogScale = remember { Animatable(0.88f) }
+            val dialogAlpha = remember { Animatable(0f) }
+            LaunchedEffect(Unit) {
+                launch { dialogScale.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 360f)) }
+                launch { dialogAlpha.animateTo(1f, tween(240)) }
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                    .graphicsLayer {
+                        scaleX = dialogScale.value
+                        scaleY = dialogScale.value
+                        alpha = dialogAlpha.value
+                    },
+                shape = RoundedCornerShape(28.dp),
+                color = Color(0xF01C222B),
+                border = BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(Color.White.copy(alpha = 0.62f), Color(0xFF8ADBC8).copy(alpha = 0.42f), Color.White.copy(alpha = 0.12f))
+                    )
+                ),
+                shadowElevation = 28.dp
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    Box(
+                        Modifier.size(54.dp).clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(Color(0xFF9CE7D0), Color(0xFF4F9D91)))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF102A26), modifier = Modifier.size(29.dp))
+                    }
+                    Text("Avatar berhasil dipilih", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(appliedAvatarLabel, color = Color(0xFF9CE7D0), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        buildAnnotatedString {
+                            append("Kategori udah diterapin, mau langsung menuju ke halaman ")
+                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Mau Mu") }
+                            append("?")
+                        },
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAvatarAppliedDialog = false },
+                            modifier = Modifier.weight(1f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) { Text("Nanti", fontWeight = FontWeight.SemiBold) }
+                        Button(
+                            onClick = {
+                                showAvatarAppliedDialog = false
+                                selectedTikTodCategory = 0
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF9CE7D0),
+                                contentColor = Color(0xFF142722)
+                            )
+                        ) { Text("Mau", fontWeight = FontWeight.Bold) }
+                    }
+                }
             }
         }
     }
