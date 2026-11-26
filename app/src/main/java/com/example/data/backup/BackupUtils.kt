@@ -124,7 +124,7 @@ object BackupUtils {
             } else payload.toString(2)
 
             val profileFolder = safeFolderName(profile.name)
-            val fileName = "${profileFolder}_${profile.id.replace(Regex("[^A-Za-z0-9_-]"), "_")}.json"
+            val fileName = "${profile.id.replace(Regex("[^A-Za-z0-9_-]"), "_")}.json"
             val roots = buildList {
                 if (BackupAmanManager.hasStorageAccess(context)) {
                     add(File(Environment.getExternalStorageDirectory(), "NSiO/Backup Profil"))
@@ -151,6 +151,12 @@ object BackupUtils {
                         temporary.delete()
                     }
                     require(target.isFile && target.length() > 0L) { "File backup gagal disimpan." }
+                    // A renamed profile keeps the same stable file identity; remove its old
+                    // copy from a previous name folder only after the new file is verified.
+                    root.listFiles()?.filter { it.isDirectory }?.forEach { oldDirectory ->
+                        val oldCopy = File(oldDirectory, fileName)
+                        if (oldCopy.absolutePath != target.absolutePath && oldCopy.isFile) oldCopy.delete()
+                    }
                     saved = target
                     break
                 } catch (e: Exception) { lastError = e }
