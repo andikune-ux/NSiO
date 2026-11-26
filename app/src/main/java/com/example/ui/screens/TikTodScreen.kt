@@ -828,7 +828,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     when (selectedTikTodCategory) {
                         0 -> "Belum ada video yang ditetapkan untuk ${avatarTargetLabels[selectedAvatarId] ?: "Avatar pilihan"}."
                         1 -> "Belum ada video yang ditetapkan ke Avatar halaman 2 (JJ)."
-                        else -> "Belum ada video Google Drive yang memenuhi syarat."
+                        else -> "Belum ada konten Google Drive yang memenuhi syarat."
                     },
                     color = Color.White.copy(alpha = 0.72f),
                     fontSize = 13.sp,
@@ -845,10 +845,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            if (!isCleanMode) {
-                // Do not expose stale player controls or buffering state over a photo.
-                Unit
-            }
         } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize()
