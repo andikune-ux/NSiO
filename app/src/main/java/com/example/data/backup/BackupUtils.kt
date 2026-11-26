@@ -311,7 +311,7 @@ object BackupUtils {
                     mediaDao.insertAll(normalizedItems)
                 }
 
-                return@withTransaction BackupResult(
+                BackupResult(
                     isSuccess = true,
                     message = if (root.optBoolean("securityCredentialsExcluded", false)) "Restore berhasil. Kredensial lokal yang sudah ada dipertahankan; profil baru perlu mengatur PIN dan mendapatkan PIN server khusus perangkat ini." else "Restore Backup Aman berhasil dipulihkan secara penuh!"
                 )
