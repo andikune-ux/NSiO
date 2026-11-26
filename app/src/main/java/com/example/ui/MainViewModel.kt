@@ -713,6 +713,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateProfileDetails(profile: Profile, newName: String, avatarImage: String) {
+        val cleanName = newName.trim()
+        if (cleanName.isBlank()) {
+            showStatus("Nama profil tidak boleh kosong")
+            return
+        }
+        viewModelScope.launch {
+            val latest = profileDao.getProfileById(profile.id) ?: run {
+                showStatus("Profil tidak ditemukan")
+                return@launch
+            }
+            val updated = latest.copy(name = cleanName, avatarEmoji = avatarImage)
+            profileDao.updateProfile(updated)
+            _profiles.value = profileDao.getAllProfilesList().map {
+                it.copy(pin = PinVault.decrypt(getApplication(), it.pin))
+            }
+            if (_activeProfile.value?.id == updated.id) {
+                _activeProfile.value = updated.copy(pin = PinVault.decrypt(getApplication(), updated.pin))
+            }
+            showStatus("Profil '${cleanName}' berhasil diperbarui")
+        }
+    }
     fun updateProfilePin(profile: Profile, newPin: String) {
         if (!newPin.matches(Regex("\\d{4}"))) {
             showStatus("PIN harus tepat 4 digit angka")
