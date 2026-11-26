@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.firebase.AuthState
 import com.example.data.model.Profile
@@ -96,9 +99,25 @@ fun ProfileScreen(
     var requestedRestoreType by remember { mutableStateOf("PROFILE_BACKUP") }
     var pendingEncryptedBackup by remember { mutableStateOf<String?>(null) }
     var backupPinInput by remember { mutableStateOf("") }
+    var showAccountSwitcher by remember { mutableStateOf(false) }
+    var profileSettingsTarget by remember { mutableStateOf<Profile?>(null) }
+    var editingProfileName by remember { mutableStateOf("") }
+    var editingProfileAvatar by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val restoreScope = androidx.compose.runtime.rememberCoroutineScope()
+    val avatarPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            editingProfileAvatar = uri.toString()
+        }
+    }
     val restorePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -215,26 +234,20 @@ fun ProfileScreen(
                 }
 
                 Button(
-                    onClick = { showAddDialog = true },
+                    onClick = { showAccountSwitcher = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.height(44.dp)
+                    shape = CircleShape,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         Icons.Default.Add,
-                        contentDescription = null,
+                        contentDescription = "Tambah atau beralih akun",
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "Tambah Profil",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -411,175 +424,66 @@ fun ProfileScreen(
             }
         }
 
-        // Section 1: Profil Tersedia
+        // Profile identities stay at the top, above cloud and backup settings.
         item {
-            Text(
-                text = "Daftar Profil Aktif & Tersedia:",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        items(profiles, key = { it.id }) { p ->
-            val isActive = activeProfile?.id == p.id
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = if (isActive) 0.18f else 0.08f,
-                        borderAlpha = if (isActive) 0.5f else 0.22f,
-                        elevation = if (isActive) 6.dp else 2.dp
-                    )
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable {
-                        if (!isActive) {
-                            if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
-                                    pendingSwitchProfile = p
-                                    showPinDialogForSwitch = true
-                                } else if (p.isPinEnabled) {
-                                    viewModel.showStatus("PIN profil ini belum valid. Atur ulang PIN sebelum beralih.")
-                                } else {
-                                    viewModel.switchProfile(p)
-                                }
-                        }
-                    }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Akun Profil",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(profiles, key = { it.id }) { p ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
                             modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    1.dp,
-                                    if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.2f),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = p.avatarEmoji, fontSize = 20.sp)
-                        }
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = p.name,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (isActive) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(AccentGreen)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            "Aktif",
-                                            fontSize = 9.sp,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            fontWeight = FontWeight.Black
-                                        )
-                                    }
+                                .width(76.dp)
+                                .clickable {
+                                    profileSettingsTarget = p
+                                    editingProfileName = p.name
+                                    editingProfileAvatar = p.avatarEmoji
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (activeProfile?.id == p.id)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .border(
+                                        if (activeProfile?.id == p.id) 2.dp else 1.dp,
+                                        if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                if (p.isPinEnabled) {
-                                    Icon(
-                                        Icons.Default.Lock,
-                                        contentDescription = "PIN",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(12.dp)
+                                if (p.avatarEmoji.startsWith("content://") ||
+                                    p.avatarEmoji.startsWith("https://") ||
+                                    p.avatarEmoji.startsWith("file://")
+                                ) {
+                                    AsyncImage(
+                                        model = p.avatarEmoji,
+                                        contentDescription = "Avatar ${p.name}",
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape)
                                     )
-                                    Text("PIN Dilindungi", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                                 } else {
-                                    Text(
-                                        "Bebas PIN",
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Text(p.avatarEmoji, fontSize = 24.sp)
                                 }
                             }
-                        }
-                    }
-
-                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(
-                            onClick = {
-                                if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
-                                    pinManagementProfile = p
-                                    pinManagementAction = "CHANGE"
-                                } else {
-                                    pinResetProfile = p
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
                             Text(
-                                if (p.isPinEnabled) "Ubah PIN" else "Atur PIN",
-                                color = MaterialTheme.colorScheme.onPrimary,
+                                p.name,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = if (activeProfile?.id == p.id) FontWeight.Bold else FontWeight.Medium,
+                                color = if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
                             )
-                        }
-                        if (p.isPinEnabled) {
-                            Button(
-                                onClick = {
-                                    if (p.pin.matches(Regex("\\d{4}"))) {
-                                        pinManagementProfile = p
-                                        pinManagementAction = "DISABLE"
-                                    } else {
-                                        pinDisableProfile = p
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text("Nonaktifkan", color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
-                            }
-                        }
-                        if (!isActive) {
-                            Button(
-                                onClick = {
-                                    if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
-                                        pendingSwitchProfile = p
-                                        showPinDialogForSwitch = true
-                                    } else if (p.isPinEnabled) {
-                                        pinResetProfile = p
-                                    } else {
-                                        viewModel.switchProfile(p)
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.height(38.dp)
-                            ) {
-                                Text("Beralih", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
                         }
                     }
                 }
@@ -895,6 +799,153 @@ fun ProfileScreen(
                             else Text("Buka & Pulihkan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (showAccountSwitcher) {
+        Dialog(onDismissRequest = { showAccountSwitcher = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(
+                        shape = RoundedCornerShape(24.dp),
+                        alpha = 0.18f,
+                        borderAlpha = 0.45f,
+                        elevation = 16.dp
+                    )
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Pilih atau tambah akun", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                profiles.forEach { p ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                showAccountSwitcher = false
+                                if (activeProfile?.id == p.id) return@clickable
+                                if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                    pendingSwitchProfile = p
+                                    showPinDialogForSwitch = true
+                                } else if (p.isPinEnabled) {
+                                    viewModel.showStatus("PIN profil ini belum valid. Atur ulang PIN sebelum beralih.")
+                                } else {
+                                    viewModel.switchProfile(p)
+                                }
+                            }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                            if (p.avatarEmoji.startsWith("content://") || p.avatarEmoji.startsWith("https://")) {
+                                AsyncImage(model = p.avatarEmoji, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape))
+                            } else Text(p.avatarEmoji, fontSize = 20.sp)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(if (p.isPinEnabled) "PIN Dilindungi" else "Bebas PIN", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (activeProfile?.id == p.id) Icon(Icons.Default.Lock, contentDescription = "Aktif", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Button(
+                    onClick = {
+                        showAccountSwitcher = false
+                        showAddDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Tambah Profil")
+                }
+            }
+        }
+    }
+
+    if (profileSettingsTarget != null) {
+        val target = profileSettingsTarget!!
+        Dialog(
+            onDismissRequest = { profileSettingsTarget = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Pengaturan Profil", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
+                    IconButton(onClick = { profileSettingsTarget = null }) {
+                        Icon(Icons.Default.Add, contentDescription = "Tutup", modifier = Modifier.size(22.dp))
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(112.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .clickable { avatarPicker.launch(arrayOf("image/*")) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (editingProfileAvatar.startsWith("content://") ||
+                        editingProfileAvatar.startsWith("https://") ||
+                        editingProfileAvatar.startsWith("file://")
+                    ) {
+                        AsyncImage(model = editingProfileAvatar, contentDescription = "Avatar profil", modifier = Modifier.fillMaxSize().clip(CircleShape))
+                    } else {
+                        Text(editingProfileAvatar.ifBlank { "👤" }, fontSize = 42.sp)
+                    }
+                }
+                Text("Tekan gambar untuk memilih Avatar dari galeri", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+                OutlinedTextField(
+                    value = editingProfileName,
+                    onValueChange = { editingProfileName = it },
+                    label = { Text("Nama profil") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    onClick = {
+                        viewModel.updateProfileDetails(target, editingProfileName, editingProfileAvatar)
+                        profileSettingsTarget = null
+                    },
+                    enabled = editingProfileName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) { Text("Simpan Profil") }
+                androidx.compose.material3.HorizontalDivider()
+                Text("Keamanan Profil", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Button(
+                    onClick = {
+                        if (target.isPinEnabled && target.pin.matches(Regex("\\d{4}"))) {
+                            pinManagementProfile = target
+                            pinManagementAction = "CHANGE"
+                        } else if (target.isPinEnabled) {
+                            viewModel.showStatus("PIN profil tidak dapat diverifikasi. Pulihkan akses PIN terlebih dahulu.")
+                        } else pinResetProfile = target
+                    },
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) { Text(if (target.isPinEnabled) "Ubah PIN" else "Atur PIN") }
+                if (target.isPinEnabled) {
+                    Button(
+                        onClick = {
+                            if (target.pin.matches(Regex("\\d{4}"))) {
+                                pinManagementProfile = target
+                                pinManagementAction = "DISABLE"
+                            } else viewModel.showStatus("PIN profil tidak dapat diverifikasi.")
+                        },
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) { Text("Nonaktifkan PIN", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
