@@ -17,6 +17,7 @@ import com.example.data.firebase.FirebaseAuthManager
 import com.example.data.firebase.FirebaseStorageRepository
 import com.example.data.local.AppDatabase
 import com.example.data.security.PinVault
+import com.example.tiktok.TikTodLocalStore
 import com.example.data.model.MediaItem
 import com.example.data.model.MediaRefreshPolicy
 import com.example.data.model.MediaSourceClassifier
@@ -2389,8 +2390,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val p = _activeProfile.value ?: return
         val s = _settings.value
         val items = _mediaList.value
+        val playlists = _sourcePlaylists.value
+        val pin = if (p.isPinEnabled) PinVault.decrypt(getApplication(), p.pin) else ""
+        val avatarAssignments = TikTodLocalStore(getApplication()).avatarAssignments(p.id)
         viewModelScope.launch {
-            val res = BackupUtils.createProfileBackup(getApplication(), p, s, items)
+            val res = BackupUtils.createProfileBackup(
+                context = getApplication(),
+                profile = p,
+                settings = s,
+                mediaList = items,
+                sourcePlaylists = playlists,
+                profilePin = pin,
+                avatarAssignments = avatarAssignments
+            )
             showStatus(res.message)
             onResult(res)
         }
@@ -2404,10 +2416,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun restoreBackup(jsonContent: String, onResult: (BackupResult) -> Unit) {
+    fun restoreBackup(jsonContent: String, backupPin: String = "", onResult: (BackupResult) -> Unit) {
+        val recipientProfileId = _activeProfile.value?.id.orEmpty()
         viewModelScope.launch {
-            val res = BackupUtils.restoreFromFile(getApplication(), database, jsonContent)
-            loadInitialData()
+            val res = BackupUtils.restoreFromFile(
+                getApplication(), database, jsonContent, recipientProfileId, backupPin
+            )
+            // Profile backups are additive imports into the active profile. Do not reload
+            // startup state here because that would reset the active profile to the default.
+            if (runCatching {
+                    org.json.JSONObject(jsonContent).optString("backupType") == "FULL_BACKUP_AMAN"
+                }.getOrDefault(false)) {
+                loadInitialData()
+            }
             showStatus(res.message)
             onResult(res)
         }
