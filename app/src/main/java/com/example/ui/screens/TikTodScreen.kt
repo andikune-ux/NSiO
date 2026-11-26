@@ -311,7 +311,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
     fun saveCurrentCategorySession() {
         if (selectedTikTodCategory == 3) return
-        val current = feed.getOrNull(index) ?: viewModel.currentlyPlaying.value ?: return
+        val current = feed.getOrNull(index) ?: return
         val key = categorySessionKey(selectedTikTodCategory)
         categorySessions = categorySessions + (key to TikTodPlaybackSession(
             queue = feed,
