@@ -949,11 +949,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 Row(
                     modifier = Modifier.clip(RoundedCornerShape(10.dp))
                         .clickable {
-                            managerTargetAvatarId = when (selectedTikTodCategory) {
-                                0 -> selectedAvatarId
-                                1 -> selectedAvatarId.takeIf { it.startsWith("p2:") } ?: "p2:balqyz"
-                                else -> selectedAvatarId
-                            }
+                            managerTargetAvatarId = assignedAvatarId ?: selectedAvatarId
                             showManagerAddVideos = false
                             showVideoManager = true
                         }
@@ -1699,17 +1695,12 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
 
     if (showVideoManager) {
-        val managerVideos = when (selectedTikTodCategory) {
-            0 -> TikTodFeedPolicy.forAvatar(eligible, effectiveAvatarAssignments, selectedAvatarId)
-            1 -> TikTodFeedPolicy.jedagJedug(eligible, effectiveAvatarAssignments)
-            else -> eligible
-        }
+        // The manager is always scoped to the exact Avatar whose identity was tapped.
+        // Never aggregate videos belonging to other Avatars, even on the For You feed.
+        val managerVideos = TikTodFeedPolicy.forAvatar(
+            eligible, effectiveAvatarAssignments, managerTargetAvatarId
+        )
         val unassignedManagerVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, effectiveAvatarAssignments).isNullOrBlank() }
-        val managerTargetOptions = if (selectedTikTodCategory == 1) {
-            avatarTargets.filter { it.first.startsWith("p2:") }
-        } else {
-            avatarTargets
-        }
         val managerShownVideos = if (showManagerAddVideos && selectedTikTodCategory != 2) {
             unassignedManagerVideos
         } else {
@@ -1748,8 +1739,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Text(
                             when (selectedTikTodCategory) {
                                 0 -> avatarTargetLabels[selectedAvatarId] ?: "Avatar aktif"
-                                1 -> "Seluruh video Avatar halaman 2 • Jedag Jedug"
-                                else -> "Seluruh video Google Drive yang memenuhi syarat"
+                                1 -> "Video dari Avatar yang sedang dipilih • halaman 2"
+                                else -> "Video dari Avatar yang identitasnya ditekan"
                             },
                             color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp,
                             maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -1764,33 +1755,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Icon(Icons.Default.Close, contentDescription = "Tutup daftar video", tint = Color.White)
                     }
                 }
-                if (selectedTikTodCategory == 0) {
-                    Text(
-                        "Avatar tujuan: ${avatarTargetLabels[selectedAvatarId] ?: selectedAvatarId}",
-                        color = Color(0xFF9DDCCB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Avatar tujuan", color = Color.White.copy(alpha = 0.82f), fontSize = 12.sp)
-                        Box {
-                            var targetMenuOpen by remember { mutableStateOf(false) }
-                            OutlinedButton(onClick = { targetMenuOpen = true }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)) {
-                                Text(avatarTargetLabels[managerTargetAvatarId] ?: "Pilih Avatar", maxLines = 1, fontSize = 11.sp)
-                            }
-                            DropdownMenu(expanded = targetMenuOpen, onDismissRequest = { targetMenuOpen = false }) {
-                                managerTargetOptions.forEach { (id, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            managerTargetAvatarId = id
-                                            targetMenuOpen = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                Text(
+                    "Hanya video milik: ${avatarTargetLabels[managerTargetAvatarId] ?: managerTargetAvatarId}",
+                    color = Color(0xFF9DDCCB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
