@@ -205,6 +205,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var showAvatarAppliedDialog by remember { mutableStateOf(false) }
     var appliedAvatarLabel by remember { mutableStateOf("") }
     var feed by remember { mutableStateOf(emptyList<com.example.data.model.MediaItem>()) }
+    var forYouFeed by remember(activeProfile?.id) { mutableStateOf(emptyList<com.example.data.model.MediaItem>()) }
     var index by remember { mutableIntStateOf(0) }
     var sessionInitialized by remember(activeProfile?.id) { mutableStateOf(false) }
     var retryUsed by remember { mutableStateOf(false) }
@@ -386,7 +387,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
     // Keep a small progressive preload for exactly one upcoming Drive video.
     // The shared player cache is reused when the item becomes the active video.
-    LaunchedEffect(media?.id, index, feed) {
+    LaunchedEffect(media?.id) {
+        // Navigation changes do not trigger another Drive preload. Only a real
+        // playback item change advances the one-item preload window.
         val nextItem = feed.getOrNull(index + 1) ?: return@LaunchedEffect
         if (MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
             viewModel.player.preloadDriveMedia(nextItem.url, nextItem.id)
@@ -423,87 +426,65 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             if (nextFeed.isNotEmpty()) startAt(0, nextFeed)
         }
     }
-    LaunchedEffect(eligible, activeProfile?.id, selectedTikTodCategory) {
+    // The For You order is a session-level queue. Switching tabs must never
+    // rebuild it or restart its current item; only newly discovered videos are appended.
+    LaunchedEffect(eligible, activeProfile?.id) {
         val profileId = activeProfile?.id ?: return@LaunchedEffect
-        if (selectedTikTodCategory != 2) return@LaunchedEffect
-        if (eligible.isEmpty()) {
-            feed = emptyList()
-            viewModel.player.pause()
-            return@LaunchedEffect
-        }
+        if (eligible.isEmpty()) return@LaunchedEffect
 
         val pendingNewIds = store.syncEligibleVideos(profileId, eligible.map { it.id })
-        val feedDoesNotMatchForYou = feed.map { it.id }.toSet() != eligible.map { it.id }.toSet()
-        if (!sessionInitialized || feedDoesNotMatchForYou) {
-            feed = TikTodFeedPolicy.sessionStartOrder(
+        if (!sessionInitialized) {
+            forYouFeed = TikTodFeedPolicy.sessionStartOrder(
                 items = eligible,
                 pendingNewIds = pendingNewIds,
                 previousVideoId = store.lastVideoId(profileId)
             )
             sessionInitialized = true
-            if (feed.isNotEmpty()) startAt(0, feed)
+            if (selectedTikTodCategory == 2 && feed.isEmpty() && forYouFeed.isNotEmpty()) {
+                feed = forYouFeed
+                startAt(0, forYouFeed)
+            }
         } else {
-            // Do not interrupt the current video. Newly discovered items are
-            // inserted immediately after it and remain prioritized until started.
-            val queuedNewItems = eligible
-                .filter { it.id in pendingNewIds && feed.none { queued -> queued.id == it.id } }
-                .shuffled()
+            val knownIds = forYouFeed.mapTo(hashSetOf()) { it.id }
+            val queuedNewItems = eligible.filter { it.id in pendingNewIds && it.id !in knownIds }
             if (queuedNewItems.isNotEmpty()) {
-                feed = feed.take(index + 1) + queuedNewItems + feed.drop(index + 1)
+                forYouFeed = forYouFeed + queuedNewItems
+                if (selectedTikTodCategory == 2) {
+                    val currentItem = feed.getOrNull(index)
+                    feed = if (currentItem != null) {
+                        listOf(currentItem) + forYouFeed.filterNot { it.id == currentItem.id }
+                    } else forYouFeed
+                    index = 0
+                }
             }
         }
     }
-    LaunchedEffect(selectedTikTodCategory, categorySource) {
-        if (selectedTikTodCategory == 2) {
-            lastFeedCategory = selectedTikTodCategory
-            return@LaunchedEffect
-        }
+
+    // A tab change only changes which queue will be used after the current
+    // video. Keep the currently playing item at the head and do not call playMedia.
+    LaunchedEffect(selectedTikTodCategory, categorySource, forYouFeed) {
         if (selectedTikTodCategory == 3) {
-            feed = emptyList()
-            index = 0
             viewModel.player.pause()
             lastFeedCategory = selectedTikTodCategory
             return@LaunchedEffect
         }
-        val categoryChanged = lastFeedCategory != selectedTikTodCategory
-        val avatarChanged = selectedTikTodCategory == 0 && lastFeedAvatarId != selectedAvatarId
+
+        val currentItem = feed.getOrNull(index)
+        val targetQueue = if (selectedTikTodCategory == 2) forYouFeed else categorySource
+        val retainedCurrent = currentItem ?: viewModel.currentlyPlaying.value
+        feed = when {
+            retainedCurrent != null ->
+                listOf(retainedCurrent) + targetQueue.filterNot { it.id == retainedCurrent.id }
+            targetQueue.isNotEmpty() -> targetQueue
+            else -> emptyList()
+        }
+        index = 0
         lastFeedCategory = selectedTikTodCategory
         lastFeedAvatarId = selectedAvatarId
-        val currentItem = media?.takeIf { feed.getOrNull(index)?.id == it.id }
-        if (categorySource.isEmpty()) {
-            if (!categoryChanged && !avatarChanged && currentItem != null) {
-                // Removing the currently playing item from an Avatar changes the
-                // next queue, not the video already on screen.
-                feed = listOf(currentItem)
-                index = 0
-            } else {
-                feed = emptyList()
-                index = 0
-                viewModel.player.pause()
-            }
-            return@LaunchedEffect
-        }
 
-        // Refresh the category queue without interrupting a current item that
-        // still belongs to it. A just-removed current item remains playable until
-        // the user advances; it is not reintroduced into the new category source.
-        val sourceIds = categorySource.mapTo(hashSetOf()) { it.id }
-        val retainedFeed = feed.filter { it.id in sourceIds }
-        val retainedCurrentIndex = retainedFeed.indexOfFirst { it.id == media?.id }
-        if (retainedCurrentIndex >= 0) {
-            val retainedIds = retainedFeed.mapTo(hashSetOf()) { it.id }
-            val newlyEligible = categorySource.filterNot { it.id in retainedIds }.shuffled()
-            feed = retainedFeed.take(retainedCurrentIndex + 1) +
-                newlyEligible + retainedFeed.drop(retainedCurrentIndex + 1)
-            index = retainedCurrentIndex
-        } else if (!categoryChanged && !avatarChanged && currentItem != null) {
-            feed = listOf(currentItem) + TikTodFeedPolicy.newCycle(categorySource, currentItem.id)
-            index = 0
-        } else {
-            val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
-            feed = nextFeed
-            index = 0
-            startAt(0, nextFeed)
+        // Only the first-ever session initialization may start a video here.
+        if (retainedCurrent == null && !sessionInitialized && feed.isNotEmpty()) {
+            startAt(0, feed)
         }
     }
 
