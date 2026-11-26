@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 enum class NavDestination(val label: String) {
     HOME("Beranda"),
@@ -244,11 +245,22 @@ private fun NavToolbarGlassItem(
         verticalArrangement = Arrangement.Center
     ) {
         if (avatarEmoji != null && avatarEmoji.isNotEmpty() && title == "Profil") {
-            Text(
-                text = avatarEmoji,
-                fontSize = 21.sp,
-                textAlign = TextAlign.Center
-            )
+            if (avatarEmoji.startsWith("content://") ||
+                avatarEmoji.startsWith("https://") ||
+                avatarEmoji.startsWith("file://")
+            ) {
+                AsyncImage(
+                    model = avatarEmoji,
+                    contentDescription = "Avatar profil",
+                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                )
+            } else {
+                Text(
+                    text = avatarEmoji,
+                    fontSize = 21.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         } else {
             Icon(
                 imageVector = icon,
