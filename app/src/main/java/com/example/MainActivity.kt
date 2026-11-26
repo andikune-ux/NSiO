@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
-            var unlocked by rememberSaveable { mutableStateOf(false) }
+            var unlocked by remember { mutableStateOf(false) }
             var profileLoggedIn by remember { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
