@@ -377,7 +377,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     LaunchedEffect(media?.id, index, feed) {
         val nextItem = feed.getOrNull(index + 1) ?: return@LaunchedEffect
         if (MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
-            viewModel.player.preloadDriveMedia(nextItem.url, "${nextItem.profileId}:${nextItem.id}")
+            viewModel.player.preloadDriveMedia(nextItem.url, nextItem.id)
         }
     }
 

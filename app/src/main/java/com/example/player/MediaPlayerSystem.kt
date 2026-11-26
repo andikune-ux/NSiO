@@ -320,6 +320,8 @@ class CS3IPlayer(
         val dataSourceFactory = object : DataSource.Factory {
             override fun createDataSource(): DataSource {
                 val upstreamFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+                // All HTTP(S) playback routes use the shared cache. Local/content
+                // sources remain direct and are not copied into the media cache.
                 return if (activeMediaCacheKey != null) {
                     CacheDataSource.Factory()
                         .setCache(DriveMediaCache.get(context))
@@ -796,8 +798,10 @@ class CS3IPlayer(
         drivePreloadJob = null
     }
 
+    @Suppress("UNUSED_PARAMETER")
     override fun preloadDriveMedia(url: String, mediaId: String) {
-        if (url.isBlank() || mediaId.isBlank() || !com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url)) return
+        if (url.isBlank() || !com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url)) return
+        val canonicalCacheKey = MediaCacheIdentity.forUrl(url) ?: return
         drivePreloadJob?.cancel()
         drivePreloadJob = coroutineScope.launch(Dispatchers.IO) {
             val source = CacheDataSource.Factory()
@@ -808,7 +812,7 @@ class CS3IPlayer(
             try {
                 val request = androidx.media3.datasource.DataSpec.Builder()
                     .setUri(Uri.parse(normalizePlaybackUrl(url.trim())))
-                    .setKey(mediaId)
+                    .setKey(canonicalCacheKey)
                     .setPosition(0L)
                     .setLength(DRIVE_PRELOAD_BYTES)
                     .build()
@@ -936,8 +940,11 @@ class CS3IPlayer(
         }
         lastUrl = url
         lastTitle = title
-        lastMediaCacheKey = mediaCacheKey?.takeIf { com.example.data.model.MediaSourceClassifier.isGoogleDriveUrl(url) }
-        activeMediaCacheKey = lastMediaCacheKey
+        val canonicalCacheIdentity = MediaCacheIdentity.forUrl(url)
+        // Drive links can differ while pointing to the same file, so use the
+        // canonical Drive key. Other HTTP(S) media falls back to its request URI.
+        lastMediaCacheKey = canonicalCacheIdentity?.takeIf { it.startsWith("drive:") }
+        activeMediaCacheKey = canonicalCacheIdentity
         repeatPointA = null
         repeatPointB = null
         _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
