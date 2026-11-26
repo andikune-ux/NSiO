@@ -17,7 +17,7 @@ class TikTodFeedPolicyTest {
     )
 
     @Test
-    fun feedContainsOnlyDriveVideosFromActiveProfile() {
+    fun feedContainsDriveVideosAndPhotosFromActiveProfile() {
         val items = listOf(
             item("drive-a"),
             item("link-a", "LINK"),
@@ -25,7 +25,7 @@ class TikTodFeedPolicyTest {
             item("other-profile").copy(profileId = "profile-b")
         )
         val result = TikTodFeedPolicy.eligible(items, "profile-a", emptySet())
-        assertEquals(listOf("drive-a"), result.map { it.id })
+        assertEquals(listOf("drive-a", "photo-a"), result.map { it.id })
     }
 
     @Test
