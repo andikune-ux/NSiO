@@ -370,8 +370,8 @@ object BackupUtils {
                             pluginId = m.optString("pluginId", ""),
                             repositoryId = m.optString("repositoryId", ""),
                             durationMs = m.optLong("durationMs", 0L),
-                            progressMs = 0L,
-                            lastWatchedAt = 0L,
+                            progressMs = m.optLong("progressMs", 0L).coerceAtLeast(0L),
+                            lastWatchedAt = m.optLong("lastWatchedAt", 0L).coerceAtLeast(0L),
                             isFavorite = m.optBoolean("isFavorite", false),
                             createdAt = System.currentTimeMillis(),
                             extraInfo = m.optString("extraInfo", "")
