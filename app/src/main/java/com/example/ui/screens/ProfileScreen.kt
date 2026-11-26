@@ -512,111 +512,74 @@ fun ProfileScreen(
             )
         }
 
-        // Backup Biasa Card
+        // Backup Profil and its restore action stay side by side.
         item {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = 0.10f,
-                        borderAlpha = 0.30f,
-                        elevation = 6.dp
-                    )
+                modifier = Modifier.fillMaxWidth().liquidGlass(
+                    shape = RoundedCornerShape(18.dp), alpha = 0.10f,
+                    borderAlpha = 0.30f, elevation = 6.dp
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Backup,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            "1. Backup Biasa (Per-Profil)",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Backup, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Text("Backup Profil", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Text(
-                        text = "Mem-backup daftar link dan pengaturan khusus profil '${activeProfile?.name ?: ""}' ke file JSON lokal.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Simpan data profil aktif ke JSON atau pulihkan JSON ke profil yang sedang digunakan. Identitas hanya diperbarui jika ID profil cocok.",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            if (!isBackupInProgress) {
-                                isBackupInProgress = true
-                                viewModel.runProfileBackup { res ->
-                                    backupStatusMessage = res.message
-                                    isBackupInProgress = false
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                if (!isBackupInProgress) {
+                                    isBackupInProgress = true
+                                    viewModel.runProfileBackup { res ->
+                                        backupStatusMessage = res.message
+                                        isBackupInProgress = false
+                                    }
                                 }
-                            }
-                        },
-                        enabled = !isBackupInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(42.dp)
-                    ) {
-                        Text(
-                            if (isBackupInProgress) "Backup sedang berjalan..." else "Mulai Backup Profil Ini",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                            },
+                            enabled = !isBackupInProgress,
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text(if (isBackupInProgress) "Memproses..." else "Backup Profil", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = { openRestorePicker("PROFILE_BACKUP") },
+                            enabled = !isBackupInProgress,
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text("Pulihkan Profil", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // Full Backup Aman Card
+        // Backup Aman is an AI-readable application structure report, not a restore file.
         item {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = 0.10f,
-                        borderAlpha = 0.30f,
-                        elevation = 6.dp
-                    )
+                modifier = Modifier.fillMaxWidth().liquidGlass(
+                    shape = RoundedCornerShape(18.dp), alpha = 0.10f,
+                    borderAlpha = 0.30f, elevation = 6.dp
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Security,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            "2. Backup Aman (Full Backup Keseluruhan)",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Text("Backup Aman • Struktur Aplikasi", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Text(
-                        text = "Mem-backup semua profil, database media, pengaturan, dan histori. PIN profil dan PIN server tidak disertakan demi keamanan; setelah restore, atur ulang PIN yang diperlukan.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Buat file TXT berisi informasi teknis dan struktur NSiO yang aman untuk disalin atau ditempelkan ke AI asisten. Tidak berisi daftar link video, PIN, atau identitas pribadi profil.",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     Button(
                         onClick = {
                             if (!isBackupInProgress) {
@@ -628,98 +591,12 @@ fun ProfileScreen(
                             }
                         },
                         enabled = !isBackupInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(42.dp)
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text(
-                            if (isBackupInProgress) "Backup sedang berjalan..." else "Buat Full Backup Terpadu",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        // Restore actions open the matching backup folder directly.
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(
-                        shape = RoundedCornerShape(18.dp),
-                        alpha = 0.10f,
-                        borderAlpha = 0.30f,
-                        elevation = 6.dp
-                    )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Restore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            "3. Pulihkan Backup",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Text(
-                        text = "Setiap tombol langsung membuka folder sesuai jenis backup. File dengan jenis yang tidak sesuai akan ditolak.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { openRestorePicker("FULL_BACKUP_AMAN") },
-                        enabled = !isBackupInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth().height(42.dp)
-                    ) {
-                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            if (isBackupInProgress) "Memulihkan..." else "Pulihkan Backup Aman",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { openRestorePicker("PROFILE_BACKUP") },
-                        enabled = !isBackupInProgress,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth().height(42.dp)
-                    ) {
-                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            if (isBackupInProgress) "Memulihkan..." else "Pulihkan Backup Profil",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                        Icon(Icons.Default.FilePresent, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (isBackupInProgress) "Membuat TXT..." else "Buat Backup Aman (.TXT)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
