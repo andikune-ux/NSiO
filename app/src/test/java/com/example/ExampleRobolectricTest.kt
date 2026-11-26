@@ -88,7 +88,12 @@ class ExampleRobolectricTest {
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
     assertEquals("Profile A", json.getString("sourceProfileName"))
     assertTrue(!json.has("settings"))
-    assertTrue(!json.has("profile"))
+    // Profile backups now carry identity metadata so the same profile can restore
+    // its own name/avatar. Restore code must ignore this identity for a different ID.
+    val exportedProfile = json.getJSONObject("profile")
+    assertEquals("profile_a", exportedProfile.getString("id"))
+    assertEquals("Profile A", exportedProfile.getString("name"))
+    assertEquals("🎬", exportedProfile.getString("avatarEmoji"))
     assertEquals("p1:balqyz", json.getJSONObject("avatarAssignments").getString("a1"))
     assertEquals("Favorit", json.getJSONArray("sourcePlaylists").getJSONObject(0).getString("name"))
     assertTrue(backupFile.name.contains("profile_a"))
