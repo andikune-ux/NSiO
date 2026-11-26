@@ -996,7 +996,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Keeping this suspendable lets bulk refresh wait for real completion instead
      * of reporting success while child jobs are still running.
      */
+    private fun googleDriveResourceKey(rawUrl: String): String? = runCatching {
+        val uri = java.net.URI(rawUrl.trim())
+        val host = uri.host?.lowercase()?.removePrefix("www.") ?: return@runCatching null
+        if (host != "drive.google.com" && host != "docs.google.com") return@runCatching null
+        val path = uri.path.orEmpty()
+        val query = uri.rawQuery.orEmpty().split('&').mapNotNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0) null else
+                java.net.URLDecoder.decode(part.substring(0, separator), "UTF-8") to
+                    java.net.URLDecoder.decode(part.substring(separator + 1), "UTF-8")
+        }.toMap()
+        val folderId = Regex("/folders/([^/]+)").find(path)?.groupValues?.get(1)
+        val fileId = Regex("/file/d/([^/]+)|/document/d/([^/]+)|/spreadsheets/d/([^/]+)|/presentation/d/([^/]+)")
+            .find(path)?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }
+            ?: query["id"]
+        when {
+            !folderId.isNullOrBlank() -> "folder:$folderId"
+            !fileId.isNullOrBlank() -> "file:$fileId"
+            else -> null
+        }
+    }.getOrNull()
+
+    private fun googleDriveFileId(rawUrl: String): String? =
+        googleDriveResourceKey(rawUrl)?.takeIf { it.startsWith("file:") }?.removePrefix("file:")
+
     private suspend fun parseAndAddLinkInternal(url: String, profileId: String, playlistName: String = ""): String {
+        val driveKey = googleDriveResourceKey(url)
+        if (driveKey != null) {
+            val existingPlaylist = sourcePlaylistDao.getForProfile(profileId)
+                .firstOrNull { googleDriveResourceKey(it.url) == driveKey }
+            if (existingPlaylist != null) {
+                return "Link Google Drive sudah ada di playlist '${existingPlaylist.name}'. Link yang sama tidak ditambahkan ulang."
+            }
+            if (driveKey.startsWith("file:")) {
+                val fileId = driveKey.removePrefix("file:")
+                val alreadyImported = mediaDao.getMediaListForProfile(profileId).any { item ->
+                    googleDriveFileId(item.url) == fileId ||
+                        googleDriveFileId(item.thumbnailUrl) == fileId ||
+                        googleDriveFileId(item.sourceUrl) == fileId
+                }
+                if (alreadyImported) {
+                    return "File Google Drive ini sudah ada di daftar media profil ini. Tidak ditambahkan ulang."
+                }
+            }
+        }
+
         return when (val result = LinkExtractor.parseUrl(url, profileId)) {
             is ParseResult.Single -> {
                 val sourceKind = when {
@@ -1041,7 +1086,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     profileId,
                     playlistName
                 )
-                val items = result.items.map {
+                val existingMedia = if (sourceKind == "DRIVE") mediaDao.getMediaListForProfile(profileId) else emptyList()
+                val existingDriveIds = existingMedia.flatMap { item ->
+                    listOfNotNull(googleDriveFileId(item.url), googleDriveFileId(item.thumbnailUrl), googleDriveFileId(item.sourceUrl))
+                }.toSet()
+                val uniqueParsedItems = if (sourceKind == "DRIVE") {
+                    result.items.distinctBy { googleDriveFileId(it.url) ?: it.url }
+                        .filter { item ->
+                            val fileId = googleDriveFileId(item.url)
+                            fileId == null || fileId !in existingDriveIds
+                        }
+                } else result.items
+                val skippedDuplicates = result.items.size - uniqueParsedItems.size
+                if (uniqueParsedItems.isEmpty()) {
+                    return "Semua ${result.items.size} media dari folder Google Drive sudah ada. Tidak ada duplikat yang ditambahkan."
+                }
+                val items = uniqueParsedItems.map {
                     it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
                 }
                 mediaDao.replacePlaylist(playlist.id, items)
@@ -1054,7 +1114,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, items)
                     }.exceptionOrNull()?.let { " Cloud gagal disinkronkan: ${it.localizedMessage ?: "koneksi bermasalah"}" }
                 }.orEmpty()
-                "${items.size} item berhasil ditambahkan (${result.title}).$cloudWarning"
+                "${items.size} item berhasil ditambahkan (${result.title})" +
+                    (if (skippedDuplicates > 0) "; $skippedDuplicates media duplikat dilewati." else ".") +
+                    cloudWarning
             }
             is ParseResult.Error -> "Error: ${result.message}"
         }
