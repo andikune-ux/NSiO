@@ -84,6 +84,13 @@ fun ProfileScreen(
     val activeProfile by viewModel.activeProfile.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
+    var showAddDialog by remember { mutableStateOf(false) }
+    var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
+    var showPinDialogForSwitch by remember { mutableStateOf(false) }
+    var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
+    var backupStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isBackupInProgress by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val restoreScope = androidx.compose.runtime.rememberCoroutineScope()
     val restorePicker = rememberLauncherForActivityResult(
@@ -141,13 +148,6 @@ fun ProfileScreen(
         }
         restorePicker.launch(intent)
     }
-
-    var showAddDialog by remember { mutableStateOf(false) }
-    var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
-    var showPinDialogForSwitch by remember { mutableStateOf(false) }
-    var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
-    var backupStatusMessage by remember { mutableStateOf<String?>(null) }
-    var isBackupInProgress by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
