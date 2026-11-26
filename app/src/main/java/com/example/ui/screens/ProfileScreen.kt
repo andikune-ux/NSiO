@@ -236,23 +236,7 @@ fun ProfileScreen(
                     )
                 }
 
-                Button(
-                    onClick = { showAccountSwitcher = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = CircleShape,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Tambah atau beralih akun",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+
             }
         }
 
@@ -323,6 +307,23 @@ fun ProfileScreen(
                                 else MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1
                             )
+                        }
+                    }
+                    item {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.width(64.dp)
+                        ) {
+                            Button(
+                                onClick = { showAccountSwitcher = true },
+                                shape = CircleShape,
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                modifier = Modifier.size(54.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Tambah atau beralih akun", modifier = Modifier.size(24.dp))
+                            }
+                            Text("Tambah", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
