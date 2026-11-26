@@ -425,7 +425,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(selectedTikTodCategory, selectedAvatarId, avatarAssignments, eligible) {
+    LaunchedEffect(selectedTikTodCategory, categorySource) {
         if (selectedTikTodCategory == 2) return@LaunchedEffect
         if (selectedTikTodCategory == 3) {
             feed = emptyList()
@@ -433,10 +433,30 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             viewModel.player.pause()
             return@LaunchedEffect
         }
-        val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
-        feed = nextFeed
-        index = 0
-        if (nextFeed.isNotEmpty()) startAt(0, nextFeed) else viewModel.player.pause()
+        if (categorySource.isEmpty()) {
+            feed = emptyList()
+            index = 0
+            viewModel.player.pause()
+            return@LaunchedEffect
+        }
+
+        // Match the Untuk Mu behavior: refresh the queue without interrupting
+        // the active item when it still belongs to the selected category.
+        val sourceIds = categorySource.mapTo(hashSetOf()) { it.id }
+        val retainedFeed = feed.filter { it.id in sourceIds }
+        val retainedCurrentIndex = retainedFeed.indexOfFirst { it.id == media?.id }
+        if (retainedCurrentIndex >= 0) {
+            val retainedIds = retainedFeed.mapTo(hashSetOf()) { it.id }
+            val newlyEligible = categorySource.filterNot { it.id in retainedIds }.shuffled()
+            feed = retainedFeed.take(retainedCurrentIndex + 1) +
+                newlyEligible + retainedFeed.drop(retainedCurrentIndex + 1)
+            index = retainedCurrentIndex
+        } else {
+            val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
+            feed = nextFeed
+            index = 0
+            startAt(0, nextFeed)
+        }
     }
 
     // Feed/category effects are the single authority that starts a TikTod item.
