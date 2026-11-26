@@ -91,6 +91,8 @@ fun ProfileScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
     var showPinDialogForSwitch by remember { mutableStateOf(false) }
+    var pendingSettingsProfile by remember { mutableStateOf<Profile?>(null) }
+    var showPinDialogForSettings by remember { mutableStateOf(false) }
     var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
     var pinManagementProfile by remember { mutableStateOf<Profile?>(null) }
     var pinManagementAction by remember { mutableStateOf("CHANGE") }
@@ -271,9 +273,16 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .width(76.dp)
                                 .clickable {
-                                    profileSettingsTarget = p
-                                    editingProfileName = p.name
-                                    editingProfileAvatar = p.avatarEmoji
+                                    if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                        pendingSettingsProfile = p
+                                        showPinDialogForSettings = true
+                                    } else if (p.isPinEnabled) {
+                                        viewModel.showStatus("PIN profil ini belum valid. Pengaturan tidak dapat dibuka.")
+                                    } else {
+                                        profileSettingsTarget = p
+                                        editingProfileName = p.name
+                                        editingProfileAvatar = p.avatarEmoji
+                                    }
                                 }
                         ) {
                             Box(
@@ -1021,6 +1030,27 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    if (showPinDialogForSettings && pendingSettingsProfile != null) {
+        PinDialog(
+            title = "Buka Pengaturan Profil",
+            subtitle = "Masukkan PIN untuk mengubah profil '${pendingSettingsProfile?.name}'.",
+            expectedPin = pendingSettingsProfile?.pin ?: "",
+            onSuccess = {
+                pendingSettingsProfile?.let { p ->
+                    profileSettingsTarget = p
+                    editingProfileName = p.name
+                    editingProfileAvatar = p.avatarEmoji
+                }
+                pendingSettingsProfile = null
+                showPinDialogForSettings = false
+            },
+            onDismiss = {
+                pendingSettingsProfile = null
+                showPinDialogForSettings = false
+            }
+        )
     }
 
     // Pin Dialog for switching
