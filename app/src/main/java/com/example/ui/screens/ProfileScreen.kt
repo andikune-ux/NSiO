@@ -94,6 +94,8 @@ fun ProfileScreen(
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
     var isBackupInProgress by remember { mutableStateOf(false) }
     var requestedRestoreType by remember { mutableStateOf("PROFILE_BACKUP") }
+    var pendingEncryptedBackup by remember { mutableStateOf<String?>(null) }
+    var backupPinInput by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     val restoreScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -126,16 +128,25 @@ fun ProfileScreen(
                         val actualBackupType = org.json.JSONObject(
                             com.example.data.backup.BackupAmanManager.extractJson(jsonContent)
                         ).optString("backupType")
-                        require(actualBackupType == requestedRestoreType) {
+                        val encryptedProfileBackup =
+                            requestedRestoreType == "PROFILE_BACKUP" &&
+                                actualBackupType == "PROFILE_BACKUP_ENCRYPTED"
+                        require(actualBackupType == requestedRestoreType || encryptedProfileBackup) {
                             if (requestedRestoreType == "FULL_BACKUP_AMAN") {
                                 "File yang dipilih bukan Backup Aman. Pilih file TXT dari folder Backup Aman."
                             } else {
                                 "File yang dipilih bukan Backup Profil. Pilih file JSON dari folder Backup Profil."
                             }
                         }
-                        viewModel.restoreBackup(jsonContent) { res ->
-                            backupStatusMessage = res.message
+                        if (encryptedProfileBackup) {
+                            pendingEncryptedBackup = jsonContent
+                            backupPinInput = ""
                             isBackupInProgress = false
+                        } else {
+                            viewModel.restoreBackup(jsonContent) { res ->
+                                backupStatusMessage = res.message
+                                isBackupInProgress = false
+                            }
                         }
                     } catch (e: Exception) {
                         backupStatusMessage = "Gagal membaca file backup: ${e.localizedMessage ?: "file tidak valid"}"
@@ -156,9 +167,9 @@ fun ProfileScreen(
             isFullBackup ->
                 "primary:Android/data/${context.packageName}/files/NSiO/backup aman"
             com.example.data.backup.BackupAmanManager.hasStorageAccess(context) ->
-                "primary:NSiO/backup profil"
+                "primary:NSiO/Backup Profil"
             else ->
-                "primary:Android/data/${context.packageName}/files/NSiO/Backup"
+                "primary:Android/data/${context.packageName}/files/NSiO/Backup Profil"
         }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -807,6 +818,84 @@ fun ProfileScreen(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
+            }
+        }
+    }
+
+    if (pendingEncryptedBackup != null) {
+        Dialog(onDismissRequest = {
+            if (!isBackupInProgress) {
+                pendingEncryptedBackup = null
+                backupPinInput = ""
+            }
+        }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(
+                        shape = RoundedCornerShape(24.dp),
+                        alpha = 0.18f,
+                        borderAlpha = 0.45f,
+                        elevation = 16.dp
+                    )
+                    .padding(20.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Backup Profil Terkunci",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Masukkan PIN profil sumber yang digunakan saat backup dibuat. PIN profil penerima tidak digunakan untuk membuka file ini.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = backupPinInput,
+                        onValueChange = { value ->
+                            if (value.length <= 4 && value.all(Char::isDigit)) backupPinInput = value
+                        },
+                        label = { Text("PIN profil sumber") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = {
+                                pendingEncryptedBackup = null
+                                backupPinInput = ""
+                            },
+                            enabled = !isBackupInProgress,
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) { Text("Batal", color = MaterialTheme.colorScheme.onSurface) }
+                        Button(
+                            onClick = {
+                                val content = pendingEncryptedBackup ?: return@Button
+                                isBackupInProgress = true
+                                viewModel.restoreBackup(content, backupPinInput) { res ->
+                                    backupStatusMessage = res.message
+                                    isBackupInProgress = false
+                                    if (res.isSuccess) {
+                                        pendingEncryptedBackup = null
+                                        backupPinInput = ""
+                                    }
+                                }
+                            },
+                            enabled = !isBackupInProgress && backupPinInput.matches(Regex("\\d{4}")),
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            if (isBackupInProgress) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                            else Text("Buka & Pulihkan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }
