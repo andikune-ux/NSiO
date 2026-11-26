@@ -74,7 +74,8 @@ object BackupUtils {
         mediaList: List<MediaItem>,
         sourcePlaylists: List<SourcePlaylist>,
         profilePin: String,
-        avatarAssignments: Map<String, String>
+        avatarAssignments: Map<String, String>,
+        storageRootOverride: File? = null
     ): BackupResult = withContext(Dispatchers.IO) {
         try {
             require(!profile.isPinEnabled || profilePin.matches(Regex("\\d{4}"))) {
@@ -126,11 +127,15 @@ object BackupUtils {
             val profileFolder = safeFolderName(profile.name)
             val fileName = "${profile.id.replace(Regex("[^A-Za-z0-9_-]"), "_")}.json"
             val roots = buildList {
-                if (BackupAmanManager.hasStorageAccess(context)) {
-                    add(File(Environment.getExternalStorageDirectory(), "NSiO/Backup Profil"))
+                if (storageRootOverride != null) {
+                    add(storageRootOverride)
+                } else {
+                    if (BackupAmanManager.hasStorageAccess(context)) {
+                        add(File(Environment.getExternalStorageDirectory(), "NSiO/Backup Profil"))
+                    }
+                    add(File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup Profil"))
+                    add(File(context.filesDir, "NSiO/Backup Profil"))
                 }
-                add(File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup Profil"))
-                add(File(context.filesDir, "NSiO/Backup Profil"))
             }.distinctBy { it.absolutePath }
 
             var saved: File? = null
