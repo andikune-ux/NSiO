@@ -271,34 +271,40 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val categoryFlipRotation = remember { Animatable(0f) }
     val categoryFlipScope = rememberCoroutineScope()
     var showYangManaSettings by remember { mutableStateOf(false) }
+    var showVideoManager by remember { mutableStateOf(false) }
+    var showManagerAddVideos by remember { mutableStateOf(false) }
+    var managerTargetAvatarId by remember { mutableStateOf("p2:balqyz") }
+    var lastFeedCategory by remember { mutableIntStateOf(2) }
+    var lastFeedAvatarId by remember { mutableStateOf(selectedAvatarId) }
+    var previewJumpIndex by remember { mutableIntStateOf(0) }
     DisposableEffect(assignmentPreviewPlayer) {
         onDispose {
             assignmentPreviewPlayer.stop()
             assignmentPreviewPlayer.release()
         }
     }
-    LaunchedEffect(showYangManaSettings) {
-        if (!showYangManaSettings) {
+    LaunchedEffect(showYangManaSettings, showVideoManager) {
+        if (!showYangManaSettings && !showVideoManager) {
             activeAssignmentPreviewId = null
             assignmentPreviewPlayer.stop()
         }
     }
-    LaunchedEffect(activeAssignmentPreviewId) {
-        if (activeAssignmentPreviewId == null || !showYangManaSettings) return@LaunchedEffect
+    LaunchedEffect(activeAssignmentPreviewId, showYangManaSettings, showVideoManager) {
+        if (activeAssignmentPreviewId == null || (!showYangManaSettings && !showVideoManager)) return@LaunchedEffect
+        previewJumpIndex = 0
+        val previewFractions = listOf(0.25f, 0.50f, 0.75f)
         while (true) {
             delay(2600L)
             val player = assignmentPreviewPlayer.exoPlayer ?: continue
             val duration = player.duration
             if (duration > 1800L && player.isCurrentMediaItemSeekable) {
-                val nextPosition = if (player.currentPosition + 6500L >= duration - 700L) {
-                    0L
-                } else {
-                    player.currentPosition + 6500L
-                }
+                val target = (duration * previewFractions[previewJumpIndex % previewFractions.size])
+                    .toLong().coerceIn(0L, (duration - 500L).coerceAtLeast(0L))
                 player.pause()
-                player.seekTo(nextPosition)
-                delay(320L)
+                player.seekTo(target)
+                delay(280L)
                 player.play()
+                previewJumpIndex = (previewJumpIndex + 1) % previewFractions.size
             }
         }
     }
@@ -397,7 +403,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
     LaunchedEffect(eligible, activeProfile?.id, selectedTikTodCategory) {
         val profileId = activeProfile?.id ?: return@LaunchedEffect
-        if (selectedTikTodCategory != 2) return@LaunchedEffect
+        if (selectedTikTodCategory != 2) {
+            lastFeedCategory = selectedTikTodCategory
+            return@LaunchedEffect
+        }
+        lastFeedCategory = selectedTikTodCategory
         if (eligible.isEmpty()) {
             feed = emptyList()
             viewModel.player.pause()
@@ -431,17 +441,31 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             feed = emptyList()
             index = 0
             viewModel.player.pause()
+            lastFeedCategory = selectedTikTodCategory
             return@LaunchedEffect
         }
+        val categoryChanged = lastFeedCategory != selectedTikTodCategory
+        val avatarChanged = selectedTikTodCategory == 0 && lastFeedAvatarId != selectedAvatarId
+        lastFeedCategory = selectedTikTodCategory
+        lastFeedAvatarId = selectedAvatarId
+        val currentItem = media?.takeIf { feed.getOrNull(index)?.id == it.id }
         if (categorySource.isEmpty()) {
-            feed = emptyList()
-            index = 0
-            viewModel.player.pause()
+            if (!categoryChanged && !avatarChanged && currentItem != null) {
+                // Removing the currently playing item from an Avatar changes the
+                // next queue, not the video already on screen.
+                feed = listOf(currentItem)
+                index = 0
+            } else {
+                feed = emptyList()
+                index = 0
+                viewModel.player.pause()
+            }
             return@LaunchedEffect
         }
 
-        // Match the Untuk Mu behavior: refresh the queue without interrupting
-        // the active item when it still belongs to the selected category.
+        // Refresh the category queue without interrupting a current item that
+        // still belongs to it. A just-removed current item remains playable until
+        // the user advances; it is not reintroduced into the new category source.
         val sourceIds = categorySource.mapTo(hashSetOf()) { it.id }
         val retainedFeed = feed.filter { it.id in sourceIds }
         val retainedCurrentIndex = retainedFeed.indexOfFirst { it.id == media?.id }
@@ -451,6 +475,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             feed = retainedFeed.take(retainedCurrentIndex + 1) +
                 newlyEligible + retainedFeed.drop(retainedCurrentIndex + 1)
             index = retainedCurrentIndex
+        } else if (!categoryChanged && !avatarChanged && currentItem != null) {
+            feed = listOf(currentItem) + TikTodFeedPolicy.newCycle(categorySource, currentItem.id)
+            index = 0
         } else {
             val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
             feed = nextFeed
@@ -911,7 +938,21 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 } else {
                     yangManaAvatarImages[assignedAvatarIndex!!]
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            managerTargetAvatarId = when (selectedTikTodCategory) {
+                                0 -> selectedAvatarId
+                                1 -> selectedAvatarId.takeIf { it.startsWith("p2:") } ?: "p2:balqyz"
+                                else -> selectedAvatarId
+                            }
+                            showManagerAddVideos = false
+                            showVideoManager = true
+                        }
+                        .padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = .20f),
@@ -1633,6 +1674,332 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                             }
                         }
                     ) { Text("Keluarkan dari Avatar", maxLines = 1) }
+                }
+            }
+        }
+    }
+
+
+    if (showVideoManager) {
+        val managerVideos = when (selectedTikTodCategory) {
+            0 -> TikTodFeedPolicy.forAvatar(eligible, avatarAssignments, selectedAvatarId)
+            1 -> TikTodFeedPolicy.jedagJedug(eligible, avatarAssignments)
+            else -> eligible
+        }
+        val unassignedManagerVideos = eligible.filter { avatarAssignments[it.id].isNullOrBlank() }
+        val managerTargetOptions = if (selectedTikTodCategory == 1) {
+            avatarTargets.filter { it.first.startsWith("p2:") }
+        } else {
+            avatarTargets
+        }
+        val managerShownVideos = if (showManagerAddVideos && selectedTikTodCategory != 2) {
+            unassignedManagerVideos
+        } else {
+            managerVideos
+        }
+        ModalBottomSheet(
+            onDismissRequest = {
+                showVideoManager = false
+                showManagerAddVideos = false
+                selectedUnassignedVideoIds = emptySet()
+                selectedAssignedVideoIds = emptySet()
+                activeAssignmentPreviewId = null
+                assignmentPreviewPlayer.stop()
+            },
+            containerColor = Color(0xFF17181D),
+            contentColor = Color.White,
+            scrimColor = Color.Black.copy(alpha = 0.62f),
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.34f)) }
+        ) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = 500.dp, max = 760.dp)
+                    .navigationBarsPadding().padding(horizontal = 15.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (showManagerAddVideos && selectedTikTodCategory != 2) "Tambah video ke Avatar"
+                            else "Daftar video • ${tikTodCategories[selectedTikTodCategory.coerceIn(0, 2)]}",
+                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            when (selectedTikTodCategory) {
+                                0 -> avatarTargetLabels[selectedAvatarId] ?: "Avatar aktif"
+                                1 -> "Seluruh video Avatar halaman 2 • Jedag Jedug"
+                                else -> "Seluruh video Google Drive yang memenuhi syarat"
+                            },
+                            color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = {
+                        showVideoManager = false
+                        showManagerAddVideos = false
+                        activeAssignmentPreviewId = null
+                        assignmentPreviewPlayer.stop()
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = "Tutup daftar video", tint = Color.White)
+                    }
+                }
+                if (selectedTikTodCategory == 0) {
+                    Text(
+                        "Avatar tujuan: ${avatarTargetLabels[selectedAvatarId] ?: selectedAvatarId}",
+                        color = Color(0xFF9DDCCB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Avatar tujuan", color = Color.White.copy(alpha = 0.82f), fontSize = 12.sp)
+                        Box {
+                            var targetMenuOpen by remember { mutableStateOf(false) }
+                            OutlinedButton(onClick = { targetMenuOpen = true }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)) {
+                                Text(avatarTargetLabels[managerTargetAvatarId] ?: "Pilih Avatar", maxLines = 1, fontSize = 11.sp)
+                            }
+                            DropdownMenu(expanded = targetMenuOpen, onDismissRequest = { targetMenuOpen = false }) {
+                                managerTargetOptions.forEach { (id, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            managerTargetAvatarId = id
+                                            targetMenuOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("${managerShownVideos.size} video", color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
+                    if (selectedTikTodCategory != 2) {
+                        TextButton(onClick = {
+                            showManagerAddVideos = !showManagerAddVideos
+                            activeAssignmentPreviewId = null
+                            assignmentPreviewPlayer.stop()
+                        }) {
+                            Text(
+                                if (showManagerAddVideos) "Kembali ke daftar" else "+ Tambah video",
+                                color = Color(0xFF9DDCCB), fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                if (managerShownVideos.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Text(
+                            when {
+                                showManagerAddVideos -> "Semua video Drive sudah memiliki Avatar."
+                                selectedTikTodCategory == 0 -> "Belum ada video untuk Avatar ini."
+                                selectedTikTodCategory == 1 -> "Belum ada video yang dikelompokkan ke Avatar halaman 2."
+                                else -> "Belum ada video Google Drive yang memenuhi syarat."
+                            },
+                            color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 14.dp)
+                    ) {
+                        items(managerShownVideos, key = { it.id }) { item ->
+                            val ownerId = avatarAssignments[item.id].orEmpty()
+                            val ownerLabel = avatarTargetLabels[ownerId] ?: "Belum memiliki Avatar"
+                            val isCurrent = media?.id == item.id
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(13.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF292C33)),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isCurrent) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.10f)
+                                )
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(7.dp),
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                                            .clip(RoundedCornerShape(8.dp)).background(Color.Black)
+                                    ) {
+                                        if (item.thumbnailUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = item.thumbnailUrl,
+                                                contentDescription = "Thumbnail ${item.title}",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                Icons.Default.PlayArrow, contentDescription = "Video",
+                                                tint = Color.White, modifier = Modifier.align(Alignment.Center).size(30.dp)
+                                            )
+                                        }
+                                        if (isCurrent) {
+                                            Surface(
+                                                Modifier.align(Alignment.TopStart).padding(4.dp),
+                                                shape = RoundedCornerShape(5.dp), color = Color(0xDD1A5A4A)
+                                            ) {
+                                                Text("SEDANG DIPUTAR", Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                                                    color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        item.title.ifBlank { "Video tanpa judul" },
+                                        color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp
+                                    )
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(formatTikTodTime(item.durationMs), color = Color.White.copy(alpha = 0.58f), fontSize = 9.sp)
+                                        Text(
+                                            if (showManagerAddVideos) "Belum dimiliki" else ownerLabel,
+                                            color = Color(0xFF9DDCCB), fontSize = 8.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            activeAssignmentPreviewId = item.id
+                                            assignmentPreviewPlayer.exoPlayer?.volume = 0f
+                                            assignmentPreviewPlayer.play(
+                                                item.url,
+                                                item.title.ifBlank { "Pratinjau video" },
+                                                0L,
+                                                mediaCacheKey = "${item.profileId}:${item.id}"
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(vertical = 4.dp),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Preview", fontSize = 10.sp)
+                                    }
+                                    if (showManagerAddVideos && selectedTikTodCategory != 2) {
+                                        Button(
+                                            onClick = {
+                                                activeProfile?.id?.let { profileId ->
+                                                    store.assignVideos(profileId, listOf(item.id), managerTargetAvatarId)
+                                                    avatarAssignments = store.avatarAssignments(profileId)
+                                                    showManagerAddVideos = false
+                                                }
+                                            },
+                                            enabled = managerTargetAvatarId.isNotBlank(),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentPadding = PaddingValues(vertical = 4.dp)
+                                        ) { Text("Tambahkan", fontSize = 10.sp) }
+                                    } else if (selectedTikTodCategory == 2 && ownerId.isBlank()) {
+                                        Button(
+                                            onClick = {
+                                                activeProfile?.id?.let { profileId ->
+                                                    store.assignVideos(profileId, listOf(item.id), managerTargetAvatarId)
+                                                    avatarAssignments = store.avatarAssignments(profileId)
+                                                }
+                                            },
+                                            enabled = managerTargetAvatarId.isNotBlank(),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentPadding = PaddingValues(vertical = 4.dp)
+                                        ) { Text("Masukkan ke Avatar", fontSize = 9.sp, maxLines = 1) }
+                                    } else if (ownerId.isNotBlank()) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                activeProfile?.id?.let { profileId ->
+                                                    store.assignVideos(profileId, listOf(item.id), "")
+                                                    avatarAssignments = store.avatarAssignments(profileId)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentPadding = PaddingValues(vertical = 4.dp),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
+                                        ) { Text("Keluarkan dari Avatar", fontSize = 9.sp, maxLines = 1) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (activeAssignmentPreviewId != null && showVideoManager) {
+        val previewItem = eligible.firstOrNull { it.id == activeAssignmentPreviewId }
+        if (previewItem != null) {
+            Dialog(
+                onDismissRequest = {
+                    activeAssignmentPreviewId = null
+                    assignmentPreviewPlayer.stop()
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF17181D),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                    shadowElevation = 20.dp
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        Text(
+                            previewItem.title.ifBlank { "Pratinjau video" },
+                            color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                        Box(
+                            Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(12.dp)).background(Color.Black)
+                        ) {
+                            AndroidView(
+                                factory = { viewContext ->
+                                    PlayerView(viewContext).apply {
+                                        player = assignmentPreviewPlayer.exoPlayer
+                                        useController = false
+                                        setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                    }
+                                },
+                                update = { it.player = assignmentPreviewPlayer.exoPlayer },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            if (assignmentPreviewState.isBuffering) {
+                                CircularProgressIndicator(
+                                    Modifier.align(Alignment.Center).size(28.dp),
+                                    color = Color.White, strokeWidth = 2.dp
+                                )
+                            }
+                        }
+                        Text(
+                            "Preview otomatis melompat ke sekitar 25%, 50%, dan 75% durasi video.",
+                            color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp
+                        )
+                        Button(
+                            onClick = {
+                                activeAssignmentPreviewId = null
+                                assignmentPreviewPlayer.stop()
+                            },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("Tutup preview") }
+                    }
                 }
             }
         }
