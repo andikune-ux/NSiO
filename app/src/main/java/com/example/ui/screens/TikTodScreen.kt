@@ -1521,8 +1521,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Pengaturan pembagian video", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text("Pilih video Drive, lalu tentukan satu Avatar pemilik. Satu video hanya bisa dimiliki satu Avatar.",
+                Text("Pengaturan pembagian konten", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text("Pilih video atau foto Drive, lalu tentukan satu Avatar pemilik. Setiap konten hanya bisa dimiliki satu Avatar.",
                     color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp, lineHeight = 17.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Avatar tujuan", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -1548,7 +1548,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         ) {
                                             Text(label, modifier = Modifier.weight(1f), maxLines = 1)
                                             Text(
-                                                "$videoCount video",
+                                                "$videoCount konten",
                                                 color = if (videoCount > 0) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.48f),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.SemiBold
@@ -1573,7 +1573,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 val unassignedVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, effectiveAvatarAssignments).isNullOrBlank() }
                 val targetAssignedVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, effectiveAvatarAssignments) == assignmentTargetAvatarId && assignmentTargetAvatarId.isNotBlank() }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${selectedUnassignedVideoIds.size + selectedAssignedVideoIds.size} video dipilih • ${eligible.size} video tersedia",
+                    Text("${selectedUnassignedVideoIds.size + selectedAssignedVideoIds.size} konten dipilih • ${eligible.size} konten tersedia",
                         modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
                     TextButton(onClick = {
                         selectedUnassignedVideoIds = if (selectedUnassignedVideoIds.size == unassignedVideos.size) emptySet()
@@ -1585,7 +1585,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
                 if (eligible.isEmpty()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("Belum ada video Drive yang memenuhi syarat untuk dibagi.", color = Color.White.copy(alpha = 0.70f), fontSize = 13.sp)
+                        Text("Belum ada konten Drive yang memenuhi syarat untuk dibagi.", color = Color.White.copy(alpha = 0.70f), fontSize = 13.sp)
                     }
                 } else {
                     Row(
@@ -1614,7 +1614,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Text("${items.size} video", color = Color(0xFF9DDCCB), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${items.size} konten", color = Color(0xFF9DDCCB), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                                 LazyColumn(
                                     Modifier.weight(1f).fillMaxWidth(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1641,13 +1641,17 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                         assignmentPreviewPlayer.stop()
                                                     } else {
                                                         activeAssignmentPreviewId = item.id
-                                                        assignmentPreviewPlayer.exoPlayer?.volume = 0f
-                                                        assignmentPreviewPlayer.play(
-                                                            item.url,
-                                                            item.title.ifBlank { "Pratinjau video" },
-                                                            0L,
-                                                            mediaCacheKey = "${item.profileId}:${item.id}"
-                                                        )
+                                                        if (item.type.equals("PHOTO", true)) {
+                                                            assignmentPreviewPlayer.stop()
+                                                        } else {
+                                                            assignmentPreviewPlayer.exoPlayer?.volume = 0f
+                                                            assignmentPreviewPlayer.play(
+                                                                item.url,
+                                                                item.title.ifBlank { "Pratinjau video" },
+                                                                0L,
+                                                                mediaCacheKey = "${item.profileId}:${item.id}"
+                                                            )
+                                                        }
                                                     }
                                                 }
                                                 .padding(6.dp),
@@ -1658,7 +1662,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                     .clip(RoundedCornerShape(7.dp))
                                                     .background(Color.Black)
                                             ) {
-                                                if (isPreview) {
+                                                if (isPreview && !item.type.equals("PHOTO", true)) {
                                                     AndroidView(
                                                         factory = { viewContext ->
                                                             PlayerView(viewContext).apply {
@@ -1677,6 +1681,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                             strokeWidth = 2.dp
                                                         )
                                                     }
+                                                } else if (item.type.equals("PHOTO", true)) {
+                                                    AsyncImage(
+                                                        model = item.url.takeIf { it.isNotBlank() } ?: item.thumbnailUrl,
+                                                        contentDescription = "Foto ${item.title}",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
                                                 } else if (item.thumbnailUrl.isNotBlank()) {
                                                     AsyncImage(
                                                         model = item.thumbnailUrl,
