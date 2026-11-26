@@ -14,7 +14,7 @@ import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
 import java.net.URI
 import java.util.UUID
-import java.util.Base64
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -106,7 +106,7 @@ object BackupUtils {
                     put("id", profile.id)
                     put("name", profile.name)
                     put("avatarEmoji", profile.avatarEmoji.takeUnless { it.startsWith("content://") || it.startsWith("file://") }.orEmpty())
-                    put("avatarImageBase64", avatarBytes?.let { Base64.getEncoder().encodeToString(it) }.orEmpty())
+                    put("avatarImageBase64", avatarBytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }.orEmpty())
                 })
                 put("mediaItems", JSONArray().apply {
                     profileMedia.forEach { m ->
@@ -380,7 +380,7 @@ object BackupUtils {
                             val restoredAvatar = if (encodedAvatar.isNotBlank()) {
                                 val avatarDir = File(context.filesDir, "NSiO/profile-avatars").apply { mkdirs() }
                                 val avatarFile = File(avatarDir, "profile-$currentProfileId.img")
-                                avatarFile.writeBytes(Base64.getDecoder().decode(encodedAvatar))
+                                avatarFile.writeBytes(Base64.decode(encodedAvatar, Base64.DEFAULT))
                                 Uri.fromFile(avatarFile).toString()
                             } else {
                                 val backupAvatar = identity.optString("avatarEmoji")
