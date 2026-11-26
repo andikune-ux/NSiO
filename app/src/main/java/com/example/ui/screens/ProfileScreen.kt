@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
@@ -841,7 +842,7 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                            if (p.avatarEmoji.startsWith("content://") || p.avatarEmoji.startsWith("https://")) {
+                            if (p.avatarEmoji.startsWith("content://") || p.avatarEmoji.startsWith("https://") || p.avatarEmoji.startsWith("file://")) {
                                 AsyncImage(model = p.avatarEmoji, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape))
                             } else Text(p.avatarEmoji, fontSize = 20.sp)
                         }
@@ -884,7 +885,7 @@ fun ProfileScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                     Text("Pengaturan Profil", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
                     IconButton(onClick = { profileSettingsTarget = null }) {
-                        Icon(Icons.Default.Add, contentDescription = "Tutup", modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.Close, contentDescription = "Tutup", modifier = Modifier.size(22.dp))
                     }
                 }
                 Box(
