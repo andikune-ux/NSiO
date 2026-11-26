@@ -403,11 +403,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
     LaunchedEffect(eligible, activeProfile?.id, selectedTikTodCategory) {
         val profileId = activeProfile?.id ?: return@LaunchedEffect
-        if (selectedTikTodCategory != 2) {
-            lastFeedCategory = selectedTikTodCategory
-            return@LaunchedEffect
-        }
-        lastFeedCategory = selectedTikTodCategory
+        if (selectedTikTodCategory != 2) return@LaunchedEffect
         if (eligible.isEmpty()) {
             feed = emptyList()
             viewModel.player.pause()
@@ -436,7 +432,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
     LaunchedEffect(selectedTikTodCategory, categorySource) {
-        if (selectedTikTodCategory == 2) return@LaunchedEffect
+        if (selectedTikTodCategory == 2) {
+            lastFeedCategory = selectedTikTodCategory
+            return@LaunchedEffect
+        }
         if (selectedTikTodCategory == 3) {
             feed = emptyList()
             index = 0
