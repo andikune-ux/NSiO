@@ -21,11 +21,24 @@ class TikTodFeedPolicyTest {
         val items = listOf(
             item("drive-a"),
             item("link-a", "LINK"),
-            item("photo-a", "DRIVE", "PHOTO"),
+            item("photo-a", "DRIVE", "PHOTO").copy(url = "https://lh3.googleusercontent.com/d/photo-a=w2000"),
             item("other-profile").copy(profileId = "profile-b")
         )
         val result = TikTodFeedPolicy.eligible(items, "profile-a", emptySet())
         assertEquals(listOf("drive-a", "photo-a"), result.map { it.id })
+    }
+
+    @Test
+    fun drivePhotoImageUrlKeepsCanonicalDriveAssignmentIdentity() {
+        val photo = item("photo-entry", "DRIVE", "PHOTO").copy(
+            url = "https://lh3.googleusercontent.com/d/actual-drive-file-id=w2000",
+            thumbnailUrl = "https://lh3.googleusercontent.com/d/actual-drive-file-id=w400"
+        )
+        assertEquals("drive:actual-drive-file-id", TikTodFeedPolicy.assignmentKey(photo))
+        assertEquals(
+            listOf("photo-entry"),
+            TikTodFeedPolicy.forAvatar(listOf(photo), mapOf("drive:actual-drive-file-id" to "p1:balqyz"), "p1:balqyz").map { it.id }
+        )
     }
 
     @Test
