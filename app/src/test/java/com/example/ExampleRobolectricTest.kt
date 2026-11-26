@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.extractor.LinkExtractor
 import com.example.data.extractor.ParseResult
 import com.example.data.backup.BackupUtils
+import com.example.data.backup.ProfileBackupCrypto
+import com.example.data.model.SourcePlaylist
 import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
@@ -40,6 +42,23 @@ class ExampleRobolectricTest {
     assertEquals("VIDEO", single.item.type)
   }
 
+
+  @Test
+  fun `profile backup encryption uses profile pin and rejects wrong pin`() {
+    val payload = """{"backupType":"PROFILE_BACKUP","version":3,"sourceProfileName":"Balqyz","mediaItems":[]}"""
+    val encrypted = ProfileBackupCrypto.encrypt(payload, "2468")
+    val envelope = JSONObject(encrypted)
+    assertEquals("PROFILE_BACKUP_ENCRYPTED", envelope.getString("backupType"))
+    assertEquals(payload, ProfileBackupCrypto.decrypt(envelope, "2468"))
+    var rejected = false
+    try {
+      ProfileBackupCrypto.decrypt(envelope, "1357")
+    } catch (_: IllegalArgumentException) {
+      rejected = true
+    }
+    assertTrue(rejected)
+  }
+
   @Test
   fun `profile backup excludes other profiles media and settings`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
@@ -53,7 +72,10 @@ class ExampleRobolectricTest {
       context = context,
       profile = profile,
       settings = ProfileSettings(profileId = "profile_b", language = "EN"),
-      mediaList = media
+      mediaList = media,
+      sourcePlaylists = listOf(SourcePlaylist(id = "playlist_a", profileId = "profile_a", name = "Favorit", url = "https://example.com/list")),
+      profilePin = "",
+      avatarAssignments = mapOf("a1" to "p1:balqyz")
     )
 
     assertTrue(result.isSuccess)
@@ -62,10 +84,13 @@ class ExampleRobolectricTest {
     val json = JSONObject(backupFile.readText())
     val exportedMedia = json.getJSONArray("mediaItems")
     assertEquals(1, exportedMedia.length())
-    assertEquals("profile_a", exportedMedia.getJSONObject(0).getString("profileId"))
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
+    assertEquals("Profile A", json.getString("sourceProfileName"))
     assertTrue(!json.has("settings"))
-    assertTrue(json.getJSONObject("profile").getBoolean("isPinEnabled").not())
+    assertTrue(!json.has("profile"))
+    assertEquals("p1:balqyz", json.getJSONObject("avatarAssignments").getString("a1"))
+    assertEquals("Favorit", json.getJSONArray("sourcePlaylists").getJSONObject(0).getString("name"))
+    assertTrue(backupFile.name.contains("profile_a"))
   }
 
 }
