@@ -381,7 +381,7 @@ object BackupUtils {
                         mediaDao.insertMedia(item)
                         existingKeys[identity] = item
                         val sourceAvatar = sourceAssignments.optString(sourceId).takeIf(String::isNotBlank)
-                            ?: sourceAssignments.optString(identity).takeIf(String::isNotBlank)
+                            ?: sourceAssignments.optString(sourceIdentity).takeIf(String::isNotBlank)
                         if (sourceAvatar != null) importedAssignments[TikTodFeedPolicy.assignmentKey(item)] = sourceAvatar
                         importedCount++
                     }
@@ -399,6 +399,8 @@ object BackupUtils {
                         isSuccess = true,
                         message = "Restore berhasil ke profil aktif. Ditambahkan $importedCount video/link, $skippedCount duplikat dilewati. Avatar dan playlist lama tetap dipertahankan."
                     )
+                } else {
+                    BackupResult(isSuccess = false, message = "Format file backup tidak dikenali.")
                 }
             }
             return@withContext result
@@ -411,9 +413,6 @@ object BackupUtils {
      * Reuses an existing source playlist by profile + URL so a locally edited
      * title survives restore. Media IDs are remapped to the retained playlist ID.
      */
-    private fun identityForAvatar(item: MediaItem): String =
-        if (item.url.isNotBlank()) canonicalMediaIdentity(item) else item.id
-
     private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>): List<MediaItem> {
         val playlistDao = database.sourcePlaylistDao()
         val normalized = media.toMutableList()
