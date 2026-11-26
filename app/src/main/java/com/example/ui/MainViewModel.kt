@@ -594,9 +594,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val defaultSettings = ProfileSettings(profileId = defaultProfile.id)
                 profileDao.insertSettings(defaultSettings.copy(serverPin = PinVault.encrypt(getApplication(), defaultSettings.serverPin)))
 
+                // Keep every profile inactive until the user explicitly selects one
+                // on the post-calculator profile chooser.
                 _profiles.value = listOf(defaultProfile)
-                _activeProfile.value = defaultProfile
-                _settings.value = defaultSettings
+                _activeProfile.value = null
+                _mediaList.value = emptyList()
+                _sourcePlaylists.value = emptyList()
             } else {
                 val decodedProfiles = existingProfiles.map { stored ->
                     val wasEncrypted = PinVault.isEncrypted(stored.pin)
@@ -615,17 +618,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     stored.copy(pin = if (lostProtectedPin) "" else pin, isPinEnabled = if (lostProtectedPin) false else stored.isPinEnabled)
                 }
+                // Do not auto-select the default or last-used profile. No account data
+                // becomes active until the user chooses a profile from ProfileLoginScreen.
                 _profiles.value = decodedProfiles
-                val active = decodedProfiles.firstOrNull { it.isDefault } ?: decodedProfiles.first()
-                _activeProfile.value = active
-                _settings.value = loadSettingsForProfile(active.id)
-                _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(active.id)
-                _cloudStreamPluginOrder.value = loadCloudStreamPluginOrder(active.id)
-                _cloudStreamSourceHealth.value.forEach { (pluginId, health) ->
-                    if (health.consecutiveFailures >= 2) scheduleCloudStreamAutoRetry(active.id, pluginId, health.nextAutoRetryAt)
-                }
-                _selectedFilter.value = loadSelectedFilter(active.id)
-                _selectedSort.value = loadSelectedSort(active.id)
+                _activeProfile.value = null
+                _mediaList.value = emptyList()
+                _sourcePlaylists.value = emptyList()
+                _settings.value = ProfileSettings(profileId = "")
             }
 
             if (didRecoverLocalPin) {
@@ -691,7 +690,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addProfile(name: String, avatar: String, pin: String, isPinEnabled: Boolean) {
+    fun addProfile(
+        name: String,
+        avatar: String,
+        pin: String,
+        isPinEnabled: Boolean,
+        switchToNewProfile: Boolean = true
+    ) {
         if (name.isBlank() || (isPinEnabled && !pin.matches(Regex("\\d{4}")))) {
             showStatus(if (name.isBlank()) "Nama profil wajib diisi" else "PIN profil harus tepat 4 digit")
             return
@@ -709,7 +714,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val newSettings = ProfileSettings(profileId = newProfile.id)
             profileDao.insertSettings(newSettings.copy(serverPin = PinVault.encrypt(getApplication(), newSettings.serverPin)))
             _profiles.value = profileDao.getAllProfilesList().map { it.copy(pin = PinVault.decrypt(getApplication(), it.pin)) }
-            switchProfile(newProfile)
+            if (switchToNewProfile) switchProfile(newProfile)
         }
     }
 
