@@ -434,8 +434,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
     DisposableEffect(viewModel) {
         viewModel.setTikTodModeActive(true)
+        viewModel.player.setTikTodLoopEnabled(true)
         onDispose {
             viewModel.player.cancelDrivePreload()
+            viewModel.player.setTikTodLoopEnabled(false)
             viewModel.setTikTodModeActive(false)
         }
     }
@@ -964,19 +966,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     }
                 }
             }
-            if (!isCleanMode && playerState.playbackEnded && playerState.error == null) {
-                Text(
-                    "Video selesai • Geser ke atas untuk video berikutnya",
-                    modifier = Modifier.align(Alignment.Center)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = .72f))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
 
             // TikTok-style creator identity and caption: compact, anchored bottom-left.
             if (!isCleanMode) {
