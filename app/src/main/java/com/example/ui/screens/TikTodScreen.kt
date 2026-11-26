@@ -169,8 +169,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     val playlists by viewModel.sourcePlaylists.collectAsState()
     val playerState by viewModel.player.playerState.collectAsState()
     val latestIsPlaying = rememberUpdatedState(playerState.isPlaying)
-    val currentMedia by viewModel.currentlyPlaying.collectAsState()
-    val store = remember(context) { TikTodLocalStore(context) }
+     val store = remember(context) { TikTodLocalStore(context) }
     val driveIds = remember(playlists) {
         playlists.filter { it.sourceType.equals("DRIVE", true) || MediaSourceClassifier.isGoogleDriveUrl(it.url) }
             .mapTo(hashSetOf()) { it.id }
@@ -374,13 +373,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
 
-    fun startAt(target: Int) {
-        if (feed.isEmpty()) return
-        index = target.coerceIn(0, feed.lastIndex)
+    fun startAt(target: Int, source: List<com.example.data.model.MediaItem> = feed) {
+        if (source.isEmpty()) return
+        val targetIndex = target.coerceIn(0, source.lastIndex)
+        index = targetIndex
         retryUsed = false
         countedView = false
         isSeeking = false
-        val item = feed[index]
+        val item = source[targetIndex]
         viewModel.playMedia(item.copy(progressMs = 0L))
         viewModel.player.setPlaybackSpeed(speed)
         likes = store.likeCount(item.id)
@@ -390,8 +390,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     fun next() {
         if (index + 1 < feed.size) startAt(index + 1)
         else {
-            feed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
-            if (feed.isNotEmpty()) startAt(0)
+            val nextFeed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
+            feed = nextFeed
+            if (nextFeed.isNotEmpty()) startAt(0, nextFeed)
         }
     }
     LaunchedEffect(eligible, activeProfile?.id, selectedTikTodCategory) {
@@ -412,7 +413,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 previousVideoId = store.lastVideoId(profileId)
             )
             sessionInitialized = true
-            if (feed.isNotEmpty()) startAt(0)
+            if (feed.isNotEmpty()) startAt(0, feed)
         } else {
             // Do not interrupt the current video. Newly discovered items are
             // inserted immediately after it and remain prioritized until started.
@@ -435,12 +436,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         val nextFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
         feed = nextFeed
         index = 0
-        if (nextFeed.isNotEmpty()) startAt(0) else viewModel.player.pause()
+        if (nextFeed.isNotEmpty()) startAt(0, nextFeed) else viewModel.player.pause()
     }
 
-    LaunchedEffect(media?.id, currentMedia?.id) {
-        if (media != null && currentMedia?.id != media.id) startAt(index)
-    }
+    // Feed/category effects are the single authority that starts a TikTod item.
+    // Do not restart the current index merely because ViewModel.currentlyPlaying
+    // briefly lags behind Compose feed state; that race can reset playback or
+    // make a stale item appear to be skipped.
     LaunchedEffect(playerState.isPlaying, media?.id, activeProfile?.id) {
         val profileId = activeProfile?.id
         if (media != null && profileId != null && playerState.isPlaying) {
@@ -584,11 +586,14 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     val refreshedFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
                                     if (refreshedFeed.isNotEmpty()) {
                                         feed = refreshedFeed
-                                        startAt(0)
+                                        startAt(0, refreshedFeed)
                                     }
                                 } else if (target == 0 && index == feed.lastIndex) {
-                                    feed = TikTodFeedPolicy.newCycle(eligible, feed.firstOrNull()?.id)
-                                    if (feed.isNotEmpty()) startAt(0)
+                                    // Cycle inside the active category, never fall back to
+                                    // all eligible videos (which breaks Mau Mu / Jedag Jedug).
+                                    val cycledFeed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
+                                    feed = cycledFeed
+                                    if (cycledFeed.isNotEmpty()) startAt(0, cycledFeed)
                                 } else {
                                     target?.let(::startAt)
                                 }
