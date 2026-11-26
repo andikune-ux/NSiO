@@ -921,7 +921,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                val assignedAvatarId = avatarAssignments[media.id]?.takeIf { it.isNotBlank() }
+                val assignedAvatarId = TikTodFeedPolicy.assignmentOwner(media, avatarAssignments)?.takeIf { it.isNotBlank() }
                 val assignedAvatarIndex = assignedAvatarId?.substringAfter(':')?.let { id ->
                     yangManaAvatarIds.indexOf(id).takeIf { it >= 0 }
                 }
@@ -1454,7 +1454,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     selectedUnassignedVideoIds = emptySet()
                                     selectedAssignedVideoIds = emptySet()
                                     showAssignmentTargetMenu = false
-                                    val previewOwner = activeAssignmentPreviewId?.let { avatarAssignments[it] }
+                                    val previewOwner = activeAssignmentPreviewId?.let { id -> eligible.firstOrNull { it.id == id }?.let { TikTodFeedPolicy.assignmentOwner(it, avatarAssignments) } }
                                     if (activeAssignmentPreviewId != null && previewOwner != null && previewOwner != id) {
                                         activeAssignmentPreviewId = null
                                         assignmentPreviewPlayer.stop()
@@ -1464,8 +1464,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         }
                     }
                 }
-                val unassignedVideos = eligible.filter { avatarAssignments[it.id].isNullOrBlank() }
-                val targetAssignedVideos = eligible.filter { avatarAssignments[it.id] == assignmentTargetAvatarId && assignmentTargetAvatarId.isNotBlank() }
+                val unassignedVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, avatarAssignments).isNullOrBlank() }
+                val targetAssignedVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, avatarAssignments) == assignmentTargetAvatarId && assignmentTargetAvatarId.isNotBlank() }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${selectedUnassignedVideoIds.size + selectedAssignedVideoIds.size} video dipilih • ${eligible.size} video tersedia",
                         modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
@@ -1516,7 +1516,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
                                         val checked = if (selectedColumn) item.id in selectedAssignedVideoIds else item.id in selectedUnassignedVideoIds
                                         val isPreview = activeAssignmentPreviewId == item.id
-                                        val ownerLabel = avatarTargetLabels[avatarAssignments[item.id]] ?: "Belum ditentukan"
+                                        val ownerLabel = avatarTargetLabels[TikTodFeedPolicy.assignmentOwner(item, avatarAssignments)] ?: "Belum ditentukan"
                                         Column(
                                             Modifier.fillMaxWidth()
                                                 .clip(RoundedCornerShape(10.dp))
@@ -1654,7 +1654,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         enabled = selectedUnassignedVideoIds.isNotEmpty() && assignmentTargetAvatarId.isNotBlank() && activeProfile != null,
                         onClick = {
                             activeProfile?.id?.let { profileId ->
-                                store.assignVideos(profileId, selectedUnassignedVideoIds, assignmentTargetAvatarId)
+                                store.assignVideos(
+                                    profileId,
+                                    selectedUnassignedVideoIds.mapNotNull { id -> eligible.firstOrNull { it.id == id }?.let(TikTodFeedPolicy::assignmentKey) },
+                                    assignmentTargetAvatarId
+                                )
                                 avatarAssignments = store.avatarAssignments(profileId)
                                 selectedUnassignedVideoIds = emptySet()
                                 selectedAssignedVideoIds = emptySet()
@@ -1666,7 +1670,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         enabled = selectedAssignedVideoIds.isNotEmpty() && activeProfile != null,
                         onClick = {
                             activeProfile?.id?.let { profileId ->
-                                store.assignVideos(profileId, selectedAssignedVideoIds, "")
+                                store.assignVideos(
+                                    profileId,
+                                    selectedAssignedVideoIds.flatMap { id ->
+                                        eligible.firstOrNull { it.id == id }?.let { listOf(TikTodFeedPolicy.assignmentKey(it), it.id) }.orEmpty()
+                                    },
+                                    ""
+                                )
                                 avatarAssignments = store.avatarAssignments(profileId)
                                 selectedAssignedVideoIds = emptySet()
                                 selectedUnassignedVideoIds = emptySet()
@@ -1685,7 +1695,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             1 -> TikTodFeedPolicy.jedagJedug(eligible, avatarAssignments)
             else -> eligible
         }
-        val unassignedManagerVideos = eligible.filter { avatarAssignments[it.id].isNullOrBlank() }
+        val unassignedManagerVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, avatarAssignments).isNullOrBlank() }
         val managerTargetOptions = if (selectedTikTodCategory == 1) {
             avatarTargets.filter { it.first.startsWith("p2:") }
         } else {
@@ -1813,7 +1823,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         contentPadding = PaddingValues(bottom = 14.dp)
                     ) {
                         items(managerShownVideos, key = { it.id }) { item ->
-                            val ownerId = avatarAssignments[item.id].orEmpty()
+                            val ownerId = TikTodFeedPolicy.assignmentOwner(item, avatarAssignments).orEmpty()
                             val ownerLabel = avatarTargetLabels[ownerId] ?: "Belum memiliki Avatar"
                             val isCurrent = media?.id == item.id
                             Card(
@@ -1896,7 +1906,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         Button(
                                             onClick = {
                                                 activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(item.id), managerTargetAvatarId)
+                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item)), managerTargetAvatarId)
                                                     avatarAssignments = store.avatarAssignments(profileId)
                                                     showManagerAddVideos = false
                                                 }
@@ -1909,7 +1919,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         Button(
                                             onClick = {
                                                 activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(item.id), managerTargetAvatarId)
+                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item)), managerTargetAvatarId)
                                                     avatarAssignments = store.avatarAssignments(profileId)
                                                 }
                                             },
@@ -1921,7 +1931,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         OutlinedButton(
                                             onClick = {
                                                 activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(item.id), "")
+                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item), item.id), "")
                                                     avatarAssignments = store.avatarAssignments(profileId)
                                                 }
                                             },
