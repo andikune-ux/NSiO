@@ -290,13 +290,14 @@ object BackupAmanManager {
                     savedFile = fallbackFile
                 }
 
+                val outputFile = savedFile ?: throw IllegalStateException("File TXT tidak berhasil disimpan.")
                 BackupResult(
-                    isSuccess = savedFile.isFile && savedFile.length() > 0L,
-                    filePath = savedFile.absolutePath,
+                    isSuccess = outputFile.isFile && outputFile.length() > 0L,
+                    filePath = outputFile.absolutePath,
                     message = if (hasStorageAccess(context)) {
-                        "Backup Aman TXT berhasil dibuat. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${savedFile.absolutePath}"
+                        "Backup Aman TXT berhasil dibuat. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${outputFile.absolutePath}"
                     } else {
-                        "Backup Aman TXT tersimpan di folder aplikasi. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${savedFile.absolutePath}. $reason"
+                        "Backup Aman TXT tersimpan di folder aplikasi. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${outputFile.absolutePath}. $reason"
                     }
                 )
             } catch (e: Exception) {
