@@ -11,6 +11,7 @@ import com.example.data.model.SourcePlaylist
 import com.example.data.security.PinVault
 import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
+import com.example.tiktok.TikTodFeedPolicy
 import java.net.URI
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +19,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 data class BackupResult(
     val isSuccess: Boolean,
@@ -192,8 +190,8 @@ object BackupUtils {
                 "Backup penuh tidak memiliki pengaturan profil."
             }
         } else {
-            require(root.optJSONObject("profile") != null) {
-                "Backup profil tidak memiliki metadata profil."
+            require(root.optString("sourceProfileName").isNotBlank()) {
+                "Backup profil tidak memiliki identitas sumber."
             }
         }
         val seenIds = HashSet<String>(media.length())
@@ -355,6 +353,7 @@ object BackupUtils {
                     for (i in 0 until mediaArray.length()) {
                         val m = mediaArray.getJSONObject(i)
                         val sourceId = m.optString("id")
+                        val sourceIdentity = canonicalMediaIdentity(MediaItem(id = sourceId, profileId = currentProfileId, title = m.optString("title"), url = m.optString("url"), sourceUrl = m.optString("sourceUrl", ""), thumbnailUrl = m.optString("thumbnailUrl", "")))
                         val item = MediaItem(
                             id = UUID.randomUUID().toString(),
                             profileId = currentProfileId,
@@ -384,7 +383,7 @@ object BackupUtils {
                         existingKeys[identity] = item
                         val sourceAvatar = sourceAssignments.optString(sourceId).takeIf(String::isNotBlank)
                             ?: sourceAssignments.optString(identity).takeIf(String::isNotBlank)
-                        if (sourceAvatar != null) importedAssignments[identityForAvatar(item)] = sourceAvatar
+                        if (sourceAvatar != null) importedAssignments[TikTodFeedPolicy.assignmentKey(item)] = sourceAvatar
                         importedCount++
                     }
 
@@ -413,7 +412,10 @@ object BackupUtils {
      * Reuses an existing source playlist by profile + URL so a locally edited
      * title survives restore. Media IDs are remapped to the retained playlist ID.
      */
-    private fun identityForAvatar(item: MediaItem): String =\n        if (item.url.isNotBlank()) canonicalMediaIdentity(item) else item.id\n\n    private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>): List<MediaItem> {
+    private fun identityForAvatar(item: MediaItem): String =
+        if (item.url.isNotBlank()) canonicalMediaIdentity(item) else item.id
+
+    private suspend fun restoreSourcePlaylists(database: AppDatabase, media: List<MediaItem>): List<MediaItem> {
         val playlistDao = database.sourcePlaylistDao()
         val normalized = media.toMutableList()
         media.filter { it.sourceUrl.isNotBlank() }
