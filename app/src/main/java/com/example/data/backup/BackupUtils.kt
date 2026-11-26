@@ -1,6 +1,7 @@
 package com.example.data.backup
 
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import androidx.room.withTransaction
 import com.example.data.local.AppDatabase
@@ -13,6 +14,7 @@ import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
 import java.net.URI
 import java.util.UUID
+import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -39,6 +41,18 @@ object BackupUtils {
     private fun safeFolderName(name: String): String =
         name.trim().replace(Regex("[^A-Za-z0-9._ -]"), "_")
             .trim('_', '.', ' ').ifBlank { "Profil" }.take(64)
+
+    private fun readProfileAvatarBytes(context: Context, avatar: String): ByteArray? {
+        if (avatar.isBlank()) return null
+        return runCatching {
+            val bytes = when {
+                avatar.startsWith("content://") -> context.contentResolver.openInputStream(Uri.parse(avatar))?.use { it.readBytes() }
+                avatar.startsWith("file://") -> File(Uri.parse(avatar).path ?: return null).takeIf { it.isFile }?.readBytes()
+                else -> null
+            }
+            bytes?.takeIf { it.isNotEmpty() && it.size <= 8 * 1024 * 1024 }
+        }.getOrNull()
+    }
 
     private fun canonicalMediaIdentity(item: MediaItem): String {
         val candidates = listOf(item.url, item.sourceUrl, item.thumbnailUrl).filter(String::isNotBlank)
@@ -84,9 +98,16 @@ object BackupUtils {
             val profileMedia = mediaList.filter { it.profileId == profile.id }
             val payload = JSONObject().apply {
                 put("backupType", "PROFILE_BACKUP")
-                put("version", 3)
+                put("version", 4)
                 put("createdAt", System.currentTimeMillis())
                 put("sourceProfileName", profile.name)
+                val avatarBytes = readProfileAvatarBytes(context, profile.avatarEmoji)
+                put("profile", JSONObject().apply {
+                    put("id", profile.id)
+                    put("name", profile.name)
+                    put("avatarEmoji", profile.avatarEmoji.takeUnless { it.startsWith("content://") || it.startsWith("file://") }.orEmpty())
+                    put("avatarImageBase64", avatarBytes?.let { Base64.getEncoder().encodeToString(it) }.orEmpty())
+                })
                 put("mediaItems", JSONArray().apply {
                     profileMedia.forEach { m ->
                         put(JSONObject().apply {
@@ -208,7 +229,7 @@ object BackupUtils {
             "Jenis file backup tidak didukung."
         }
         val version = root.optInt("version", 1)
-        require(version in 1..3) { "Versi backup $version belum didukung aplikasi ini." }
+        require(version in 1..4) { "Versi backup $version belum didukung aplikasi ini." }
         val media = root.optJSONArray("mediaItems")
             ?: throw IllegalArgumentException("Backup tidak memiliki daftar media.")
         require(media.length() <= 50_000) { "Backup berisi terlalu banyak item media." }
@@ -348,6 +369,32 @@ object BackupUtils {
                 )
                 } else if (backupType == "PROFILE_BACKUP") {
                     require(currentProfileId.isNotBlank()) { "Profil penerima tidak ditemukan." }
+
+                    // Restore personal identity only when the stable profile ID matches.
+                    // A backup from another person must never rename or replace the recipient avatar.
+                    val identity = root.optJSONObject("profile")
+                    if (identity != null && identity.optString("id") == currentProfileId) {
+                        val existingProfile = profileDao.getProfileById(currentProfileId)
+                        if (existingProfile != null) {
+                            val encodedAvatar = identity.optString("avatarImageBase64")
+                            val restoredAvatar = if (encodedAvatar.isNotBlank()) {
+                                val avatarDir = File(context.filesDir, "NSiO/profile-avatars").apply { mkdirs() }
+                                val avatarFile = File(avatarDir, "profile-$currentProfileId.img")
+                                avatarFile.writeBytes(Base64.getDecoder().decode(encodedAvatar))
+                                Uri.fromFile(avatarFile).toString()
+                            } else {
+                                val backupAvatar = identity.optString("avatarEmoji")
+                                if (backupAvatar.isNotBlank() && !backupAvatar.startsWith("content://") && !backupAvatar.startsWith("file://")) {
+                                    backupAvatar
+                                } else existingProfile.avatarEmoji
+                            }
+                            profileDao.insertProfile(existingProfile.copy(
+                                name = identity.optString("name").takeIf { it.isNotBlank() } ?: existingProfile.name,
+                                avatarEmoji = restoredAvatar
+                            ))
+                        }
+                    }
+
                     val existingItems = mediaDao.getMediaListForProfile(currentProfileId)
                     val existingKeys = existingItems.associateBy(::canonicalMediaIdentity).toMutableMap()
                     val playlistDao = database.sourcePlaylistDao()
