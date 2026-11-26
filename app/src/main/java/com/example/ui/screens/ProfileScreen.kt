@@ -273,10 +273,10 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .width(76.dp)
                                 .clickable {
-                                    if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                    if (p.isPinEnabled && activeProfile?.id != p.id && p.pin.matches(Regex("\\d{4}"))) {
                                         pendingSettingsProfile = p
                                         showPinDialogForSettings = true
-                                    } else if (p.isPinEnabled) {
+                                    } else if (p.isPinEnabled && activeProfile?.id != p.id) {
                                         viewModel.showStatus("PIN profil ini belum valid. Pengaturan tidak dapat dibuka.")
                                     } else {
                                         profileSettingsTarget = p
@@ -932,7 +932,7 @@ fun ProfileScreen(
                     enabled = editingProfileName.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().height(44.dp)
                 ) { Text("Simpan Profil") }
-                androidx.compose.material3.HorizontalDivider()
+                Spacer(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)))
                 Text("Keamanan Profil", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Button(
                     onClick = {
@@ -977,7 +977,12 @@ fun ProfileScreen(
             profileName = pinResetProfile?.name.orEmpty(),
             onDismiss = { pinResetProfile = null },
             onSave = { pin ->
-                pinResetProfile?.let { viewModel.updateProfilePin(it, pin) }
+                pinResetProfile?.let { profile ->
+                    viewModel.updateProfilePin(profile, pin)
+                    if (profileSettingsTarget?.id == profile.id) {
+                        profileSettingsTarget = profileSettingsTarget?.copy(pin = pin, isPinEnabled = true)
+                    }
+                }
                 pinResetProfile = null
             }
         )
@@ -1020,7 +1025,12 @@ fun ProfileScreen(
                         }
                         Button(
                             onClick = {
-                                pinDisableProfile?.let { viewModel.disableProfilePin(it) }
+                                pinDisableProfile?.let { profile ->
+                                    viewModel.disableProfilePin(profile)
+                                    if (profileSettingsTarget?.id == profile.id) {
+                                        profileSettingsTarget = profileSettingsTarget?.copy(pin = "", isPinEnabled = false)
+                                    }
+                                }
                                 pinDisableProfile = null
                             },
                             modifier = Modifier.weight(1f),
