@@ -594,7 +594,7 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth().height(44.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Icon(Icons.Default.FilePresent, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(if (isBackupInProgress) "Membuat TXT..." else "Buat Backup Aman (.TXT)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
