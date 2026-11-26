@@ -1079,13 +1079,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     MediaSourceClassifier.isGoogleDriveUrl(url) -> "DRIVE"
                     else -> "REPO"
                 }
-                val playlist = ensureSourcePlaylist(
-                    url,
-                    playlistNameFromUrl(url, result.title),
-                    sourceKind,
-                    profileId,
-                    playlistName
-                )
                 val existingMedia = if (sourceKind == "DRIVE") mediaDao.getMediaListForProfile(profileId) else emptyList()
                 val existingDriveIds = existingMedia.flatMap { item ->
                     listOfNotNull(googleDriveFileId(item.url), googleDriveFileId(item.thumbnailUrl), googleDriveFileId(item.sourceUrl))
@@ -1101,6 +1094,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (uniqueParsedItems.isEmpty()) {
                     return "Semua ${result.items.size} media dari folder Google Drive sudah ada. Tidak ada duplikat yang ditambahkan."
                 }
+                val playlist = ensureSourcePlaylist(
+                    url,
+                    playlistNameFromUrl(url, result.title),
+                    sourceKind,
+                    profileId,
+                    playlistName
+                )
                 val items = uniqueParsedItems.map {
                     it.copy(sourceType = sourceKind, playlistId = playlist.id, sourceUrl = url)
                 }
