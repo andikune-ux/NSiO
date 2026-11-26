@@ -870,35 +870,44 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                val isPrimaryProfile = activeProfile?.isDefault == true
+                val assignedAvatarId = avatarAssignments[media.id]?.takeIf { it.isNotBlank() }
+                val assignedAvatarIndex = assignedAvatarId?.substringAfter(':')?.let { id ->
+                    yangManaAvatarIds.indexOf(id).takeIf { it >= 0 }
+                }
+                val isDefaultKuntiMeong = assignedAvatarId == null || assignedAvatarIndex == null
+                val displayedAvatarName = if (isDefaultKuntiMeong) {
+                    "Kunti Meong Collection"
+                } else {
+                    val baseName = yangManaNames[assignedAvatarIndex!!]
+                    if (assignedAvatarId!!.startsWith("p2:")) "JJ $baseName" else baseName
+                }
+                val displayedAvatarImage = if (isDefaultKuntiMeong) {
+                    PRIMARY_PROFILE_AVATAR_URL
+                } else {
+                    yangManaAvatarImages[assignedAvatarIndex!!]
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = .20f),
-                        modifier = Modifier.size(if (isPrimaryProfile) 34.dp else 30.dp)
+                        modifier = Modifier.size(if (isDefaultKuntiMeong) 34.dp else 30.dp)
                     ) {
-                        if (isPrimaryProfile) {
-                            AsyncImage(
-                                model = PRIMARY_PROFILE_AVATAR_URL,
-                                contentDescription = "Avatar Kunti Meong Collection",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape)
-                            )
-                        } else {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(activeProfile?.avatarEmoji?.takeIf { it.isNotBlank() } ?: "👤", fontSize = 17.sp)
-                            }
-                        }
+                        AsyncImage(
+                            model = displayedAvatarImage,
+                            contentDescription = "Avatar $displayedAvatarName",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        )
                     }
                     Text(
-                        if (isPrimaryProfile) "Kunti Meong Collection" else activeProfile?.name?.takeIf { it.isNotBlank() } ?: "Profil",
+                        displayedAvatarName,
                         color = Color.White,
-                        fontSize = if (isPrimaryProfile) 12.sp else 13.sp,
+                        fontSize = if (isDefaultKuntiMeong) 12.sp else 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        fontFamily = if (isPrimaryProfile) primaryDisplayFont else null,
+                        fontFamily = if (isDefaultKuntiMeong) primaryDisplayFont else null,
                         maxLines = 1
                     )
-                    if (isPrimaryProfile) {
+                    if (isDefaultKuntiMeong) {
                         Icon(
                             imageVector = androidx.compose.material.icons.Icons.Default.Verified,
                             contentDescription = "Terverifikasi",
