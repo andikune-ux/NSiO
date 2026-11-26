@@ -152,6 +152,8 @@ fun ProfileScreen(
                 "primary:NSiO/backup aman"
             isFullBackup ->
                 "primary:Android/data/${context.packageName}/files/NSiO/backup aman"
+            com.example.data.backup.BackupAmanManager.hasStorageAccess(context) ->
+                "primary:NSiO/backup profil"
             else ->
                 "primary:Android/data/${context.packageName}/files/NSiO/Backup"
         }
