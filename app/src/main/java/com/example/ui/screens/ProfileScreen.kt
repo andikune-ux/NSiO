@@ -88,6 +88,9 @@ fun ProfileScreen(
     var pendingSwitchProfile by remember { mutableStateOf<Profile?>(null) }
     var showPinDialogForSwitch by remember { mutableStateOf(false) }
     var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
+    var pinManagementProfile by remember { mutableStateOf<Profile?>(null) }
+    var pinManagementAction by remember { mutableStateOf("CHANGE") }
+    var pinDisableProfile by remember { mutableStateOf<Profile?>(null) }
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
     var isBackupInProgress by remember { mutableStateOf(false) }
     var requestedRestoreType by remember { mutableStateOf("PROFILE_BACKUP") }
@@ -511,14 +514,41 @@ fun ProfileScreen(
                     }
 
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (p.isPinEnabled && !p.pin.matches(Regex("\\d{4}"))) {
+                        Button(
+                            onClick = {
+                                if (p.isPinEnabled && p.pin.matches(Regex("\\d{4}"))) {
+                                    pinManagementProfile = p
+                                    pinManagementAction = "CHANGE"
+                                } else {
+                                    pinResetProfile = p
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(
+                                if (p.isPinEnabled) "Ubah PIN" else "Atur PIN",
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (p.isPinEnabled) {
                             Button(
-                                onClick = { pinResetProfile = p },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                onClick = {
+                                    if (p.pin.matches(Regex("\\d{4}"))) {
+                                        pinManagementProfile = p
+                                        pinManagementAction = "DISABLE"
+                                    } else {
+                                        pinDisableProfile = p
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.height(34.dp)
+                                modifier = Modifier.height(32.dp)
                             ) {
-                                Text("Atur PIN", color = MaterialTheme.colorScheme.onPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Nonaktifkan", color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
                             }
                         }
                         if (!isActive) {
@@ -801,6 +831,55 @@ fun ProfileScreen(
                 pinResetProfile = null
             }
         )
+    }
+
+    // Verify the existing PIN before changing or disabling protection.
+    if (pinManagementProfile != null) {
+        val target = pinManagementProfile!!
+        PinDialog(
+            title = "Verifikasi PIN",
+            subtitle = "Masukkan PIN saat ini untuk profil '${target.name}'.",
+            expectedPin = target.pin,
+            onSuccess = {
+                if (pinManagementAction == "CHANGE") pinResetProfile = target
+                else pinDisableProfile = target
+                pinManagementProfile = null
+            },
+            onDismiss = { pinManagementProfile = null }
+        )
+    }
+
+    if (pinDisableProfile != null) {
+        Dialog(onDismissRequest = { pinDisableProfile = null }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .liquidGlass(shape = RoundedCornerShape(24.dp), alpha = 0.18f, borderAlpha = 0.45f, elevation = 16.dp)
+                    .padding(20.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Nonaktifkan PIN", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "Profil '${pinDisableProfile?.name}' tidak akan meminta PIN saat dipilih atau saat NSiO dibuka.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { pinDisableProfile = null }, modifier = Modifier.weight(1f)) {
+                            Text("Batal")
+                        }
+                        Button(
+                            onClick = {
+                                pinDisableProfile?.let { viewModel.disableProfilePin(it) }
+                                pinDisableProfile = null
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) { Text("Nonaktifkan", color = MaterialTheme.colorScheme.onError) }
+                    }
+                }
+            }
+        }
     }
 
     // Pin Dialog for switching
