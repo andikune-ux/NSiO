@@ -97,6 +97,8 @@ interface IPlayer {
     fun play(url: String, title: String, startPositionMs: Long = 0L, requestHeaders: Map<String, String> = emptyMap(), mediaCacheKey: String? = null)
     fun preloadDriveMedia(url: String, mediaId: String)
     fun cancelDrivePreload()
+    /** Enables repeat-one only while TikTod owns the player. */
+    fun setTikTodLoopEnabled(enabled: Boolean)
     fun togglePlayPause()
     fun pause()
     fun stop()
@@ -210,6 +212,7 @@ class CS3IPlayer(
     private var equalizerGainsDb: FloatArray = FloatArray(10)
     private lateinit var equalizerProcessor: TenBandEqualizerProcessor
     private var logicalRepeatMode: Int = Player.REPEAT_MODE_OFF
+    @Volatile private var tikTodLoopEnabled: Boolean = false
     private var logicalShuffleEnabled: Boolean = false
     private lateinit var httpDataSourceFactory: HttpDataSource.Factory
     private lateinit var mediaSourceFactory: DefaultMediaSourceFactory
@@ -367,6 +370,7 @@ class CS3IPlayer(
                 val restoredVolume = preferences.getFloat("preferred_volume", 1f).coerceIn(0f, 1f)
                 lastNonZeroVolume = preferences.getFloat("last_non_zero_volume", 1f).coerceIn(0.05f, 1f)
                 volume = restoredVolume
+                repeatMode = if (tikTodLoopEnabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
                 preferences.getFloat("preferred_playback_speed", 1f)
                     .takeIf { it.isFinite() && it in 0.25f..8f }
                     ?.let(::setPlaybackSpeed)
@@ -796,6 +800,16 @@ class CS3IPlayer(
     override fun cancelDrivePreload() {
         drivePreloadJob?.cancel()
         drivePreloadJob = null
+    }
+
+    override fun setTikTodLoopEnabled(enabled: Boolean) {
+        tikTodLoopEnabled = enabled
+        // TikTod has exactly one active ExoPlayer item at a time. Repeat that
+        // item in-place; never use the app queue or the user's global Repeat setting.
+        exoPlayer?.repeatMode = if (enabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        if (enabled) {
+            _playerState.value = _playerState.value.copy(playbackEnded = false)
+        }
     }
 
     @Suppress("UNUSED_PARAMETER")
