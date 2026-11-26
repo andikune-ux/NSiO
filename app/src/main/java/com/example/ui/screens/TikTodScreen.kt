@@ -1835,6 +1835,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         ) {
                             items(managerVideos, key = { it.id }) { item ->
                                 val checked = item.id in selectedAssignedVideoIds
+                                val previewDurationMs = if (activeAssignmentPreviewId == item.id && assignmentPreviewState.durationMs > 0L) {
+                                    assignmentPreviewState.durationMs
+                                } else item.durationMs
                                 val isCurrent = media?.id == item.id
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
