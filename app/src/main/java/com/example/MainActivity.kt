@@ -74,6 +74,7 @@ import com.example.ui.screens.MultiviewScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.TikTodScreen
 import com.example.ui.screens.ProfileScreen
+import com.example.ui.screens.ProfileLoginScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.update.AppUpdateManager
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             var unlocked by rememberSaveable { mutableStateOf(false) }
+            var profileLoggedIn by remember { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
             var showShortcutUpdatePopup by remember { mutableStateOf(false) }
@@ -150,6 +152,10 @@ class MainActivity : ComponentActivity() {
                             if (message != null) secretMessage = message
                         }
                     )
+                }
+            } else if (!profileLoggedIn) {
+                MyApplicationTheme(themeMode = "system") {
+                    ProfileLoginScreen(viewModel = viewModel, onLogin = { profileLoggedIn = true })
                 }
             } else {
                 MainApplicationContent(viewModel, isPipMode)
