@@ -10,6 +10,7 @@ import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.security.PinVault
 import com.example.tiktok.TikTodLocalStore
+import com.example.tiktok.TikTodFeedPolicy
 import java.net.URI
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -203,7 +204,7 @@ object BackupUtils {
             val profileId = item.optString("profileId").trim()
             val title = item.optString("title").trim()
             val url = item.optString("url").trim()
-            require(id.isNotEmpty() && profileId.isNotEmpty() && title.isNotEmpty() && url.isNotEmpty()) {
+            require(id.isNotEmpty() && title.isNotEmpty() && url.isNotEmpty()) {
                 "Item media ke-${index + 1} memiliki identitas atau URL kosong."
             }
             require(seenIds.add(id)) { "Backup memiliki ID media duplikat: $id" }
