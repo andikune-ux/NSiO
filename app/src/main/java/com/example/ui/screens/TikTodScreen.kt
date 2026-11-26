@@ -98,6 +98,12 @@ import androidx.compose.animation.core.spring
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 
+private data class TikTodPlaybackSession(
+    val queue: List<com.example.data.model.MediaItem>,
+    val mediaId: String,
+    val positionMs: Long
+)
+
 private const val PRIMARY_PROFILE_AVATAR_URL = "https://raw.githubusercontent.com/andikune-ux/icon/main/1795557171709.jpg"
 private const val RUBIK_PUDDLES_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/rubikpuddles/RubikPuddles-Regular.ttf"
 private const val POPPINS_BOLD_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf"
@@ -294,6 +300,32 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var managerTargetAvatarId by remember { mutableStateOf("p2:balqyz") }
     var lastFeedCategory by remember { mutableIntStateOf(2) }
     var lastFeedAvatarId by remember { mutableStateOf(selectedAvatarId) }
+    var categorySessions by remember(activeProfile?.id) {
+        mutableStateOf<Map<String, TikTodPlaybackSession>>(emptyMap())
+    }
+    var activeCategorySessionKey by remember(activeProfile?.id) { mutableStateOf<String?>(null) }
+
+    fun categorySessionKey(category: Int, avatarId: String = selectedAvatarId): String =
+        if (category == 0) "0:$avatarId" else category.toString()
+
+    fun saveCurrentCategorySession() {
+        if (selectedTikTodCategory == 3) return
+        val current = feed.getOrNull(index) ?: viewModel.currentlyPlaying.value ?: return
+        val key = categorySessionKey(selectedTikTodCategory)
+        categorySessions = categorySessions + (key to TikTodPlaybackSession(
+            queue = feed,
+            mediaId = current.id,
+            positionMs = viewModel.player.playerState.value.currentPositionMs.coerceAtLeast(0L)
+        ))
+    }
+
+    fun switchTikTodCategory(target: Int) {
+        if (target == selectedTikTodCategory) return
+        saveCurrentCategorySession()
+        viewModel.player.pause()
+        viewModel.player.cancelDrivePreload()
+        selectedTikTodCategory = target.coerceIn(0, 3)
+    }
     var previewJumpIndex by remember { mutableIntStateOf(0) }
     DisposableEffect(assignmentPreviewPlayer) {
         onDispose {
@@ -404,7 +436,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
 
-    fun startAt(target: Int, source: List<com.example.data.model.MediaItem> = feed) {
+    fun startAt(
+        target: Int,
+        source: List<com.example.data.model.MediaItem> = feed,
+        startPositionMs: Long = 0L
+    ) {
         if (source.isEmpty()) return
         val targetIndex = target.coerceIn(0, source.lastIndex)
         index = targetIndex
@@ -412,7 +448,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         countedView = false
         isSeeking = false
         val item = source[targetIndex]
-        viewModel.playMedia(item.copy(progressMs = 0L))
+        viewModel.playMedia(item.copy(progressMs = startPositionMs.coerceAtLeast(0L)))
         viewModel.player.setPlaybackSpeed(speed)
         likes = store.likeCount(item.id)
         views = store.viewCount(item.id)
@@ -420,12 +456,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     }
     fun next() {
         if (index + 1 < feed.size) startAt(index + 1)
-        else {
-            val nextFeed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
-            feed = nextFeed
-            if (selectedTikTodCategory == 2) forYouFeed = nextFeed
-            if (nextFeed.isNotEmpty()) startAt(0, nextFeed)
-        }
     }
     // The For You order is a session-level queue. Switching tabs must never
     // rebuild it or restart its current item; only newly discovered videos are appended.
@@ -461,31 +491,54 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
 
-    // A tab change only changes which queue will be used after the current
-    // video. Keep the currently playing item at the head and do not call playMedia.
-    LaunchedEffect(selectedTikTodCategory, categorySource, forYouFeed) {
+    // Each playable category owns an independent queue, current item and playhead.
+    // Category switches pause the shared player and restore only the target session.
+    LaunchedEffect(selectedTikTodCategory, selectedAvatarId, categorySource, forYouFeed) {
         if (selectedTikTodCategory == 3) {
             viewModel.player.pause()
+            activeCategorySessionKey = null
             lastFeedCategory = selectedTikTodCategory
+            lastFeedAvatarId = selectedAvatarId
             return@LaunchedEffect
         }
 
-        val currentItem = feed.getOrNull(index)
+        val key = categorySessionKey(selectedTikTodCategory)
         val targetQueue = if (selectedTikTodCategory == 2) forYouFeed else categorySource
-        val retainedCurrent = currentItem ?: viewModel.currentlyPlaying.value
-        feed = when {
-            retainedCurrent != null ->
-                listOf(retainedCurrent) + targetQueue.filterNot { it.id == retainedCurrent.id }
-            targetQueue.isNotEmpty() -> targetQueue
-            else -> emptyList()
+        if (targetQueue.isEmpty()) {
+            feed = emptyList()
+            index = 0
+            return@LaunchedEffect
         }
-        index = 0
+
+        val targetIds = targetQueue.mapTo(hashSetOf()) { it.id }
+        if (activeCategorySessionKey == key) {
+            val currentId = feed.getOrNull(index)?.id
+            val updatedQueue = feed.filter { it.id in targetIds } +
+                targetQueue.filterNot { item -> feed.any { it.id == item.id } }
+            feed = updatedQueue
+            val retainedIndex = currentId?.let { id -> updatedQueue.indexOfFirst { it.id == id } } ?: -1
+            if (retainedIndex >= 0) index = retainedIndex
+            else if (updatedQueue.isNotEmpty()) startAt(0, updatedQueue)
+            return@LaunchedEffect
+        }
+
+        val saved = categorySessions[key]
+        val restoredQueue = if (saved != null) {
+            saved.queue.filter { it.id in targetIds } +
+                targetQueue.filterNot { item -> saved.queue.any { it.id == item.id } }
+        } else targetQueue
+        feed = restoredQueue
+        val restoredIndex = saved?.mediaId?.let { id ->
+            restoredQueue.indexOfFirst { it.id == id }
+        } ?: -1
+        index = restoredIndex.takeIf { it >= 0 } ?: 0
+        activeCategorySessionKey = key
         lastFeedCategory = selectedTikTodCategory
         lastFeedAvatarId = selectedAvatarId
 
-        // Only the first-ever session initialization may start a video here.
-        if (retainedCurrent == null && !sessionInitialized && feed.isNotEmpty()) {
-            startAt(0, feed)
+        if (restoredQueue.isNotEmpty()) {
+            val position = if (restoredIndex >= 0) saved?.positionMs ?: 0L else 0L
+            startAt(index, restoredQueue, position)
         }
     }
 
@@ -610,8 +663,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         val horizontalThreshold = (size.width * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
                         if (kotlin.math.abs(latestHorizontalOffset) >= horizontalThreshold) {
                             // Swipe changes one category at a time; stop at the first and last category.
-                            selectedTikTodCategory = (selectedTikTodCategory + if (latestHorizontalOffset < 0f) 1 else -1)
-                                .coerceIn(0, tikTodCategories.lastIndex)
+                            switchTikTodCategory((selectedTikTodCategory + if (latestHorizontalOffset < 0f) 1 else -1)
+                                .coerceIn(0, tikTodCategories.lastIndex))
                         }
                     } else if (!multiTouch && verticalDragStarted) {
                         val distanceThreshold = (size.height * 0.18f).coerceAtLeast(viewConfiguration.touchSlop * 2f)
@@ -619,7 +672,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         val refreshAtTop = offset > distanceThreshold && index == 0 && feed.isNotEmpty()
                         val target = when {
                             offset < -distanceThreshold && index < feed.lastIndex -> index + 1
-                            offset < -distanceThreshold && index == feed.lastIndex && feed.isNotEmpty() -> 0
                             offset > distanceThreshold && index > 0 -> index - 1
                             else -> null
                         }
@@ -631,20 +683,20 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     tween(durationMillis = 220)
                                 ) { swipeOffset = value }
                                 if (refreshAtTop) {
-                                    // Pulling down beyond the first item refreshes only
-                                    // the feed order; all other swipe directions stay unchanged.
+                                    // Manual pull-to-refresh is the only in-feed action
+                                    // that reshuffles the active category's queue.
                                     val refreshedFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
                                     if (refreshedFeed.isNotEmpty()) {
                                         feed = refreshedFeed
                                         if (selectedTikTodCategory == 2) forYouFeed = refreshedFeed
+                                        index = 0
+                                        activeCategorySessionKey = categorySessionKey(selectedTikTodCategory)
+                                        categorySessions = categorySessions + (
+                                            categorySessionKey(selectedTikTodCategory) to
+                                                TikTodPlaybackSession(refreshedFeed, refreshedFeed.first().id, 0L)
+                                        )
                                         startAt(0, refreshedFeed)
                                     }
-                                } else if (target == 0 && index == feed.lastIndex) {
-                                    // Cycle inside the active category, never fall back to
-                                    // all eligible videos (which breaks Mau Mu / Jedag Jedug).
-                                    val cycledFeed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
-                                    feed = cycledFeed
-                                    if (cycledFeed.isNotEmpty()) startAt(0, cycledFeed)
                                 } else {
                                     target?.let(::startAt)
                                 }
@@ -710,7 +762,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 tikTodCategories.forEachIndexed { categoryIndex, category ->
                     val selected = selectedTikTodCategory == categoryIndex
                     Column(
-                        modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                        modifier = Modifier.clickable { switchTikTodCategory(categoryIndex) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -1202,7 +1254,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     tikTodCategories.forEachIndexed { categoryIndex, category ->
                         val selected = selectedTikTodCategory == categoryIndex
                         Column(
-                            modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                            modifier = Modifier.clickable { switchTikTodCategory(categoryIndex) },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -1273,7 +1325,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 tikTodCategories.forEachIndexed { categoryIndex, category ->
                     val selected = selectedTikTodCategory == categoryIndex
                     Column(
-                        modifier = Modifier.clickable { selectedTikTodCategory = categoryIndex },
+                        modifier = Modifier.clickable { switchTikTodCategory(categoryIndex) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
