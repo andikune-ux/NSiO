@@ -143,6 +143,20 @@ object BackupUtils {
             for (root in roots) {
                 try {
                     val directory = File(root, profileFolder)
+                    val previousDirectory = root.listFiles()?.firstOrNull { candidate ->
+                        candidate.isDirectory && candidate.name != profileFolder &&
+                            File(candidate, fileName).isFile
+                    }
+                    if (!directory.exists() && previousDirectory != null) {
+                        val previousContents = previousDirectory.listFiles().orEmpty()
+                        val containsOnlyThisProfileBackup = previousContents.all {
+                            it.name == fileName || it.name == fileName + ".tmp"
+                        }
+                        if (containsOnlyThisProfileBackup) {
+                            // Rename the existing profile folder when it belongs only to this profile.
+                            previousDirectory.renameTo(directory)
+                        }
+                    }
                     if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory) {
                         throw IllegalStateException("Folder backup tidak dapat dibuat.")
                     }
@@ -160,7 +174,10 @@ object BackupUtils {
                     // copy from a previous name folder only after the new file is verified.
                     root.listFiles()?.filter { it.isDirectory }?.forEach { oldDirectory ->
                         val oldCopy = File(oldDirectory, fileName)
-                        if (oldCopy.absolutePath != target.absolutePath && oldCopy.isFile) oldCopy.delete()
+                        if (oldCopy.absolutePath != target.absolutePath && oldCopy.isFile) {
+                            oldCopy.delete()
+                            if (oldDirectory.listFiles().isNullOrEmpty()) oldDirectory.delete()
+                        }
                     }
                     saved = target
                     break
