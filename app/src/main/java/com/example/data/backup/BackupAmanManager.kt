@@ -212,17 +212,57 @@ object BackupAmanManager {
         return sb.toString()
     }
 
+    /**
+     * Exports a technical application-structure note for AI assistance.
+     * It deliberately excludes personal profile names, media URLs, PINs and restore JSON.
+     */
     suspend fun createBackupAman(context: Context, database: AppDatabase): BackupResult =
         withContext(Dispatchers.IO) {
             try {
-                val profiles = database.profileDao().getAllProfilesList()
-                val settings = database.profileDao().getAllSettingsList()
-                val media = database.mediaDao().getAllMediaList()
-
-                val json = buildRestoreJson(profiles, settings, media).toString(2)
-                val text = buildText(context, profiles, settings, media, json)
-                val fileName = "Backup Aman-NSiO-${jakartaFormat("dd-MM-yyyy_HH-mm-ss").format(Date())}.TXT"
-
+                val profileCount = database.profileDao().getAllProfilesList().size
+                val mediaCount = database.mediaDao().getAllMediaList().size
+                val text = buildString {
+                    appendLine(LINE)
+                    appendLine("NSiO - BACKUP AMAN / STRUKTUR APLIKASI")
+                    appendLine(LINE)
+                    appendLine("Tanggal Export  : ${jakartaFormat("dd-MM-yyyy HH:mm:ss").format(Date())}")
+                    appendLine("Versi Aplikasi  : ${BuildConfig.VERSION_NAME}")
+                    appendLine("Package         : ${context.packageName}")
+                    appendLine("Perangkat       : ${Build.MANUFACTURER} ${Build.MODEL}")
+                    appendLine("Android         : ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+                    appendLine()
+                    appendLine("RINGKASAN LOKAL (AGREGAT, TANPA IDENTITAS)")
+                    appendLine("- Jumlah profil : $profileCount")
+                    appendLine("- Jumlah media  : $mediaCount")
+                    appendLine()
+                    appendLine("ALUR AKSES")
+                    appendLine("1. Kalkulator biasa menerima kode akses tersembunyi.")
+                    appendLine("2. Kode benar membuka NSiO dan halaman pemilihan profil.")
+                    appendLine("3. Profil dengan PIN meminta PIN profil; profil tanpa PIN langsung dibuka.")
+                    appendLine("4. Beranda hanya menampilkan data setelah profil dipilih.")
+                    appendLine()
+                    appendLine("STRUKTUR FITUR UTAMA")
+                    appendLine("- Profil: identitas foto/nama, PIN profil, pemisahan data.")
+                    appendLine("- Beranda: katalog media, pencarian, filter, dan pengurutan.")
+                    appendLine("- Pemutar: pemutaran media, subtitle, kualitas, rasio, dan kontrol gestur.")
+                    appendLine("- TikTod: Untuk Mu, Jedag Jedug, Avatar, dan pengelolaan video per Avatar.")
+                    appendLine("- Sumber: Google Drive, playlist, file lokal, server, dan plugin CloudStream.")
+                    appendLine("- Penyimpanan: database lokal, cache media bersama, dan unduhan.")
+                    appendLine("- Cadangan: Backup Profil JSON dan Backup Aman TXT untuk konteks teknis AI.")
+                    appendLine()
+                    appendLine("BATASAN PRIVASI")
+                    appendLine("File ini TIDAK memuat nama/foto profil, ID akun, PIN, token, URL video,")
+                    appendLine("daftar playlist pribadi, histori tontonan, atau blok JSON untuk pemulihan.")
+                    appendLine("File ini adalah ringkasan struktur aplikasi, bukan file restore.")
+                    appendLine()
+                    appendLine("PETUNJUK UNTUK AI ASISTEN")
+                    appendLine("Gunakan informasi ini sebagai konteks teknis NSiO. Minta source code")
+                    appendLine("atau log terkait secara terpisah jika analisis membutuhkan detail implementasi.")
+                    appendLine(LINE)
+                    appendLine("END OF STRUCTURE REPORT")
+                    appendLine(LINE)
+                }
+                val fileName = "Backup Aman-NSiO-Struktur-${jakartaFormat("dd-MM-yyyy_HH-mm-ss").format(Date())}.TXT"
                 var savedFile: File? = null
                 var reason = ""
 
@@ -232,11 +272,8 @@ object BackupAmanManager {
                         dir.mkdirs()
                         val target = File(dir, fileName)
                         target.writeText(text, Charsets.UTF_8)
-                        if (target.exists() && target.length() > 0L) {
-                            savedFile = target
-                        } else {
-                            reason = "File tidak berhasil dibuat di folder publik."
-                        }
+                        if (target.isFile && target.length() > 0L) savedFile = target
+                        else reason = "File tidak berhasil dibuat di folder publik."
                     } catch (e: Exception) {
                         reason = "Gagal menulis ke folder publik: ${e.localizedMessage}"
                     }
@@ -244,38 +281,27 @@ object BackupAmanManager {
                     reason = "Izin akses penyimpanan belum diberikan."
                 }
 
-                if (savedFile != null) {
-                    return@withContext BackupResult(
-                        isSuccess = true,
-                        filePath = savedFile.absolutePath,
-                        message = "Backup Aman berhasil disimpan!\n" +
-                            "Lokasi: ${savedFile.absolutePath}\n" +
-                            "${profiles.size} Profil, ${media.size} Media."
-                    )
-                }
-
-                // Fallback: folder app, supaya data tetap aman walau izin belum ada
-                val fallbackDir = File(context.getExternalFilesDir(null) ?: context.filesDir, PUBLIC_FOLDER)
-                fallbackDir.mkdirs()
-                val fallbackFile = File(fallbackDir, fileName)
-                fallbackFile.writeText(text, Charsets.UTF_8)
-
-                if (!hasStorageAccess(context)) {
-                    openStorageAccessSettings(context)
+                if (savedFile == null) {
+                    val fallbackDir = File(context.getExternalFilesDir(null) ?: context.filesDir, PUBLIC_FOLDER)
+                    if (!fallbackDir.exists()) fallbackDir.mkdirs()
+                    val fallbackFile = File(fallbackDir, fileName)
+                    fallbackFile.writeText(text, Charsets.UTF_8)
+                    if (!hasStorageAccess(context)) openStorageAccessSettings(context)
+                    savedFile = fallbackFile
                 }
 
                 BackupResult(
-                    isSuccess = true,
-                    filePath = fallbackFile.absolutePath,
-                    message = "Backup tersimpan sementara di folder app:\n${fallbackFile.absolutePath}\n" +
-                        "$reason Beri izin \"Akses semua file\", lalu tekan tombol lagi " +
-                        "untuk menyimpan ke /sdcard/NSiO/backup aman/"
+                    isSuccess = savedFile.isFile && savedFile.length() > 0L,
+                    filePath = savedFile.absolutePath,
+                    message = if (hasStorageAccess(context)) {
+                        "Backup Aman TXT berhasil dibuat. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${savedFile.absolutePath}"
+                    } else {
+                        "Backup Aman TXT tersimpan di folder aplikasi. File berisi ringkasan struktur NSiO tanpa data pribadi. Lokasi: ${savedFile.absolutePath}. $reason"
+                    }
                 )
             } catch (e: Exception) {
-                BackupResult(
-                    isSuccess = false,
-                    message = "Gagal membuat Backup Aman: ${e.localizedMessage}"
-                )
+                BackupResult(isSuccess = false, message = "Gagal membuat Backup Aman: ${e.localizedMessage}")
             }
         }
+
 }
