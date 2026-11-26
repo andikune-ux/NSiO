@@ -114,18 +114,41 @@ object BackupUtils {
             }
             rootObj.put("mediaItems", mediaArray)
 
-            // Prefer the visible shared folder so the restore picker can reopen it directly.
-            // Keep the app-specific folder as a safe fallback when all-files access is unavailable.
-            val baseDir = if (BackupAmanManager.hasStorageAccess(context)) {
-                File(Environment.getExternalStorageDirectory(), "NSiO/backup profil")
-            } else {
-                File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup")
-            }
-            if (!baseDir.exists()) baseDir.mkdirs()
+            // Try the visible shared folder first, but never treat the permission
+            // flag as proof that the directory is actually writable on this device.
+            // Fall back to app-specific storage if public storage creation/write fails.
+            val directories = buildList {
+                if (BackupAmanManager.hasStorageAccess(context)) {
+                    add(File(Environment.getExternalStorageDirectory(), "NSiO/backup profil"))
+                }
+                add(File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup"))
+                add(File(context.filesDir, "NSiO/Backup"))
+            }.distinctBy { it.absolutePath }
 
             val fileName = "backup_${profile.name.replace(" ", "_")}_${getTimestamp()}.json"
-            val file = File(baseDir, fileName)
-            file.writeText(rootObj.toString(2))
+            var savedFile: File? = null
+            var lastWriteError: Exception? = null
+            for (directory in directories) {
+                try {
+                    if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory) {
+                        throw IllegalStateException("Folder tidak dapat dibuat: ${directory.absolutePath}")
+                    }
+                    val candidate = File(directory, fileName)
+                    candidate.writeText(rootObj.toString(2), Charsets.UTF_8)
+                    if (!candidate.isFile || candidate.length() == 0L) {
+                        throw IllegalStateException("File backup tidak berhasil ditulis.")
+                    }
+                    savedFile = candidate
+                    break
+                } catch (e: Exception) {
+                    lastWriteError = e
+                }
+            }
+
+            val file = savedFile ?: throw IllegalStateException(
+                "Semua lokasi penyimpanan backup gagal digunakan.",
+                lastWriteError
+            )
 
             BackupResult(
                 isSuccess = true,
