@@ -5,12 +5,11 @@ import com.example.data.model.MediaSourceClassifier
 import java.net.URI
 import java.net.URLDecoder
 
-/** Feed policy: Drive videos only, randomized without repetition inside one cycle. */
+/** Feed policy: Drive videos and photos, randomized without repetition inside one cycle. */
 internal object TikTodFeedPolicy {
     fun eligible(items: List<MediaItem>, profileId: String, drivePlaylistIds: Set<String>): List<MediaItem> =
         items.asSequence()
             .filter { it.profileId == profileId }
-            .filterNot { it.type.equals("PHOTO", true) }
             .filter { MediaSourceClassifier.isDriveMedia(it, drivePlaylistIds) }
             .distinctBy { it.id }
             .toList()
@@ -28,7 +27,7 @@ internal object TikTodFeedPolicy {
     fun assignmentOwner(item: MediaItem, assignments: Map<String, String>): String? =
         assignments[assignmentKey(item)] ?: assignments[item.id]
 
-    /** Counts unique source videos per Avatar; every requested Avatar is returned, including empty ones. */
+    /** Counts unique Drive media per Avatar; every requested Avatar is returned, including empty ones. */
     fun avatarVideoCounts(
         items: List<MediaItem>,
         assignments: Map<String, String>,
