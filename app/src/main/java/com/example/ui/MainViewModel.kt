@@ -2457,6 +2457,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }.getOrDefault(false)) {
                 loadInitialData()
             }
+            if (res.isSuccess && recipientProfileId.isNotBlank()) {
+                val refreshedProfiles = profileDao.getAllProfilesList().map { stored ->
+                    stored.copy(pin = PinVault.decrypt(getApplication(), stored.pin))
+                }
+                _profiles.value = refreshedProfiles
+                _activeProfile.value = refreshedProfiles.firstOrNull { it.id == recipientProfileId }
+            }
             showStatus(res.message)
             onResult(res)
         }
