@@ -28,6 +28,18 @@ internal object TikTodFeedPolicy {
     fun assignmentOwner(item: MediaItem, assignments: Map<String, String>): String? =
         assignments[assignmentKey(item)] ?: assignments[item.id]
 
+    /** Counts unique source videos per Avatar; every requested Avatar is returned, including empty ones. */
+    fun avatarVideoCounts(
+        items: List<MediaItem>,
+        assignments: Map<String, String>,
+        avatarIds: Collection<String>
+    ): Map<String, Int> {
+        val uniqueVideos = items.distinctBy(::assignmentKey)
+        return avatarIds.associateWith { avatarId ->
+            uniqueVideos.count { assignmentOwner(it, assignments) == avatarId }
+        }
+    }
+
     private fun googleDriveFileId(rawUrl: String): String? {
         if (!MediaSourceClassifier.isGoogleDriveUrl(rawUrl)) return null
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null

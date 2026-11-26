@@ -49,6 +49,9 @@ interface MediaDao {
     @Query("UPDATE media_items SET progressMs = :progressMs, durationMs = CASE WHEN :durationMs > 0 THEN :durationMs ELSE durationMs END, lastWatchedAt = CASE WHEN :progressMs > 0 THEN :watchedAt ELSE lastWatchedAt END WHERE id = :id")
     suspend fun updatePlaybackState(id: String, progressMs: Long, durationMs: Long, watchedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE media_items SET durationMs = :durationMs WHERE id = :id AND durationMs <= 0 AND :durationMs > 0")
+    suspend fun updateDurationIfMissing(id: String, durationMs: Long)
+
     @Delete
     suspend fun deleteMedia(item: MediaItem)
 

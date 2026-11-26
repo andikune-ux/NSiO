@@ -41,6 +41,26 @@ class TikTodFeedPolicyTest {
     }
 
     @Test
+    fun avatarVideoCountsIncludeEmptyAvatarsAndCountSharedDriveFileOnce() {
+        val first = item("same-drive-file")
+        val duplicateEntry = first.copy(id = "second-entry")
+        val other = item("other-drive-file")
+        val assignments = mapOf(
+            "drive:same-drive-file" to "p1:balqyz",
+            "drive:other-drive-file" to "p2:rawina"
+        )
+
+        assertEquals(
+            mapOf("p1:balqyz" to 1, "p1:ayu" to 0, "p2:rawina" to 1),
+            TikTodFeedPolicy.avatarVideoCounts(
+                listOf(first, duplicateEntry, other),
+                assignments,
+                listOf("p1:balqyz", "p1:ayu", "p2:rawina")
+            )
+        )
+    }
+
+    @Test
     fun jedagJedugCombinesAllPageTwoAvatarsAndExcludesPageOne() {
         val items = listOf(item("page-one"), item("jj-one"), item("jj-two"))
         val assignments = mapOf(

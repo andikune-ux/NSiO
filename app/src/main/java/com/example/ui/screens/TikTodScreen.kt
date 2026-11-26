@@ -254,6 +254,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
     val avatarTargetLabels = remember(avatarTargets) { avatarTargets.toMap() }
+    val avatarVideoCounts = remember(eligible, effectiveAvatarAssignments, avatarTargets) {
+        TikTodFeedPolicy.avatarVideoCounts(
+            eligible,
+            effectiveAvatarAssignments,
+            avatarTargets.map { it.first }
+        )
+    }
     // Fixed muted highlighter/charcoal palette; colors stay with their avatar in both modes.
     val yangManaNameColors = listOf(
         Color(0xFFD18BA7), // Balqyz - dusty pink
@@ -298,6 +305,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             activeAssignmentPreviewId = null
             assignmentPreviewPlayer.stop()
         }
+    }
+    LaunchedEffect(activeAssignmentPreviewId, assignmentPreviewState.durationMs) {
+        val previewId = activeAssignmentPreviewId ?: return@LaunchedEffect
+        val actualDuration = assignmentPreviewState.durationMs
+        if (actualDuration > 0L) viewModel.savePreviewMediaDuration(previewId, actualDuration)
     }
     LaunchedEffect(activeAssignmentPreviewId, showYangManaSettings, showVideoManager) {
         if (activeAssignmentPreviewId == null || (!showYangManaSettings && !showVideoManager)) return@LaunchedEffect
@@ -1455,7 +1467,24 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                 showAssignmentTargetMenu = false
                             })
                             avatarTargets.forEach { (id, label) ->
-                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                val videoCount = avatarVideoCounts[id] ?: 0
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Text(label, modifier = Modifier.weight(1f), maxLines = 1)
+                                            Text(
+                                                "$videoCount video",
+                                                color = if (videoCount > 0) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.48f),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    },
+                                    onClick = {
                                     assignmentTargetAvatarId = id
                                     selectedUnassignedVideoIds = emptySet()
                                     selectedAssignedVideoIds = emptySet()
@@ -1522,6 +1551,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
                                         val checked = if (selectedColumn) item.id in selectedAssignedVideoIds else item.id in selectedUnassignedVideoIds
                                         val isPreview = activeAssignmentPreviewId == item.id
+                                        val previewDurationMs = if (isPreview && assignmentPreviewState.durationMs > 0L) {
+                                            assignmentPreviewState.durationMs
+                                        } else item.durationMs
                                         val ownerLabel = avatarTargetLabels[TikTodFeedPolicy.assignmentOwner(item, effectiveAvatarAssignments)] ?: "Belum ditentukan"
                                         Column(
                                             Modifier.fillMaxWidth()
@@ -1851,7 +1883,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                             }
                                             Surface(Modifier.align(Alignment.BottomEnd).padding(6.dp),
                                                 shape = RoundedCornerShape(5.dp), color = Color.Black.copy(alpha = 0.68f)) {
-                                                Text(formatTikTodTime(item.durationMs),
+                                                Text(formatTikTodTime(previewDurationMs),
                                                     Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
                                                     color = Color.White, fontSize = 8.sp)
                                             }
@@ -2005,6 +2037,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                             ) {
                                 items(unassignedManagerVideos, key = { it.id }) { item ->
                                     val checked = item.id in selectedUnassignedVideoIds
+                                    val previewDurationMs = if (activeAssignmentPreviewId == item.id && assignmentPreviewState.durationMs > 0L) {
+                                        assignmentPreviewState.durationMs
+                                    } else item.durationMs
                                     Card(
                                         modifier = Modifier.fillMaxWidth().clickable {
                                             selectedUnassignedVideoIds = if (checked) {
@@ -2045,7 +2080,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                 }
                                                 Surface(Modifier.align(Alignment.BottomEnd).padding(6.dp),
                                                     shape = RoundedCornerShape(5.dp), color = Color.Black.copy(alpha = 0.68f)) {
-                                                    Text(formatTikTodTime(item.durationMs),
+                                                    Text(formatTikTodTime(previewDurationMs),
                                                         Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
                                                         color = Color.White, fontSize = 8.sp)
                                                 }

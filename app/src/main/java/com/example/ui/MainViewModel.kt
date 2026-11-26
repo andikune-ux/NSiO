@@ -2209,6 +2209,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Stores duration learned by a silent TikTod preview without changing watch progress/history. */
+    fun savePreviewMediaDuration(mediaId: String, durationMs: Long) {
+        if (mediaId.isBlank() || durationMs <= 0L || mediaId.startsWith("external-stream:")) return
+        viewModelScope.launch {
+            runCatching { mediaDao.updateDurationIfMissing(mediaId, durationMs) }
+        }
+    }
+
     private fun persistPlaybackProgress(item: MediaItem, positionMs: Long, durationMs: Long) {
         // External streams have no catalog row; CloudStream catalog items do.
         if (item.id.startsWith("external-stream:")) return
