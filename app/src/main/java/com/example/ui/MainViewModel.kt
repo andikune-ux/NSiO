@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.example.data.backup.BackupResult
+import com.example.data.backup.BackupAmanManager
 import com.example.data.backup.BackupUtils
 import com.example.data.download.VideoDownloadManager
 import com.example.data.extractor.LinkExtractor
@@ -2425,7 +2426,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Profile backups are additive imports into the active profile. Do not reload
             // startup state here because that would reset the active profile to the default.
             if (runCatching {
-                    org.json.JSONObject(jsonContent).optString("backupType") == "FULL_BACKUP_AMAN"
+                    org.json.JSONObject(BackupAmanManager.extractJson(jsonContent)).optString("backupType") == "FULL_BACKUP_AMAN"
                 }.getOrDefault(false)) {
                 loadInitialData()
             }
