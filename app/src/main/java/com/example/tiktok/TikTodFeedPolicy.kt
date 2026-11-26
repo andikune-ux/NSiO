@@ -16,7 +16,7 @@ internal object TikTodFeedPolicy {
 
     /**
      * Drive media is keyed by its actual file ID so two imported rows pointing to
-     * the same Drive video cannot be assigned to different Avatars.
+     * the same Drive file cannot be assigned to different Avatars.
      */
     fun assignmentKey(item: MediaItem): String {
         val driveId = listOf(item.url, item.sourceUrl, item.thumbnailUrl)
@@ -40,13 +40,14 @@ internal object TikTodFeedPolicy {
     }
 
     private fun googleDriveFileId(rawUrl: String): String? {
-        if (!MediaSourceClassifier.isGoogleDriveUrl(rawUrl)) return null
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
+        val host = uri.host?.lowercase().orEmpty()
+        if (!MediaSourceClassifier.isGoogleDriveUrl(rawUrl) && host != "lh3.googleusercontent.com") return null
         val segments = uri.path.orEmpty().split('/').filter(String::isNotBlank)
         val markers = setOf("folders", "d", "document", "spreadsheets", "presentation")
         val markerIndex = segments.indexOfFirst { it in markers }
         if (markerIndex >= 0 && markerIndex + 1 < segments.size) {
-            return segments[markerIndex + 1].takeIf(String::isNotBlank)
+            return segments[markerIndex + 1].substringBefore("=").takeIf(String::isNotBlank)
         }
         val idValue = uri.rawQuery.orEmpty().split('&')
             .firstOrNull { it.substringBefore('=') == "id" }
