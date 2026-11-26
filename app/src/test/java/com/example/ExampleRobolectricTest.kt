@@ -75,15 +75,14 @@ class ExampleRobolectricTest {
       mediaList = media,
       sourcePlaylists = listOf(SourcePlaylist(id = "playlist_a", profileId = "profile_a", name = "Favorit", url = "https://example.com/list")),
       profilePin = "",
-      avatarAssignments = mapOf("a1" to "p1:balqyz")
+      avatarAssignments = mapOf("a1" to "p1:balqyz"),
+      storageRootOverride = File(context.cacheDir, "profile-backup-test-root")
     )
 
-    println("PROFILE_BACKUP_TEST_RESULT: success=${result.isSuccess}, path=${result.filePath}, message=${result.message}")
     assertTrue(result.message, result.isSuccess)
     val backupFile = File(result.filePath)
     assertTrue(backupFile.isFile)
     val json = JSONObject(backupFile.readText())
-    println("PROFILE_BACKUP_TEST_JSON: $json")
     val exportedMedia = json.getJSONArray("mediaItems")
     assertEquals(1, exportedMedia.length())
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
