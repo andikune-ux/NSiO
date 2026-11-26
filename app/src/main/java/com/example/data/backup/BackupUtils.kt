@@ -110,9 +110,12 @@ object BackupUtils {
                     }
                 })
                 // Export only Avatar ownership relationships, not profile IDs or preferences.
+                val ownedAssignmentKeys = profileMedia.flatMap { item ->
+                    listOf(item.id, TikTodFeedPolicy.assignmentKey(item), canonicalMediaIdentity(item))
+                }.toSet()
                 put("avatarAssignments", JSONObject().apply {
                     avatarAssignments.forEach { (mediaKey, avatarId) ->
-                        if (mediaKey.isNotBlank() && avatarId.isNotBlank()) put(mediaKey, avatarId)
+                        if (mediaKey in ownedAssignmentKeys && avatarId.isNotBlank()) put(mediaKey, avatarId)
                     }
                 })
             }
