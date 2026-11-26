@@ -34,6 +34,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import coil.compose.AsyncImage
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
@@ -116,7 +118,18 @@ fun ProfileLoginScreen(
                                     ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(profile.avatarEmoji, style = MaterialTheme.typography.headlineSmall)
+                                    if (profile.avatarEmoji.startsWith("content://") ||
+                                        profile.avatarEmoji.startsWith("https://") ||
+                                        profile.avatarEmoji.startsWith("file://")
+                                    ) {
+                                        AsyncImage(
+                                            model = profile.avatarEmoji,
+                                            contentDescription = "Avatar profil",
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                        )
+                                    } else {
+                                        Text(profile.avatarEmoji, style = MaterialTheme.typography.headlineSmall)
+                                    }
                                 }
                                 Column(
                                     modifier = Modifier.weight(1f).padding(start = 14.dp),
