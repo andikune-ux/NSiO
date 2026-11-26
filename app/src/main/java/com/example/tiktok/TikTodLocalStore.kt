@@ -39,7 +39,13 @@ internal class TikTodLocalStore(context: Context) {
             avatarAssignments(profileId).forEach { (mediaId, ownerId) -> put(mediaId, ownerId) }
         }
         mediaIds.filter(String::isNotBlank).forEach { mediaId ->
-            if (avatarId.isBlank()) json.remove(mediaId) else json.put(mediaId, avatarId)
+            if (avatarId.isBlank()) {
+                json.remove(mediaId)
+            } else {
+                val currentOwner = json.optString(mediaId)
+                // Never silently move a video from one Avatar to another.
+                if (!json.has(mediaId) || currentOwner == avatarId) json.put(mediaId, avatarId)
+            }
         }
         prefs.edit().putString("avatar_assignments:$profileId", json.toString()).apply()
     }
