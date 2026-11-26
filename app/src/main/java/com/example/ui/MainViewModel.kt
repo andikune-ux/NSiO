@@ -730,6 +730,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun disableProfilePin(profile: Profile) {
+        viewModelScope.launch {
+            val latest = profileDao.getProfileById(profile.id) ?: run {
+                showStatus("Profil tidak ditemukan")
+                return@launch
+            }
+            profileDao.updateProfile(latest.copy(pin = "", isPinEnabled = false))
+            _profiles.value = profileDao.getAllProfilesList().map {
+                it.copy(pin = PinVault.decrypt(getApplication(), it.pin))
+            }
+            if (_activeProfile.value?.id == latest.id) {
+                _activeProfile.value = latest.copy(pin = "", isPinEnabled = false)
+            }
+            showStatus("PIN profil '${latest.name}' berhasil dinonaktifkan")
+        }
+    }
+
     private suspend fun loadSettingsForProfile(profileId: String): ProfileSettings {
         val stored = profileDao.getSettings(profileId) ?: ProfileSettings(profileId = profileId)
         val wasEncrypted = PinVault.isEncrypted(stored.serverPin)
