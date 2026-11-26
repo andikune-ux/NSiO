@@ -184,7 +184,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var selectedAvatarId by remember(activeProfile?.id) {
         mutableStateOf(activeProfile?.id?.let(store::selectedAvatar) ?: "p1:balqyz")
     }
-    var selectedAssignmentVideoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedUnassignedVideoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedAssignedVideoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var assignmentTargetAvatarId by remember { mutableStateOf("p1:balqyz") }
     var showAssignmentTargetMenu by remember { mutableStateOf(false) }
     var activeAssignmentPreviewId by remember { mutableStateOf<String?>(null) }
@@ -1344,7 +1345,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         ModalBottomSheet(
             onDismissRequest = {
                 showYangManaSettings = false
-                selectedAssignmentVideoIds = emptySet()
+                selectedUnassignedVideoIds = emptySet()
+                selectedAssignedVideoIds = emptySet()
                 showAssignmentTargetMenu = false
             },
             containerColor = Color(0xFF17181D),
@@ -1368,24 +1370,38 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         DropdownMenu(expanded = showAssignmentTargetMenu, onDismissRequest = { showAssignmentTargetMenu = false }) {
                             DropdownMenuItem(text = { Text("Belum ditentukan") }, onClick = {
                                 assignmentTargetAvatarId = ""
+                                selectedUnassignedVideoIds = emptySet()
+                                selectedAssignedVideoIds = emptySet()
                                 showAssignmentTargetMenu = false
                             })
                             avatarTargets.forEach { (id, label) ->
                                 DropdownMenuItem(text = { Text(label) }, onClick = {
                                     assignmentTargetAvatarId = id
+                                    selectedUnassignedVideoIds = emptySet()
+                                    selectedAssignedVideoIds = emptySet()
                                     showAssignmentTargetMenu = false
+                                    val previewOwner = activeAssignmentPreviewId?.let { avatarAssignments[it] }
+                                    if (activeAssignmentPreviewId != null && previewOwner != null && previewOwner != id) {
+                                        activeAssignmentPreviewId = null
+                                        assignmentPreviewPlayer.stop()
+                                    }
                                 })
                             }
                         }
                     }
                 }
+                val unassignedVideos = eligible.filter { avatarAssignments[it.id].isNullOrBlank() }
+                val targetAssignedVideos = eligible.filter { avatarAssignments[it.id] == assignmentTargetAvatarId && assignmentTargetAvatarId.isNotBlank() }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${selectedAssignmentVideoIds.size} video dipilih • ${eligible.size} video tersedia",
+                    Text("${selectedUnassignedVideoIds.size + selectedAssignedVideoIds.size} video dipilih • ${eligible.size} video tersedia",
                         modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
                     TextButton(onClick = {
-                        selectedAssignmentVideoIds = if (selectedAssignmentVideoIds.size == eligible.size) emptySet()
-                        else eligible.map { it.id }.toSet()
-                    }) { Text(if (eligible.isNotEmpty() && selectedAssignmentVideoIds.size == eligible.size) "Batal semua" else "Pilih semua") }
+                        selectedUnassignedVideoIds = if (selectedUnassignedVideoIds.size == unassignedVideos.size) emptySet()
+                        else unassignedVideos.map { it.id }.toSet()
+                        selectedAssignedVideoIds = emptySet()
+                    }, enabled = unassignedVideos.isNotEmpty()) {
+                        Text(if (unassignedVideos.isNotEmpty() && selectedUnassignedVideoIds.size == unassignedVideos.size) "Batal pilih" else "Pilih semua")
+                    }
                 }
                 if (eligible.isEmpty()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -1424,7 +1440,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
-                                        val checked = item.id in selectedAssignmentVideoIds
+                                        val checked = if (selectedColumn) item.id in selectedAssignedVideoIds else item.id in selectedUnassignedVideoIds
                                         val isPreview = activeAssignmentPreviewId == item.id
                                         val ownerLabel = avatarTargetLabels[avatarAssignments[item.id]] ?: "Belum ditentukan"
                                         Column(
@@ -1432,10 +1448,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(Color.White.copy(alpha = if (checked) 0.13f else 0.045f))
                                                 .clickable {
-                                                    selectedAssignmentVideoIds = if (checked) {
-                                                        selectedAssignmentVideoIds - item.id
+                                                    if (selectedColumn) {
+                                                        selectedAssignedVideoIds = if (checked) selectedAssignedVideoIds - item.id else selectedAssignedVideoIds + item.id
                                                     } else {
-                                                        selectedAssignmentVideoIds + item.id
+                                                        selectedUnassignedVideoIds = if (checked) selectedUnassignedVideoIds - item.id else selectedUnassignedVideoIds + item.id
                                                     }
                                                     if (activeAssignmentPreviewId == item.id) {
                                                         activeAssignmentPreviewId = null
@@ -1508,8 +1524,11 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                 Checkbox(
                                                     checked = checked,
                                                     onCheckedChange = { value ->
-                                                        selectedAssignmentVideoIds = if (value) selectedAssignmentVideoIds + item.id
-                                                        else selectedAssignmentVideoIds - item.id
+                                                        if (selectedColumn) {
+                                                            selectedAssignedVideoIds = if (value) selectedAssignedVideoIds + item.id else selectedAssignedVideoIds - item.id
+                                                        } else {
+                                                            selectedUnassignedVideoIds = if (value) selectedUnassignedVideoIds + item.id else selectedUnassignedVideoIds - item.id
+                                                        }
                                                     },
                                                     modifier = Modifier.size(25.dp),
                                                     colors = CheckboxDefaults.colors(
@@ -1542,27 +1561,45 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         }
                         AssignmentVideoColumn(
                             title = "Belum dipilih",
-                            items = eligible.filterNot { it.id in selectedAssignmentVideoIds },
+                            items = unassignedVideos,
                             selectedColumn = false
                         )
                         AssignmentVideoColumn(
                             title = "Sudah dipilih",
-                            items = eligible.filter { it.id in selectedAssignmentVideoIds },
+                            items = targetAssignedVideos,
                             selectedColumn = true
                         )
                     }
                 }
-                Button(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                    enabled = selectedAssignmentVideoIds.isNotEmpty() && activeProfile != null,
-                    onClick = {
-                        activeProfile?.id?.let { profileId ->
-                            store.assignVideos(profileId, selectedAssignmentVideoIds, assignmentTargetAvatarId)
-                            avatarAssignments = store.avatarAssignments(profileId)
-                            selectedAssignmentVideoIds = emptySet()
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        enabled = selectedUnassignedVideoIds.isNotEmpty() && assignmentTargetAvatarId.isNotBlank() && activeProfile != null,
+                        onClick = {
+                            activeProfile?.id?.let { profileId ->
+                                store.assignVideos(profileId, selectedUnassignedVideoIds, assignmentTargetAvatarId)
+                                avatarAssignments = store.avatarAssignments(profileId)
+                                selectedUnassignedVideoIds = emptySet()
+                                selectedAssignedVideoIds = emptySet()
+                            }
                         }
-                    }
-                ) { Text(if (assignmentTargetAvatarId.isBlank()) "Keluarkan dari Avatar" else "Terapkan ke Avatar") }
+                    ) { Text("Simpan ke Avatar", maxLines = 1) }
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = selectedAssignedVideoIds.isNotEmpty() && activeProfile != null,
+                        onClick = {
+                            activeProfile?.id?.let { profileId ->
+                                store.assignVideos(profileId, selectedAssignedVideoIds, "")
+                                avatarAssignments = store.avatarAssignments(profileId)
+                                selectedAssignedVideoIds = emptySet()
+                                selectedUnassignedVideoIds = emptySet()
+                            }
+                        }
+                    ) { Text("Keluarkan dari Avatar", maxLines = 1) }
+                }
             }
         }
     }
