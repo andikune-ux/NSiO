@@ -304,6 +304,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         mutableStateOf<Map<String, TikTodPlaybackSession>>(emptyMap())
     }
     var activeCategorySessionKey by remember(activeProfile?.id) { mutableStateOf<String?>(null) }
+    var preloadAllowedMediaId by remember { mutableStateOf<String?>(null) }
 
     fun categorySessionKey(category: Int, avatarId: String = selectedAvatarId): String =
         if (category == 0) "0:$avatarId" else category.toString()
@@ -324,6 +325,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         saveCurrentCategorySession()
         viewModel.player.pause()
         viewModel.player.cancelDrivePreload()
+        preloadAllowedMediaId = null
         selectedTikTodCategory = target.coerceIn(0, 3)
     }
     var previewJumpIndex by remember { mutableIntStateOf(0) }
@@ -420,8 +422,10 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     // Keep a small progressive preload for exactly one upcoming Drive video.
     // The shared player cache is reused when the item becomes the active video.
     LaunchedEffect(media?.id) {
-        // Navigation changes do not trigger another Drive preload. Only a real
-        // playback item change advances the one-item preload window.
+        // Only explicit video navigation or manual refresh may advance the
+        // preload window. A category restore never starts a speculative Drive request.
+        if (media == null || preloadAllowedMediaId != media.id) return@LaunchedEffect
+        preloadAllowedMediaId = null
         val nextItem = feed.getOrNull(index + 1) ?: return@LaunchedEffect
         if (MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
             viewModel.player.preloadDriveMedia(nextItem.url, nextItem.id)
@@ -439,7 +443,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     fun startAt(
         target: Int,
         source: List<com.example.data.model.MediaItem> = feed,
-        startPositionMs: Long = 0L
+        startPositionMs: Long = 0L,
+        preloadNext: Boolean = true
     ) {
         if (source.isEmpty()) return
         val targetIndex = target.coerceIn(0, source.lastIndex)
@@ -448,7 +453,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         countedView = false
         isSeeking = false
         val item = source[targetIndex]
-        viewModel.playMedia(item.copy(progressMs = startPositionMs.coerceAtLeast(0L)))
+        preloadAllowedMediaId = item.id.takeIf { preloadNext }
+        if (viewModel.currentlyPlaying.value?.id == item.id) {
+            viewModel.player.seekTo(startPositionMs.coerceAtLeast(0L))
+            if (!viewModel.player.playerState.value.isPlaying) viewModel.player.togglePlayPause()
+        } else {
+            viewModel.playMedia(item.copy(progressMs = startPositionMs.coerceAtLeast(0L)))
+        }
         viewModel.player.setPlaybackSpeed(speed)
         likes = store.likeCount(item.id)
         views = store.viewCount(item.id)
@@ -514,7 +525,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             feed = updatedQueue
             val retainedIndex = currentId?.let { id -> updatedQueue.indexOfFirst { it.id == id } } ?: -1
             if (retainedIndex >= 0) index = retainedIndex
-            else if (updatedQueue.isNotEmpty()) startAt(0, updatedQueue)
+            else if (updatedQueue.isNotEmpty()) startAt(0, updatedQueue, preloadNext = false)
             return@LaunchedEffect
         }
 
@@ -522,7 +533,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         val restoredQueue = if (saved != null) {
             saved.queue.filter { it.id in targetIds } +
                 targetQueue.filterNot { item -> saved.queue.any { it.id == item.id } }
-        } else targetQueue
+        } else if (selectedTikTodCategory == 2) targetQueue else TikTodFeedPolicy.newCycle(targetQueue)
         feed = restoredQueue
         val restoredIndex = saved?.mediaId?.let { id ->
             restoredQueue.indexOfFirst { it.id == id }
@@ -534,7 +545,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
         if (restoredQueue.isNotEmpty()) {
             val position = if (restoredIndex >= 0) saved?.positionMs ?: 0L else 0L
-            startAt(index, restoredQueue, position)
+            startAt(index, restoredQueue, position, preloadNext = false)
         }
     }
 
