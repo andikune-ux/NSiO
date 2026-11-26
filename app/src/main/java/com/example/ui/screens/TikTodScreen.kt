@@ -423,6 +423,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         else {
             val nextFeed = TikTodFeedPolicy.newCycle(categorySource, feed.firstOrNull()?.id)
             feed = nextFeed
+            if (selectedTikTodCategory == 2) forYouFeed = nextFeed
             if (nextFeed.isNotEmpty()) startAt(0, nextFeed)
         }
     }
@@ -635,6 +636,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                     val refreshedFeed = TikTodFeedPolicy.newCycle(categorySource, media?.id)
                                     if (refreshedFeed.isNotEmpty()) {
                                         feed = refreshedFeed
+                                        if (selectedTikTodCategory == 2) forYouFeed = refreshedFeed
                                         startAt(0, refreshedFeed)
                                     }
                                 } else if (target == 0 && index == feed.lastIndex) {
