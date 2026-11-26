@@ -1805,13 +1805,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                 val checked = item.id in selectedAssignedVideoIds
                                 val isCurrent = media?.id == item.id
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().clickable {
-                                        selectedAssignedVideoIds = if (checked) {
-                                            selectedAssignedVideoIds - item.id
-                                        } else {
-                                            selectedAssignedVideoIds + item.id
-                                        }
-                                    },
+                                    modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFF222630)),
                                     border = BorderStroke(
@@ -1843,8 +1837,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                         Icon(Icons.Default.Verified, contentDescription = "Dipilih",
                                                             tint = Color(0xFF10251F), modifier = Modifier.size(17.dp))
                                                     } else {
-                                                        Icon(Icons.Default.PlayArrow, contentDescription = "Pilih video",
-                                                            tint = Color.White, modifier = Modifier.size(17.dp))
+                                                        Text("○", color = Color.White, fontSize = 19.sp,
+                                                            fontWeight = FontWeight.Bold)
                                                     }
                                                 }
                                             }
@@ -1865,6 +1859,43 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                         Text(item.title.ifBlank { "Video tanpa judul" }, color = Color.White,
                                             fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
                                             overflow = TextOverflow.Ellipsis, lineHeight = 14.sp)
+                                        Row(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    selectedAssignedVideoIds = if (checked) {
+                                                        selectedAssignedVideoIds - item.id
+                                                    } else {
+                                                        selectedAssignedVideoIds + item.id
+                                                    }
+                                                }
+                                                .padding(horizontal = 2.dp, vertical = 1.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Checkbox(
+                                                checked = checked,
+                                                onCheckedChange = { selected ->
+                                                    selectedAssignedVideoIds = if (selected) {
+                                                        selectedAssignedVideoIds + item.id
+                                                    } else {
+                                                        selectedAssignedVideoIds - item.id
+                                                    }
+                                                },
+                                                modifier = Modifier.size(28.dp),
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = Color(0xFF8ED8BF),
+                                                    uncheckedColor = Color.White.copy(alpha = 0.62f),
+                                                    checkmarkColor = Color(0xFF10251F)
+                                                )
+                                            )
+                                            Text(
+                                                "Tandai untuk keluarkan",
+                                                color = if (checked) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.72f),
+                                                fontSize = 9.sp,
+                                                fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
+                                                maxLines = 1
+                                            )
+                                        }
                                         OutlinedButton(
                                             onClick = {
                                                 activeAssignmentPreviewId = item.id
