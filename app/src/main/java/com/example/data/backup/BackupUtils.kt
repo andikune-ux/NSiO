@@ -37,7 +37,7 @@ object BackupUtils {
     )
 
     private fun safeFolderName(name: String): String =
-        name.trim().replace(Regex("[^A-Za-z0-9._ -]"), "_").replace(Regex("\\s+"), "_")
+        name.trim().replace(Regex("[^A-Za-z0-9._ -]"), "_")
             .trim('_', '.', ' ').ifBlank { "Profil" }.take(64)
 
     private fun canonicalMediaIdentity(item: MediaItem): String {
@@ -189,7 +189,7 @@ object BackupUtils {
                 "Backup penuh tidak memiliki pengaturan profil."
             }
         } else {
-            require(root.optString("sourceProfileName").isNotBlank()) {
+            require(root.optString("sourceProfileName").isNotBlank() || root.optJSONObject("profile") != null) {
                 "Backup profil tidak memiliki identitas sumber."
             }
         }
