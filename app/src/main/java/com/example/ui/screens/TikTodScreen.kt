@@ -427,7 +427,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         if (media == null || preloadAllowedMediaId != media.id) return@LaunchedEffect
         preloadAllowedMediaId = null
         val nextItem = feed.getOrNull(index + 1) ?: return@LaunchedEffect
-        if (MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
+        if (!nextItem.type.equals("PHOTO", true) && MediaSourceClassifier.isGoogleDriveUrl(nextItem.url)) {
             viewModel.player.preloadDriveMedia(nextItem.url, nextItem.id)
         }
     }
@@ -455,8 +455,19 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         countedView = false
         isSeeking = false
         val item = source[targetIndex]
-        preloadAllowedMediaId = item.id.takeIf { preloadNext }
-        if (viewModel.currentlyPlaying.value?.id == item.id) {
+        val isPhotoItem = item.type.equals("PHOTO", true)
+        preloadAllowedMediaId = item.id.takeIf { preloadNext && !isPhotoItem }
+        if (isPhotoItem) {
+            // A photo is a still feed item: stop video/audio and never ask ExoPlayer to open it.
+            viewModel.player.cancelDrivePreload()
+            viewModel.player.pause()
+            viewModel.player.setTikTodLoopEnabled(false)
+        } else {
+            viewModel.player.setTikTodLoopEnabled(true)
+        }
+        if (isPhotoItem) {
+            // The photo is rendered directly by Compose below; the last video item remains untouched.
+        } else if (viewModel.currentlyPlaying.value?.id == item.id) {
             viewModel.player.seekTo(startPositionMs.coerceAtLeast(0L))
             if (!viewModel.player.playerState.value.isPlaying) viewModel.player.togglePlayPause()
         } else {
@@ -557,7 +568,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     // make a stale item appear to be skipped.
     LaunchedEffect(playerState.isPlaying, media?.id, activeProfile?.id) {
         val profileId = activeProfile?.id
-        if (media != null && profileId != null && playerState.isPlaying) {
+        if (media != null && !media.type.equals("PHOTO", true) && profileId != null && playerState.isPlaying) {
             // "Viewed" means playback actually started, not that the video completed.
             store.markVideoStarted(profileId, media.id)
             if (!countedView) {
@@ -567,7 +578,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         }
     }
     LaunchedEffect(playerState.error, media?.id) {
-        if (media != null && playerState.error != null && !retryUsed) {
+        if (media != null && !media.type.equals("PHOTO", true) && playerState.error != null && !retryUsed) {
             // Keep the existing single automatic retry. If it fails, the UI
             // exposes the source error plus explicit Retry and Skip actions.
             retryUsed = true
@@ -615,9 +626,13 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         Modifier.fillMaxSize().background(Color.Black)
             .pointerInput(media?.id, speed) {
                 detectTapGestures(
-                    onTap = { viewModel.player.togglePlayPause() },
-                    onLongPress = { viewModel.player.setPlaybackSpeed(3f) },
-                    onPress = { try { awaitRelease() } finally { viewModel.player.setPlaybackSpeed(speed) } }
+                    onTap = { if (media?.type?.equals("PHOTO", true) != true) viewModel.player.togglePlayPause() },
+                    onLongPress = { if (media?.type?.equals("PHOTO", true) != true) viewModel.player.setPlaybackSpeed(3f) },
+                    onPress = {
+                        try { awaitRelease() } finally {
+                            if (media?.type?.equals("PHOTO", true) != true) viewModel.player.setPlaybackSpeed(speed)
+                        }
+                    }
                 )
             }
             .pointerInput(feed, index) {
@@ -822,6 +837,18 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 )
                 if (selectedTikTodCategory == 0) TextButton(onClick = { switchTikTodCategory(3) }) { Text("Pilih Avatar") }
             }
+        } else if (media.type.equals("PHOTO", true)) {
+            // Drive photos are rendered as still images; they remain until the user swipes.
+            AsyncImage(
+                model = media.url.takeIf { it.isNotBlank() } ?: media.thumbnailUrl,
+                contentDescription = media.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            if (!isCleanMode) {
+                // Do not expose stale player controls or buffering state over a photo.
+                Unit
+            }
         } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize()
@@ -974,6 +1001,19 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
+                if (media.type.equals("PHOTO", true)) {
+                    Text(
+                        "FOTO",
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color.Black.copy(alpha = 0.48f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 val assignedAvatarId = TikTodFeedPolicy.assignmentOwner(media, effectiveAvatarAssignments)?.takeIf { it.isNotBlank() }
                 val assignedAvatarIndex = assignedAvatarId?.substringAfter(':')?.let { id ->
                     yangManaAvatarIds.indexOf(id).takeIf { it >= 0 }
