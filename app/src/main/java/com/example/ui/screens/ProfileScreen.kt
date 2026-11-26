@@ -90,6 +90,7 @@ fun ProfileScreen(
     var pinResetProfile by remember { mutableStateOf<Profile?>(null) }
     var backupStatusMessage by remember { mutableStateOf<String?>(null) }
     var isBackupInProgress by remember { mutableStateOf(false) }
+    var requestedRestoreType by remember { mutableStateOf("PROFILE_BACKUP") }
 
     val context = LocalContext.current
     val restoreScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -119,6 +120,16 @@ fun ProfileScreen(
                                 output.toString(Charsets.UTF_8.name())
                             } ?: throw IllegalArgumentException("File tidak dapat dibuka.")
                         }
+                        val actualBackupType = org.json.JSONObject(
+                            com.example.data.backup.BackupAmanManager.extractJson(jsonContent)
+                        ).optString("backupType")
+                        require(actualBackupType == requestedRestoreType) {
+                            if (requestedRestoreType == "FULL_BACKUP_AMAN") {
+                                "File yang dipilih bukan Backup Aman. Pilih file TXT dari folder Backup Aman."
+                            } else {
+                                "File yang dipilih bukan Backup Profil. Pilih file JSON dari folder Backup Profil."
+                            }
+                        }
                         viewModel.restoreBackup(jsonContent) { res ->
                             backupStatusMessage = res.message
                             isBackupInProgress = false
@@ -132,8 +143,18 @@ fun ProfileScreen(
         }
     }
 
-    fun openRestorePicker() {
+    fun openRestorePicker(backupType: String) {
         if (isBackupInProgress) return
+        requestedRestoreType = backupType
+        val isFullBackup = backupType == "FULL_BACKUP_AMAN"
+        val documentId = when {
+            isFullBackup && com.example.data.backup.BackupAmanManager.hasStorageAccess(context) ->
+                "primary:NSiO/backup aman"
+            isFullBackup ->
+                "primary:Android/data/${context.packageName}/files/NSiO/backup aman"
+            else ->
+                "primary:Android/data/${context.packageName}/files/NSiO/Backup"
+        }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
@@ -142,7 +163,7 @@ fun ProfileScreen(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
                     "android.provider.extra.INITIAL_URI",
-                    Uri.parse("content://com.android.externalstorage.documents/document/primary%3A")
+                    Uri.parse("content://com.android.externalstorage.documents/document/${Uri.encode(documentId)}")
                 )
             }
         }
@@ -667,7 +688,7 @@ fun ProfileScreen(
             }
         }
 
-        // Restore backup file picker
+        // Restore actions open the matching backup folder directly.
         item {
             Box(
                 modifier = Modifier
@@ -698,34 +719,49 @@ fun ProfileScreen(
                         )
                     }
                     Text(
-                        text = "Pilih file backup JSON atau TXT dari penyimpanan internal. Pemulihan dimulai setelah file dipilih.",
+                        text = "Setiap tombol langsung membuka folder sesuai jenis backup. File dengan jenis yang tidak sesuai akan ditolak.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
-                        onClick = { openRestorePicker() },
+                        onClick = { openRestorePicker("FULL_BACKUP_AMAN") },
                         enabled = !isBackupInProgress,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(42.dp)
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
                     ) {
-                        if (isBackupInProgress) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Memulihkan...", color = MaterialTheme.colorScheme.onPrimary, fontSize = 12.sp)
-                        } else {
-                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Pilih File untuk Dipulihkan", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
+                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (isBackupInProgress) "Memulihkan..." else "Pulihkan Backup Aman",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { openRestorePicker("PROFILE_BACKUP") },
+                        enabled = !isBackupInProgress,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {
+                        Icon(Icons.Default.Backup, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (isBackupInProgress) "Memulihkan..." else "Pulihkan Backup Profil",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
