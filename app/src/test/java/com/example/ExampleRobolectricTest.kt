@@ -78,10 +78,12 @@ class ExampleRobolectricTest {
       avatarAssignments = mapOf("a1" to "p1:balqyz")
     )
 
+    println("PROFILE_BACKUP_TEST_RESULT: success=${result.isSuccess}, path=${result.filePath}, message=${result.message}")
     assertTrue(result.message, result.isSuccess)
     val backupFile = File(result.filePath)
     assertTrue(backupFile.isFile)
     val json = JSONObject(backupFile.readText())
+    println("PROFILE_BACKUP_TEST_JSON: $json")
     val exportedMedia = json.getJSONArray("mediaItems")
     assertEquals(1, exportedMedia.length())
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
