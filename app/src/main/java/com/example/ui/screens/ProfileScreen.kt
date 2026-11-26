@@ -253,6 +253,72 @@ fun ProfileScreen(
             }
         }
 
+        // Profile identities stay at the top, above cloud and backup settings.
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Akun Profil",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(profiles, key = { it.id }) { p ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier
+                                .width(76.dp)
+                                .clickable {
+                                    profileSettingsTarget = p
+                                    editingProfileName = p.name
+                                    editingProfileAvatar = p.avatarEmoji
+                                }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (activeProfile?.id == p.id)
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .border(
+                                        if (activeProfile?.id == p.id) 2.dp else 1.dp,
+                                        if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (p.avatarEmoji.startsWith("content://") ||
+                                    p.avatarEmoji.startsWith("https://") ||
+                                    p.avatarEmoji.startsWith("file://")
+                                ) {
+                                    AsyncImage(
+                                        model = p.avatarEmoji,
+                                        contentDescription = "Avatar ${p.name}",
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                    )
+                                } else {
+                                    Text(p.avatarEmoji, fontSize = 24.sp)
+                                }
+                            }
+                            Text(
+                                p.name,
+                                fontSize = 10.sp,
+                                fontWeight = if (activeProfile?.id == p.id) FontWeight.Bold else FontWeight.Medium,
+                                color = if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Cloud Google Account Card
         item {
             Box(
@@ -418,72 +484,6 @@ fun ProfileScreen(
                                     fontSize = 12.sp
                                 )
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Profile identities stay at the top, above cloud and backup settings.
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Akun Profil",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(profiles, key = { it.id }) { p ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier
-                                .width(76.dp)
-                                .clickable {
-                                    profileSettingsTarget = p
-                                    editingProfileName = p.name
-                                    editingProfileAvatar = p.avatarEmoji
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (activeProfile?.id == p.id)
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                    .border(
-                                        if (activeProfile?.id == p.id) 2.dp else 1.dp,
-                                        if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (p.avatarEmoji.startsWith("content://") ||
-                                    p.avatarEmoji.startsWith("https://") ||
-                                    p.avatarEmoji.startsWith("file://")
-                                ) {
-                                    AsyncImage(
-                                        model = p.avatarEmoji,
-                                        contentDescription = "Avatar ${p.name}",
-                                        modifier = Modifier.fillMaxSize().clip(CircleShape)
-                                    )
-                                } else {
-                                    Text(p.avatarEmoji, fontSize = 24.sp)
-                                }
-                            }
-                            Text(
-                                p.name,
-                                fontSize = 10.sp,
-                                fontWeight = if (activeProfile?.id == p.id) FontWeight.Bold else FontWeight.Medium,
-                                color = if (activeProfile?.id == p.id) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1
-                            )
                         }
                     }
                 }
