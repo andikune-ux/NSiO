@@ -1,47 +1,32 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import coil.compose.AsyncImage
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.model.Profile
 import com.example.ui.MainViewModel
 
@@ -50,12 +35,27 @@ fun ProfileLoginScreen(
     viewModel: MainViewModel,
     onLogin: () -> Unit
 ) {
+    val context = LocalContext.current
     val profiles by viewModel.profiles.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
     var pendingLoginProfileId by remember { mutableStateOf<String?>(null) }
     var pinProfile by remember { mutableStateOf<Profile?>(null) }
     var pinValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+    var showAddProfile by remember { mutableStateOf(false) }
+    var newProfileName by remember { mutableStateOf("") }
+    var newProfileAvatar by remember { mutableStateOf("👤") }
+    var newProfilePin by remember { mutableStateOf("") }
+    var newProfilePinEnabled by remember { mutableStateOf(false) }
+
+    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            newProfileAvatar = uri.toString()
+        }
+    }
 
     LaunchedEffect(activeProfile?.id, pendingLoginProfileId) {
         if (pendingLoginProfileId != null && activeProfile?.id == pendingLoginProfileId) {
@@ -81,13 +81,14 @@ fun ProfileLoginScreen(
             Text("NSiO", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
             Text("Pilih Profil", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "Pilih profil untuk melanjutkan ke beranda.",
+                "Pilih akun yang ingin digunakan. Data baru ditampilkan setelah profil berhasil dibuka.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             if (profiles.isEmpty()) {
-                Text("Memuat profil…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CircularProgressIndicator()
+                Text("Memuat daftar profil…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
@@ -112,9 +113,8 @@ fun ProfileLoginScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
-                                    modifier = Modifier.size(48.dp).background(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                        CircleShape
+                                    modifier = Modifier.size(54.dp).background(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), CircleShape
                                     ),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -124,7 +124,7 @@ fun ProfileLoginScreen(
                                     ) {
                                         AsyncImage(
                                             model = profile.avatarEmoji,
-                                            contentDescription = "Avatar profil",
+                                            contentDescription = "Foto profil ${profile.name}",
                                             modifier = Modifier.fillMaxSize().clip(CircleShape)
                                         )
                                     } else {
@@ -150,6 +150,17 @@ fun ProfileLoginScreen(
                             }
                         }
                     }
+                    item {
+                        OutlinedButton(
+                            onClick = { showAddProfile = true },
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Tambah Profil")
+                        }
+                    }
                 }
             }
         }
@@ -157,15 +168,11 @@ fun ProfileLoginScreen(
 
     pinProfile?.let { profile ->
         AlertDialog(
-            onDismissRequest = {
-                pinProfile = null
-                pinValue = ""
-                pinError = null
-            },
+            onDismissRequest = { pinProfile = null; pinValue = ""; pinError = null },
             title = { Text("PIN ${profile.name}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Masukkan PIN untuk membuka profil ini.")
+                    Text("Masukkan PIN profil untuk melanjutkan.")
                     OutlinedTextField(
                         value = pinValue,
                         onValueChange = { value ->
@@ -180,34 +187,82 @@ fun ProfileLoginScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         isError = pinError != null
                     )
-                    if (pinError != null) {
-                        Text(pinError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    pinError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
+            },
+            confirmButton = {
+                Button(enabled = pinValue.length == 4, onClick = {
+                    if (pinValue == profile.pin) {
+                        pinProfile = null
+                        pinValue = ""
+                        pinError = null
+                        selectProfile(profile)
+                    } else {
+                        pinValue = ""
+                        pinError = "PIN tidak sesuai. Coba lagi."
+                    }
+                }) { Text("Buka Profil") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pinProfile = null; pinValue = ""; pinError = null }) { Text("Batal") }
+            }
+        )
+    }
+
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Tambah Profil") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = { avatarPicker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth()) {
+                        if (newProfileAvatar.startsWith("content://") || newProfileAvatar.startsWith("file://")) {
+                            AsyncImage(model = newProfileAvatar, contentDescription = "Foto profil baru", modifier = Modifier.size(36.dp).clip(CircleShape))
+                        } else Text(newProfileAvatar, style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Pilih ikon dari galeri")
+                    }
+                    OutlinedTextField(
+                        value = newProfileName,
+                        onValueChange = { newProfileName = it },
+                        label = { Text("Nama profil") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = newProfilePinEnabled, onCheckedChange = {
+                            newProfilePinEnabled = it
+                            if (!it) newProfilePin = ""
+                        })
+                        Text("Kunci profil dengan PIN")
+                    }
+                    if (newProfilePinEnabled) {
+                        OutlinedTextField(
+                            value = newProfilePin,
+                            onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) newProfilePin = it },
+                            label = { Text("PIN 4 digit") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = pinValue.length == 4,
+                    enabled = newProfileName.isNotBlank() && (!newProfilePinEnabled || newProfilePin.length == 4),
                     onClick = {
-                        if (pinValue == profile.pin) {
-                            pinProfile = null
-                            pinValue = ""
-                            pinError = null
-                            selectProfile(profile)
-                        } else {
-                            pinValue = ""
-                            pinError = "PIN tidak sesuai. Coba lagi."
-                        }
+                        viewModel.addProfile(newProfileName.trim(), newProfileAvatar, newProfilePin, newProfilePinEnabled, switchToNewProfile = false)
+                        newProfileName = ""
+                        newProfileAvatar = "👤"
+                        newProfilePin = ""
+                        newProfilePinEnabled = false
+                        showAddProfile = false
                     }
-                ) { Text("Buka Profil") }
+                ) { Text("Simpan Profil") }
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    pinProfile = null
-                    pinValue = ""
-                    pinError = null
-                }) { Text("Batal") }
-            }
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Batal") } }
         )
     }
 }
