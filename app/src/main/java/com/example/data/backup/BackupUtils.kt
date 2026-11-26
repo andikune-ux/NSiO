@@ -1,6 +1,7 @@
 package com.example.data.backup
 
 import android.content.Context
+import android.os.Environment
 import androidx.room.withTransaction
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
@@ -113,8 +114,13 @@ object BackupUtils {
             }
             rootObj.put("mediaItems", mediaArray)
 
-            // Target directory: NSiO/Backup
-            val baseDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup")
+            // Prefer the visible shared folder so the restore picker can reopen it directly.
+            // Keep the app-specific folder as a safe fallback when all-files access is unavailable.
+            val baseDir = if (BackupAmanManager.hasStorageAccess(context)) {
+                File(Environment.getExternalStorageDirectory(), "NSiO/backup profil")
+            } else {
+                File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Backup")
+            }
             if (!baseDir.exists()) baseDir.mkdirs()
 
             val fileName = "backup_${profile.name.replace(" ", "_")}_${getTimestamp()}.json"
