@@ -78,7 +78,7 @@ class ExampleRobolectricTest {
       avatarAssignments = mapOf("a1" to "p1:balqyz")
     )
 
-    assertTrue(result.isSuccess)
+    assertTrue(result.message, result.isSuccess)
     val backupFile = File(result.filePath)
     assertTrue(backupFile.isFile)
     val json = JSONObject(backupFile.readText())
