@@ -471,10 +471,6 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 previousVideoId = store.lastVideoId(profileId)
             )
             sessionInitialized = true
-            if (selectedTikTodCategory == 2 && feed.isEmpty() && forYouFeed.isNotEmpty()) {
-                feed = forYouFeed
-                startAt(0, forYouFeed)
-            }
         } else {
             val knownIds = forYouFeed.mapTo(hashSetOf()) { it.id }
             val queuedNewItems = eligible.filter { it.id in pendingNewIds && it.id !in knownIds }
@@ -811,7 +807,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     lineHeight = 19.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                if (selectedTikTodCategory == 0) TextButton(onClick = { selectedTikTodCategory = 3 }) { Text("Pilih Avatar") }
+                if (selectedTikTodCategory == 0) TextButton(onClick = { switchTikTodCategory(3) }) { Text("Pilih Avatar") }
             }
         } else {
             AndroidView(
@@ -1309,8 +1305,8 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         } while (event.changes.any { it.pressed })
                         val threshold = maxOf(48.dp.toPx(), size.width * 0.08f)
                         if (!multiTouch && recognized && kotlin.math.abs(horizontal) >= threshold) {
-                            selectedTikTodCategory = (selectedTikTodCategory + if (horizontal < 0f) 1 else -1)
-                                .coerceIn(0, tikTodCategories.lastIndex)
+                            switchTikTodCategory((selectedTikTodCategory + if (horizontal < 0f) 1 else -1)
+                                .coerceIn(0, tikTodCategories.lastIndex))
                         }
                     }
                 }
@@ -2343,7 +2339,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                         Button(
                             onClick = {
                                 showAvatarAppliedDialog = false
-                                selectedTikTodCategory = 0
+                                switchTikTodCategory(0)
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
