@@ -282,6 +282,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var showYangManaSettings by remember { mutableStateOf(false) }
     var showVideoManager by remember { mutableStateOf(false) }
     var showManagerAddVideos by remember { mutableStateOf(false) }
+    var confirmManagerRemoval by remember { mutableStateOf(false) }
     var managerTargetAvatarId by remember { mutableStateOf("p2:balqyz") }
     var lastFeedCategory by remember { mutableIntStateOf(2) }
     var lastFeedAvatarId by remember { mutableStateOf(selectedAvatarId) }
@@ -1695,234 +1696,414 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
 
 
     if (showVideoManager) {
-        // The manager is always scoped to the exact Avatar whose identity was tapped.
-        // Never aggregate videos belonging to other Avatars, even on the For You feed.
+        // Dedicated Avatar profile manager: independent UI from Yang Mana settings and Jedag Jedug.
         val managerVideos = TikTodFeedPolicy.forAvatar(
             eligible, effectiveAvatarAssignments, managerTargetAvatarId
         )
-        val unassignedManagerVideos = eligible.filter { TikTodFeedPolicy.assignmentOwner(it, effectiveAvatarAssignments).isNullOrBlank() }
-        val managerShownVideos = if (showManagerAddVideos && selectedTikTodCategory != 2) {
-            unassignedManagerVideos
-        } else {
-            managerVideos
+        val unassignedManagerVideos = eligible.filter {
+            TikTodFeedPolicy.assignmentOwner(it, effectiveAvatarAssignments).isNullOrBlank()
         }
-        ModalBottomSheet(
+        val targetSlug = managerTargetAvatarId.substringAfter(':')
+        val targetIndex = yangManaAvatarIds.indexOf(targetSlug)
+        val targetName = if (targetIndex >= 0) {
+            yangManaNames[targetIndex]
+        } else {
+            avatarTargetLabels[managerTargetAvatarId] ?: "Avatar"
+        }
+        val targetImage = if (targetIndex >= 0) yangManaAvatarImages[targetIndex] else PRIMARY_PROFILE_AVATAR_URL
+
+        Dialog(
             onDismissRequest = {
                 showVideoManager = false
                 showManagerAddVideos = false
-                selectedUnassignedVideoIds = emptySet()
+                confirmManagerRemoval = false
                 selectedAssignedVideoIds = emptySet()
+                selectedUnassignedVideoIds = emptySet()
                 activeAssignmentPreviewId = null
                 assignmentPreviewPlayer.stop()
             },
-            containerColor = Color(0xFF17181D),
-            contentColor = Color.White,
-            scrimColor = Color.Black.copy(alpha = 0.62f),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.34f)) }
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Column(
-                Modifier.fillMaxWidth().heightIn(min = 500.dp, max = 760.dp)
-                    .navigationBarsPadding().padding(horizontal = 15.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color(0xFF101217)
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    Modifier.fillMaxSize().navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            if (showManagerAddVideos && selectedTikTodCategory != 2) "Tambah video ke Avatar"
-                            else "Daftar video • ${tikTodCategories[selectedTikTodCategory.coerceIn(0, 2)]}",
-                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            when (selectedTikTodCategory) {
-                                0 -> avatarTargetLabels[selectedAvatarId] ?: "Avatar aktif"
-                                1 -> "Video dari Avatar yang sedang dipilih • halaman 2"
-                                else -> "Video dari Avatar yang identitasnya ditekan"
-                            },
-                            color = Color.White.copy(alpha = 0.62f), fontSize = 10.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = {
-                        showVideoManager = false
-                        showManagerAddVideos = false
-                        activeAssignmentPreviewId = null
-                        assignmentPreviewPlayer.stop()
-                    }) {
-                        Icon(Icons.Default.Close, contentDescription = "Tutup daftar video", tint = Color.White)
-                    }
-                }
-                Text(
-                    "Hanya video milik: ${avatarTargetLabels[managerTargetAvatarId] ?: managerTargetAvatarId}",
-                    color = Color(0xFF9DDCCB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("${managerShownVideos.size} video", color = Color.White.copy(alpha = 0.72f), fontSize = 11.sp)
-                    if (selectedTikTodCategory != 2) {
-                        TextButton(onClick = {
-                            showManagerAddVideos = !showManagerAddVideos
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Profil Avatar", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold)
+                        IconButton(onClick = {
+                            showVideoManager = false
+                            showManagerAddVideos = false
+                            selectedAssignedVideoIds = emptySet()
+                            selectedUnassignedVideoIds = emptySet()
                             activeAssignmentPreviewId = null
                             assignmentPreviewPlayer.stop()
                         }) {
-                            Text(
-                                if (showManagerAddVideos) "Kembali ke daftar" else "+ Tambah video",
-                                color = Color(0xFF9DDCCB), fontWeight = FontWeight.SemiBold
-                            )
+                            Icon(Icons.Default.Close, contentDescription = "Tutup profil Avatar", tint = Color.White)
                         }
                     }
-                }
-                if (managerShownVideos.isEmpty()) {
-                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(104.dp),
+                            shape = CircleShape,
+                            color = Color(0xFF292D36),
+                            border = BorderStroke(2.dp, Color.White.copy(alpha = 0.22f))
+                        ) {
+                            AsyncImage(
+                                model = targetImage,
+                                contentDescription = "Foto profil $targetName",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        Text(targetName, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            when {
-                                showManagerAddVideos -> "Semua video Drive sudah memiliki Avatar."
-                                selectedTikTodCategory == 0 -> "Belum ada video untuk Avatar ini."
-                                selectedTikTodCategory == 1 -> "Belum ada video yang dikelompokkan ke Avatar halaman 2."
-                                else -> "Belum ada video Google Drive yang memenuhi syarat."
-                            },
-                            color = Color.White.copy(alpha = 0.68f), fontSize = 13.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            "${managerVideos.size} video dalam profil ini",
+                            color = Color.White.copy(alpha = 0.58f), fontSize = 11.sp
                         )
                     }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 14.dp)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        items(managerShownVideos, key = { it.id }) { item ->
-                            val ownerId = TikTodFeedPolicy.assignmentOwner(item, effectiveAvatarAssignments).orEmpty()
-                            val ownerLabel = avatarTargetLabels[ownerId] ?: "Belum memiliki Avatar"
-                            val isCurrent = media?.id == item.id
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(13.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF292C33)),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isCurrent) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.10f)
-                                )
-                            ) {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(7.dp),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Box(
-                                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                                            .clip(RoundedCornerShape(8.dp)).background(Color.Black)
-                                    ) {
-                                        if (item.thumbnailUrl.isNotBlank()) {
-                                            AsyncImage(
-                                                model = item.thumbnailUrl,
-                                                contentDescription = "Thumbnail ${item.title}",
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
+                        Text("Video Avatar", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        if (selectedAssignedVideoIds.isNotEmpty()) {
+                            Text("${selectedAssignedVideoIds.size} dipilih", color = Color(0xFF9DDCCB),
+                                fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    if (managerVideos.isEmpty()) {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("Belum ada video di profil $targetName. Tekan Tambah Video untuk memilih dari katalog.",
+                                color = Color.White.copy(alpha = 0.62f), fontSize = 13.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
+                            items(managerVideos, key = { it.id }) { item ->
+                                val checked = item.id in selectedAssignedVideoIds
+                                val isCurrent = media?.id == item.id
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        selectedAssignedVideoIds = if (checked) {
+                                            selectedAssignedVideoIds - item.id
                                         } else {
-                                            Icon(
-                                                Icons.Default.PlayArrow, contentDescription = "Video",
-                                                tint = Color.White, modifier = Modifier.align(Alignment.Center).size(30.dp)
-                                            )
+                                            selectedAssignedVideoIds + item.id
                                         }
-                                        if (isCurrent) {
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF222630)),
+                                    border = BorderStroke(
+                                        if (checked) 2.dp else 1.dp,
+                                        if (checked) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.09f)
+                                    )
+                                ) {
+                                    Column(Modifier.fillMaxWidth().padding(7.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(
+                                            Modifier.fillMaxWidth().aspectRatio(4f / 5f)
+                                                .clip(RoundedCornerShape(10.dp)).background(Color.Black)
+                                        ) {
+                                            if (item.thumbnailUrl.isNotBlank()) {
+                                                AsyncImage(model = item.thumbnailUrl,
+                                                    contentDescription = "Video ${item.title}",
+                                                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                            } else {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = "Video",
+                                                    tint = Color.White, modifier = Modifier.align(Alignment.Center).size(34.dp))
+                                            }
                                             Surface(
-                                                Modifier.align(Alignment.TopStart).padding(4.dp),
-                                                shape = RoundedCornerShape(5.dp), color = Color(0xDD1A5A4A)
+                                                Modifier.align(Alignment.TopEnd).padding(6.dp).size(25.dp),
+                                                shape = CircleShape,
+                                                color = if (checked) Color(0xFF8ED8BF) else Color.Black.copy(alpha = 0.58f)
                                             ) {
-                                                Text("SEDANG DIPUTAR", Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
-                                                    color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    if (checked) {
+                                                        Icon(Icons.Default.Verified, contentDescription = "Dipilih",
+                                                            tint = Color(0xFF10251F), modifier = Modifier.size(17.dp))
+                                                    } else {
+                                                        Icon(Icons.Default.PlayArrow, contentDescription = "Pilih video",
+                                                            tint = Color.White, modifier = Modifier.size(17.dp))
+                                                    }
+                                                }
+                                            }
+                                            if (isCurrent) {
+                                                Surface(Modifier.align(Alignment.BottomStart).padding(6.dp),
+                                                    shape = RoundedCornerShape(5.dp), color = Color(0xDD1A5A4A)) {
+                                                    Text("SEDANG DIPUTAR", Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                                                        color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            Surface(Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                                                shape = RoundedCornerShape(5.dp), color = Color.Black.copy(alpha = 0.68f)) {
+                                                Text(formatTikTodTime(item.durationMs),
+                                                    Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                                                    color = Color.White, fontSize = 8.sp)
                                             }
                                         }
-                                    }
-                                    Text(
-                                        item.title.ifBlank { "Video tanpa judul" },
-                                        color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 14.sp
-                                    )
-                                    Row(
-                                        Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(formatTikTodTime(item.durationMs), color = Color.White.copy(alpha = 0.58f), fontSize = 9.sp)
-                                        Text(
-                                            if (showManagerAddVideos) "Belum dimiliki" else ownerLabel,
-                                            color = Color(0xFF9DDCCB), fontSize = 8.sp,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            activeAssignmentPreviewId = item.id
-                                            assignmentPreviewPlayer.exoPlayer?.volume = 0f
-                                            assignmentPreviewPlayer.play(
-                                                item.url,
-                                                item.title.ifBlank { "Pratinjau video" },
-                                                0L,
-                                                mediaCacheKey = "${item.profileId}:${item.id}"
-                                            )
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentPadding = PaddingValues(vertical = 4.dp),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.20f))
-                                    ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Preview", fontSize = 10.sp)
-                                    }
-                                    if (showManagerAddVideos && selectedTikTodCategory != 2) {
-                                        Button(
-                                            onClick = {
-                                                activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item)), managerTargetAvatarId)
-                                                    avatarAssignments = store.avatarAssignments(profileId)
-                                                    showManagerAddVideos = false
-                                                }
-                                            },
-                                            enabled = managerTargetAvatarId.isNotBlank(),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentPadding = PaddingValues(vertical = 4.dp)
-                                        ) { Text("Tambahkan", fontSize = 10.sp) }
-                                    } else if (selectedTikTodCategory == 2 && ownerId.isBlank()) {
-                                        Button(
-                                            onClick = {
-                                                activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item)), managerTargetAvatarId)
-                                                    avatarAssignments = store.avatarAssignments(profileId)
-                                                }
-                                            },
-                                            enabled = managerTargetAvatarId.isNotBlank(),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentPadding = PaddingValues(vertical = 4.dp)
-                                        ) { Text("Masukkan ke Avatar", fontSize = 9.sp, maxLines = 1) }
-                                    } else if (ownerId.isNotBlank()) {
+                                        Text(item.title.ifBlank { "Video tanpa judul" }, color = Color.White,
+                                            fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis, lineHeight = 14.sp)
                                         OutlinedButton(
                                             onClick = {
-                                                activeProfile?.id?.let { profileId ->
-                                                    store.assignVideos(profileId, listOf(TikTodFeedPolicy.assignmentKey(item), item.id), "")
-                                                    avatarAssignments = store.avatarAssignments(profileId)
-                                                }
+                                                activeAssignmentPreviewId = item.id
+                                                assignmentPreviewPlayer.exoPlayer?.volume = 0f
+                                                assignmentPreviewPlayer.play(item.url,
+                                                    item.title.ifBlank { "Pratinjau video" }, 0L,
+                                                    mediaCacheKey = "${item.profileId}:${item.id}")
                                             },
                                             modifier = Modifier.fillMaxWidth(),
-                                            contentPadding = PaddingValues(vertical = 4.dp),
-                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
-                                        ) { Text("Keluarkan dari Avatar", fontSize = 9.sp, maxLines = 1) }
+                                            contentPadding = PaddingValues(vertical = 2.dp),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null,
+                                                modifier = Modifier.size(15.dp))
+                                            Spacer(Modifier.width(3.dp))
+                                            Text("Preview", fontSize = 10.sp)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = selectedAssignedVideoIds.isNotEmpty(),
+                            onClick = { confirmManagerRemoval = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFA6A6)),
+                            border = BorderStroke(1.dp, Color(0xFFB96C76))
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text("Keluarkan", maxLines = 1)
+                        }
+                        Button(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                showManagerAddVideos = true
+                                selectedUnassignedVideoIds = emptySet()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF287B68))
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text("Tambah Video", maxLines = 1)
+                        }
+                    }
                 }
             }
+        }
+
+        if (showManagerAddVideos) {
+            Dialog(
+                onDismissRequest = {
+                    showManagerAddVideos = false
+                    selectedUnassignedVideoIds = emptySet()
+                    activeAssignmentPreviewId = null
+                    assignmentPreviewPlayer.stop()
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    Modifier.fillMaxSize().padding(10.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color(0xFF171B22),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                ) {
+                    Column(
+                        Modifier.fillMaxSize().navigationBarsPadding().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Katalog Video", color = Color.White, fontSize = 19.sp,
+                                    fontWeight = FontWeight.Bold)
+                                Text("Pilih video yang belum dimiliki Avatar mana pun",
+                                    color = Color.White.copy(alpha = 0.58f), fontSize = 10.sp)
+                            }
+                            IconButton(onClick = {
+                                showManagerAddVideos = false
+                                selectedUnassignedVideoIds = emptySet()
+                                activeAssignmentPreviewId = null
+                                assignmentPreviewPlayer.stop()
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Tutup katalog", tint = Color.White)
+                            }
+                        }
+                        Text("${unassignedManagerVideos.size} video tersedia",
+                            color = Color(0xFF9DDCCB), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        if (unassignedManagerVideos.isEmpty()) {
+                            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                Text("Tidak ada video yang belum memiliki Avatar.",
+                                    color = Color.White.copy(alpha = 0.62f), fontSize = 13.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 8.dp)
+                            ) {
+                                items(unassignedManagerVideos, key = { it.id }) { item ->
+                                    val checked = item.id in selectedUnassignedVideoIds
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            selectedUnassignedVideoIds = if (checked) {
+                                                selectedUnassignedVideoIds - item.id
+                                            } else {
+                                                selectedUnassignedVideoIds + item.id
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(13.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF252B35)),
+                                        border = BorderStroke(if (checked) 2.dp else 1.dp,
+                                            if (checked) Color(0xFF9DDCCB) else Color.White.copy(alpha = 0.10f))
+                                    ) {
+                                        Column(Modifier.fillMaxWidth().padding(7.dp),
+                                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Box(Modifier.fillMaxWidth().aspectRatio(4f / 5f)
+                                                .clip(RoundedCornerShape(9.dp)).background(Color.Black)) {
+                                                if (item.thumbnailUrl.isNotBlank()) {
+                                                    AsyncImage(model = item.thumbnailUrl,
+                                                        contentDescription = "Video ${item.title}",
+                                                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                                } else {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = "Video",
+                                                        tint = Color.White, modifier = Modifier.align(Alignment.Center).size(32.dp))
+                                                }
+                                                Surface(Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp),
+                                                    shape = CircleShape,
+                                                    color = if (checked) Color(0xFF8ED8BF) else Color.Black.copy(alpha = 0.62f)) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        if (checked) {
+                                                            Icon(Icons.Default.Verified, contentDescription = "Dipilih",
+                                                                tint = Color(0xFF10251F), modifier = Modifier.size(16.dp))
+                                                        } else {
+                                                            Icon(Icons.Default.PlayArrow, contentDescription = "Pilih video",
+                                                                tint = Color.White, modifier = Modifier.size(16.dp))
+                                                        }
+                                                    }
+                                                }
+                                                Surface(Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                                                    shape = RoundedCornerShape(5.dp), color = Color.Black.copy(alpha = 0.68f)) {
+                                                    Text(formatTikTodTime(item.durationMs),
+                                                        Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                                                        color = Color.White, fontSize = 8.sp)
+                                                }
+                                            }
+                                            Text(item.title.ifBlank { "Video tanpa judul" }, color = Color.White,
+                                                fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                                                maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
+                                            OutlinedButton(
+                                                onClick = {
+                                                    activeAssignmentPreviewId = item.id
+                                                    assignmentPreviewPlayer.exoPlayer?.volume = 0f
+                                                    assignmentPreviewPlayer.play(item.url,
+                                                        item.title.ifBlank { "Pratinjau video" }, 0L,
+                                                        mediaCacheKey = "${item.profileId}:${item.id}")
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentPadding = PaddingValues(vertical = 1.dp),
+                                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                                            ) {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = null,
+                                                    modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Preview", fontSize = 9.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${selectedUnassignedVideoIds.size} dipilih",
+                                Modifier.weight(1f), color = Color.White.copy(alpha = 0.68f), fontSize = 11.sp)
+                            OutlinedButton(onClick = {
+                                showManagerAddVideos = false
+                                selectedUnassignedVideoIds = emptySet()
+                            }) { Text("Batal") }
+                            Button(
+                                enabled = selectedUnassignedVideoIds.isNotEmpty() && managerTargetAvatarId.isNotBlank(),
+                                onClick = {
+                                    activeProfile?.id?.let { profileId ->
+                                        val keys = selectedUnassignedVideoIds.mapNotNull { id ->
+                                            unassignedManagerVideos.firstOrNull { it.id == id }
+                                                ?.let(TikTodFeedPolicy::assignmentKey)
+                                        }
+                                        store.assignVideos(profileId, keys, managerTargetAvatarId)
+                                        avatarAssignments = store.avatarAssignments(profileId)
+                                    }
+                                    selectedUnassignedVideoIds = emptySet()
+                                    showManagerAddVideos = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF287B68))
+                            ) { Text("Tambahkan") }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (confirmManagerRemoval) {
+            AlertDialog(
+                onDismissRequest = { confirmManagerRemoval = false },
+                containerColor = Color(0xFF222630),
+                title = { Text("Keluarkan video?", color = Color.White) },
+                text = {
+                    Text("${selectedAssignedVideoIds.size} video akan dilepas dari profil $targetName. File video tidak dihapus.",
+                        color = Color.White.copy(alpha = 0.78f))
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        activeProfile?.id?.let { profileId ->
+                            val keys = selectedAssignedVideoIds.flatMap { id ->
+                                managerVideos.firstOrNull { it.id == id }?.let {
+                                    listOf(TikTodFeedPolicy.assignmentKey(it), it.id)
+                                }.orEmpty()
+                            }
+                            store.assignVideos(profileId, keys, "")
+                            avatarAssignments = store.avatarAssignments(profileId)
+                        }
+                        selectedAssignedVideoIds = emptySet()
+                        confirmManagerRemoval = false
+                    }) { Text("Keluarkan", color = Color(0xFFFFA6A6)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmManagerRemoval = false }) {
+                        Text("Batal", color = Color.White.copy(alpha = 0.72f))
+                    }
+                }
+            )
         }
     }
 
