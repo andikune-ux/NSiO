@@ -11,7 +11,7 @@ done
 (
   cd "$ARTIFACT_DIR"
   # The first build recorded absolute runner paths; normalize them after artifact download.
-  awk '{ path = $2; sub(/^.*tdlib-api24-output\\//, "", path); print $1 "  " path }' SHA256SUMS | sha256sum -c -
+  awk '{ path = $2; prefix = "tdlib-api24-output/"; pos = index(path, prefix); if (pos > 0) path = substr(path, pos + length(prefix)); print $1 "  " path }' SHA256SUMS | sha256sum -c -
 )
 mkdir -p "$APP_DIR/java/org/drinkless/tdlib" "$APP_DIR/jniLibs"
 cp "$ARTIFACT_DIR/java/org/drinkless/tdlib/"*.java "$APP_DIR/java/org/drinkless/tdlib/"
