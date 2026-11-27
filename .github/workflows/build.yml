@@ -220,7 +220,7 @@ jobs:
           KEY_CERT_SHA="$(keytool -exportcert -keystore debug.keystore -storepass android -alias androiddebugkey | sha256sum | awk '{print tolower($1)}')"
           APKSIGNER_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
           echo "$APKSIGNER_OUTPUT"
-          APK_CERT_SHA="$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/{gsub(":", "", $2); print tolower($2); exit}' <<< "$APKSIGNER_OUTPUT")"
+          APK_CERT_SHA="$(awk '/Signer: certificate SHA-256 digest:/ { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(":", ""); print tolower($0); exit }' <<< "$APKSIGNER_OUTPUT")"
           echo "Keystore certificate SHA-256: $KEY_CERT_SHA"
           echo "APK certificate SHA-256: $APK_CERT_SHA"
           if [[ -z "$KEY_CERT_SHA" || -z "$APK_CERT_SHA" ]]; then
