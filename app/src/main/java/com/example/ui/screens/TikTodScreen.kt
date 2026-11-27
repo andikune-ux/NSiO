@@ -377,6 +377,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     var zoomOffset by remember { mutableStateOf(Offset.Zero) }
     var videoAspectRatio by remember { mutableFloatStateOf(0f) }
     val media = feed.getOrNull(index)
+    val isPhotoMedia = media?.type?.equals("PHOTO", true) == true
     var hasRenderedFirstFrame by remember(media?.id) { mutableStateOf(false) }
     val thumbnailAlpha by animateFloatAsState(
         targetValue = if (hasRenderedFirstFrame) 0f else 1f,
@@ -775,7 +776,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 translationY = swipeOffset
             }
         ) {
-        if (!isCleanMode) {
+        if (!isCleanMode || isPhotoMedia) {
             Row(
                 modifier = Modifier.align(Alignment.TopCenter)
                     .statusBarsPadding()
@@ -991,7 +992,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             // TikTok-style creator identity and caption: compact, anchored bottom-left.
-            if (!isCleanMode) {
+            if (!isCleanMode || isPhotoMedia) {
             Column(
                 Modifier.align(Alignment.BottomStart)
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
@@ -1083,7 +1084,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             // Separate TikTok-style action buttons: each icon has its own background and spacing.
-            if (!isCleanMode) {
+            if (!isCleanMode || isPhotoMedia) {
             Column(
                 Modifier.align(Alignment.BottomEnd)
                     .padding(end = 9.dp, bottom = 90.dp)
@@ -1275,7 +1276,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
             // Draw category navigation last inside the video layer so PlayerView cannot cover it.
-            if (!isCleanMode) {
+            if (!isCleanMode || isPhotoMedia) {
                 Row(
                     modifier = Modifier.align(Alignment.TopCenter)
                         .statusBarsPadding()
