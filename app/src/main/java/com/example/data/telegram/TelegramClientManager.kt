@@ -20,10 +20,20 @@ object TelegramClientManager {
 
     data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int)
 
+    data class TelegramMedia(
+        val chatId: Long,
+        val messageId: Long,
+        val title: String,
+        val fileId: Int,
+        val isPhoto: Boolean,
+        val mimeType: String
+    )
+
     data class State(
         val stage: AuthStage = AuthStage.NOT_CONFIGURED,
         val message: String = "Telegram belum dihubungkan.",
-        val chats: List<TelegramChat> = emptyList()
+        val chats: List<TelegramChat> = emptyList(),
+        val media: List<TelegramMedia> = emptyList()
     )
 
     private val mutableState = MutableStateFlow(State())
@@ -164,6 +174,53 @@ object TelegramClientManager {
     private fun refreshChat(chatId: Long) {
         client?.send(TdApi.GetChat(chatId), { result ->
             if (result is TdApi.Chat) upsertChat(result)
+        })
+    }
+
+    fun loadRecentMedia(chatId: Long) {
+        val activeClient = client ?: return
+        mutableState.value = mutableState.value.copy(media = emptyList(), message = "Memuat media Telegram…")
+        activeClient.send(TdApi.GetChatHistory(chatId, 0L, 0, 50, false), { result ->
+            if (result is TdApi.Messages) {
+                val items = result.messages.mapNotNull { message ->
+                    val content = message.content
+                    when (content) {
+                        is TdApi.MessageVideo -> content.video?.video?.let {
+                            TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" })
+                        }
+                        is TdApi.MessagePhoto -> content.photo?.sizes?.maxByOrNull { it.width.toLong() * it.height }?.photo?.let {
+                            TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: "Foto Telegram", it.id, true, "image/jpeg")
+                        }
+                        is TdApi.MessageDocument -> content.document?.let { document ->
+                            val mime = document.mimeType.orEmpty()
+                            if (mime.startsWith("video/") || mime.startsWith("image/")) {
+                                TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: document.fileName.orEmpty().ifBlank { "Media Telegram" }, document.document.id, mime.startsWith("image/"), mime)
+                            } else null
+                        }
+                        is TdApi.MessageAnimation -> content.animation?.let { animation ->
+                            TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: animation.fileName.orEmpty().ifBlank { "Animasi Telegram" }, animation.animation.id, false, animation.mimeType.orEmpty().ifBlank { "video/mp4" })
+                        }
+                        else -> null
+                    }
+                }
+                mutableState.value = mutableState.value.copy(media = items, message = "Ditemukan ${items.size} media pada 50 pesan terbaru.")
+            } else if (result is TdApi.Error) {
+                mutableState.value = mutableState.value.copy(message = "Gagal memuat media: ${result.message}")
+            }
+        })
+    }
+
+    fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
+        val activeClient = client ?: run { onFinished(null); return }
+        activeClient.send(TdApi.DownloadFile(media.fileId, 32, 0L, 0L, true), { result ->
+            if (result is TdApi.File && result.local?.isDownloadingCompleted == true && result.local.path.isNotBlank()) {
+                onFinished(result.local.path)
+            } else {
+                if (result is TdApi.Error) {
+                    mutableState.value = mutableState.value.copy(message = "Unduhan Telegram gagal: ${result.message}")
+                }
+                onFinished(null)
+            }
         })
     }
 
