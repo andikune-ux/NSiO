@@ -26,7 +26,9 @@ object TelegramClientManager {
         val title: String,
         val fileId: Int,
         val isPhoto: Boolean,
-        val mimeType: String
+        val mimeType: String,
+        val caption: String = "",
+        val createdAt: Long = 0L
     )
 
     data class State(
@@ -228,19 +230,19 @@ object TelegramClientManager {
     private fun extractMedia(chatId: Long, message: TdApi.Message): TelegramMedia? {
         return when (val content = message.content) {
             is TdApi.MessageVideo -> content.video?.video?.let {
-                TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" })
+                TelegramMedia(chatId, message.id, content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" }, content.caption?.text.orEmpty(), message.date * 1000L)
             }
             is TdApi.MessagePhoto -> content.photo?.sizes?.maxByOrNull { it.width.toLong() * it.height }?.photo?.let {
-                TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: "Foto Telegram", it.id, true, "image/jpeg")
+                TelegramMedia(chatId, message.id, "Foto Telegram", it.id, true, "image/jpeg", content.caption?.text.orEmpty(), message.date * 1000L)
             }
             is TdApi.MessageDocument -> content.document?.let { document ->
                 val mime = document.mimeType.orEmpty()
                 if (mime.startsWith("video/") || mime.startsWith("image/")) {
-                    TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: document.fileName.orEmpty().ifBlank { "Media Telegram" }, document.document.id, mime.startsWith("image/"), mime)
+                    TelegramMedia(chatId, message.id, document.fileName.orEmpty().ifBlank { if (mime.startsWith("image/")) "Foto Telegram" else "Video Telegram" }, document.document.id, mime.startsWith("image/"), mime, content.caption?.text.orEmpty(), message.date * 1000L)
                 } else null
             }
             is TdApi.MessageAnimation -> content.animation?.let { animation ->
-                TelegramMedia(chatId, message.id, content.caption?.text?.takeIf(String::isNotBlank) ?: animation.fileName.orEmpty().ifBlank { "Animasi Telegram" }, animation.animation.id, false, animation.mimeType.orEmpty().ifBlank { "video/mp4" })
+                TelegramMedia(chatId, message.id, animation.fileName.orEmpty().ifBlank { "Animasi Telegram" }, animation.animation.id, false, animation.mimeType.orEmpty().ifBlank { "video/mp4" }, content.caption?.text.orEmpty(), message.date * 1000L)
             }
             else -> null
         }
@@ -265,16 +267,63 @@ object TelegramClientManager {
     }
 
     fun loadRecentMedia(chatId: Long) {
-        val activeClient = client ?: return
-        mutableState.value = mutableState.value.copy(media = emptyList(), message = "Memuat media Telegram…")
-        activeClient.send(TdApi.GetChatHistory(chatId, 0L, 0, 50, false), { result ->
-            if (result is TdApi.Messages) {
-                val items = result.messages.mapNotNull { extractMedia(chatId, it) }
-                mutableState.value = mutableState.value.copy(media = items, message = "Ditemukan ${items.size} media pada 50 pesan terbaru.")
-            } else if (result is TdApi.Error) {
-                mutableState.value = mutableState.value.copy(message = "Gagal memuat media: ${result.message}")
+        loadAllChatMedia(chatId) { items, error ->
+            mutableState.value = mutableState.value.copy(
+                media = items,
+                message = error ?: "Ditemukan ${items.size} media dari seluruh riwayat yang dapat diakses."
+            )
+        }
+    }
+
+    /**
+     * Reads the complete accessible chat history in pages. The callback receives media only;
+     * text-only messages are ignored. TDLib may stop at the oldest message available to this account.
+     */
+    fun loadAllChatMedia(chatId: Long, onFinished: (List<TelegramMedia>, String?) -> Unit) {
+        val activeClient = client
+        if (activeClient == null || mutableState.value.stage != AuthStage.READY) {
+            onFinished(emptyList(), "Telegram belum terhubung.")
+            return
+        }
+        val collected = linkedMapOf<Long, TelegramMedia>()
+        var cursorMessageId = 0L
+        var completed = false
+
+        fun loadPage() {
+            if (completed) return
+            activeClient.send(TdApi.GetChatHistory(chatId, cursorMessageId, if (cursorMessageId == 0L) 0 else -1, 100, false)) { result ->
+                when (result) {
+                    is TdApi.Messages -> {
+                        val page = result.messages
+                        if (page.isEmpty()) {
+                            completed = true
+                            onFinished(collected.values.sortedByDescending { it.createdAt }, null)
+                        } else {
+                            page.forEach { message ->
+                                extractMedia(chatId, message)?.let { collected[message.id] = it }
+                            }
+                            val oldestId = page.minOfOrNull { it.id } ?: 0L
+                            if (oldestId <= 0L || oldestId == cursorMessageId || page.size < 100) {
+                                completed = true
+                                onFinished(collected.values.sortedByDescending { it.createdAt }, null)
+                            } else {
+                                cursorMessageId = oldestId
+                                loadPage()
+                            }
+                        }
+                    }
+                    is TdApi.Error -> {
+                        completed = true
+                        onFinished(collected.values.sortedByDescending { it.createdAt }, "Gagal membaca riwayat Telegram: ${result.message}")
+                    }
+                    else -> {
+                        completed = true
+                        onFinished(collected.values.sortedByDescending { it.createdAt }, "Telegram tidak mengembalikan riwayat pesan.")
+                    }
+                }
             }
-        })
+        }
+        loadPage()
     }
 
     fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
