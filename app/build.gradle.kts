@@ -97,6 +97,13 @@ android {
     }
   }
 
+  // Exclude emulator-only prebuilt TDLib JNI libraries from the distributed APK.
+  packaging {
+    jniLibs {
+      excludes += setOf("**/x86/**", "**/x86_64/**")
+    }
+  }
+
   buildTypes {
     release {
       isCrunchPngs = false
