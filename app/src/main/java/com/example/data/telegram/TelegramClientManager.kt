@@ -290,46 +290,64 @@ object TelegramClientManager {
      * text-only messages are ignored. TDLib may stop at the oldest message available to this account.
      */
     fun loadAllChatMedia(chatId: Long, onFinished: (List<TelegramMedia>, String?) -> Unit) {
+        val collected = linkedMapOf<Long, TelegramMedia>()
+        loadAllChatMedia(chatId, { page, acknowledge ->
+            page.forEach { collected[it.messageId] = it }
+            acknowledge()
+        }) { failure ->
+            onFinished(collected.values.sortedByDescending { it.createdAt }, failure)
+        }
+    }
+
+    /**
+     * Streams media one history page at a time. The caller acknowledges a page only after
+     * persisting it, so large histories do not have to remain in memory before import starts.
+     */
+    fun loadAllChatMedia(
+        chatId: Long,
+        onPage: (List<TelegramMedia>, acknowledge: () -> Unit) -> Unit,
+        onFinished: (String?) -> Unit
+    ) {
         val activeClient = client
         if (activeClient == null || mutableState.value.stage != AuthStage.READY) {
-            onFinished(emptyList(), "Telegram belum terhubung.")
+            onFinished("Telegram belum terhubung.")
             return
         }
-        val collected = linkedMapOf<Long, TelegramMedia>()
         var cursorMessageId = 0L
         var completed = false
+
+        fun finish(failure: String? = null) {
+            if (completed) return
+            completed = true
+            onFinished(failure)
+        }
 
         fun loadPage() {
             if (completed) return
             activeClient.send(TdApi.GetChatHistory(chatId, cursorMessageId, if (cursorMessageId == 0L) 0 else -1, 100, false)) { result ->
                 when (result) {
                     is TdApi.Messages -> {
-                        val page = result.messages
-                        if (page.isEmpty()) {
-                            completed = true
-                            onFinished(collected.values.sortedByDescending { it.createdAt }, null)
-                        } else {
-                            page.forEach { message ->
-                                extractMedia(chatId, message)?.let { collected[message.id] = it }
-                            }
-                            val oldestId = page.minOfOrNull { it.id } ?: 0L
-                            if (oldestId <= 0L || oldestId == cursorMessageId || page.size < 100) {
-                                completed = true
-                                onFinished(collected.values.sortedByDescending { it.createdAt }, null)
-                            } else {
-                                cursorMessageId = oldestId
-                                loadPage()
+                        val messages = result.messages
+                        if (messages.isEmpty()) {
+                            finish()
+                            return@send
+                        }
+                        val page = messages.mapNotNull { extractMedia(chatId, it) }
+                        val oldestId = messages.minOfOrNull { it.id } ?: 0L
+                        val reachedEnd = oldestId <= 0L || oldestId == cursorMessageId || messages.size < 100
+                        val acknowledged = java.util.concurrent.atomic.AtomicBoolean(false)
+                        val acknowledge = {
+                            if (acknowledged.compareAndSet(false, true) && !completed) {
+                                if (reachedEnd) finish() else {
+                                    cursorMessageId = oldestId
+                                    loadPage()
+                                }
                             }
                         }
+                        if (page.isEmpty()) acknowledge() else onPage(page, acknowledge)
                     }
-                    is TdApi.Error -> {
-                        completed = true
-                        onFinished(collected.values.sortedByDescending { it.createdAt }, "Gagal membaca riwayat Telegram: ${result.message}")
-                    }
-                    else -> {
-                        completed = true
-                        onFinished(collected.values.sortedByDescending { it.createdAt }, "Telegram tidak mengembalikan riwayat pesan.")
-                    }
+                    is TdApi.Error -> finish("Gagal membaca riwayat Telegram: ${result.message}")
+                    else -> finish("Telegram tidak mengembalikan riwayat pesan.")
                 }
             }
         }
