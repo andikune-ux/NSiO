@@ -11,9 +11,11 @@ class MediaCacheIdentityTest {
         val fileLink = MediaCacheIdentity.forUrl("https://drive.google.com/file/d/abc123/view")
         val downloadLink = MediaCacheIdentity.forUrl("https://drive.usercontent.google.com/download?id=abc123&export=download")
         val docsLink = MediaCacheIdentity.forUrl("https://docs.google.com/document/d/abc123/edit")
+        val photoUrl = MediaCacheIdentity.forUrl("https://lh3.googleusercontent.com/d/abc123=w2000")
         assertEquals("drive:abc123", fileLink)
         assertEquals(fileLink, downloadLink)
         assertEquals(fileLink, docsLink)
+        assertEquals(fileLink, photoUrl)
     }
 
     @Test
