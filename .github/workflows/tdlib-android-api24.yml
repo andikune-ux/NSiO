@@ -1,4 +1,4 @@
-name: NSiO TDLib Android API 24
+name: NSiO TDLib Android API 24 — Permanent pinned runtime
 on:
   workflow_dispatch:
   push:
