@@ -188,7 +188,6 @@ object TelegramClientManager {
         activeClient.send(function, { result ->
             if (result is TdApi.Error) {
                 mutableState.value = mutableState.value.copy(
-                    stage = AuthStage.ERROR,
                     message = "Telegram (${result.code}): ${result.message}"
                 )
             }
