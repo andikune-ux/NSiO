@@ -14,7 +14,7 @@ import com.example.data.model.SourcePlaylist
 
 @Database(
     entities = [MediaItem::class, Profile::class, ProfileSettings::class, DownloadItem::class, SourcePlaylist::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,6 +68,11 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE media_items ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
             }
         }
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE source_playlists ADD COLUMN thumbnailUrl TEXT NOT NULL DEFAULT ''")
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -77,7 +82,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "net_stream_io.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build()
                 INSTANCE = instance
                 instance
             }
