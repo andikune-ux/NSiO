@@ -375,7 +375,7 @@ object TelegramClientManager {
                         }
                         val page = messages.mapNotNull { extractMedia(chatId, it) }
                         val oldestId = messages.minOfOrNull { it.id } ?: 0L
-                        val reachedEnd = oldestId <= 0L || oldestId == cursorMessageId || messages.size < 100
+                        val reachedEnd = oldestId <= 0L || oldestId == cursorMessageId
                         val acknowledged = java.util.concurrent.atomic.AtomicBoolean(false)
                         val acknowledge = {
                             if (acknowledged.compareAndSet(false, true) && !completed) {
@@ -527,7 +527,7 @@ object TelegramClientManager {
                             finish(true)
                         } else {
                             val oldestId = messages.minOfOrNull { it.id } ?: 0L
-                            if (oldestId <= 0L || oldestId == cursorMessageId || messages.size < 100) {
+                            if (oldestId <= 0L || oldestId == cursorMessageId) {
                                 finish(false)
                             } else {
                                 cursorMessageId = oldestId

@@ -64,19 +64,25 @@ object TelegramCatalogSync {
                     }
                 )
 
-                val existing = database.mediaDao().getPlaylistItems(playlist.id).mapTo(hashSetOf()) { it.id }
+                val existing = database.mediaDao().getPlaylistItems(playlist.id).associateBy { it.id }.toMutableMap()
                 try {
                     for ((page, acknowledge) in pages) {
                         try {
                             for (media in page) {
                                 val id = "telegram:${profile.id}:${media.chatId}:${media.messageId}"
-                                if (id in existing) continue
+                                val previous = existing[id]
                                 try {
-                                    val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
-                                        TelegramClientManager.downloadMedia(media) { filePath ->
-                                            if (continuation.isActive) continuation.resumeWith(Result.success(filePath))
+                                    if (previous != null) {
+                                        if (!media.isPhoto && !isThumbnailUsable(previous.thumbnailUrl)) {
+                                            val repaired = repairVideoThumbnail(context, id, previous, media)
+                                            if (!repaired.isNullOrBlank()) {
+                                                database.mediaDao().updateThumbnailUrl(id, repaired)
+                                                existing[id] = previous.copy(thumbnailUrl = repaired)
+                                            }
                                         }
-                                    } ?: continue
+                                        continue
+                                    }
+                                    val downloaded = downloadTelegramMedia(media) ?: continue
                                     val source = File(downloaded)
                                     if (!source.isFile || source.length() <= 0L) continue
                                     val extension = source.extension.takeIf { it.isNotBlank() }
@@ -86,36 +92,30 @@ object TelegramCatalogSync {
                                     if (!target.exists() || target.length() != source.length()) {
                                         source.copyTo(target, overwrite = true)
                                     }
-                                    val thumbnail = if (media.isPhoto) {
-                                        Uri.fromFile(target).toString()
-                                    } else {
-                                        createVideoThumbnail(context, id, target)
-                                    }
-                                    database.mediaDao().insertMedia(
-                                        MediaItem(
-                                            id = id,
-                                            profileId = profile.id,
-                                            title = media.title.ifBlank {
-                                                if (media.isPhoto) "Foto Telegram" else "Video Telegram"
-                                            },
-                                            url = Uri.fromFile(target).toString(),
-                                            thumbnailUrl = thumbnail,
-                                            type = if (media.isPhoto) "PHOTO" else "VIDEO",
-                                            sourceType = "TELEGRAM",
-                                            category = "Telegram",
-                                            playlistId = playlist.id,
-                                            sourceUrl = playlist.url,
-                                            createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                                            extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
-                                            caption = media.caption
-                                        )
+                                    val thumbnail = if (media.isPhoto) Uri.fromFile(target).toString()
+                                        else createVideoThumbnail(context, id, target)
+                                    val imported = MediaItem(
+                                        id = id,
+                                        profileId = profile.id,
+                                        title = media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
+                                        url = Uri.fromFile(target).toString(),
+                                        thumbnailUrl = thumbnail,
+                                        type = if (media.isPhoto) "PHOTO" else "VIDEO",
+                                        sourceType = "TELEGRAM",
+                                        category = "Telegram",
+                                        playlistId = playlist.id,
+                                        sourceUrl = playlist.url,
+                                        createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                                        extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
+                                        caption = media.caption
                                     )
-                                    existing.add(id)
+                                    database.mediaDao().insertMedia(imported)
+                                    existing[id] = imported
                                     addedTotal++
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (error: Exception) {
-                                    Log.w(TAG, "Gagal mengimpor pesan ${media.messageId} dari chat $chatId", error)
+                                    Log.w(TAG, "Gagal mengimpor/memperbaiki pesan ${media.messageId} dari chat $chatId", error)
                                 }
                             }
                             // Publish the current count after each page, not after the full history.
@@ -138,10 +138,51 @@ object TelegramCatalogSync {
         return addedTotal
     }
 
+    private suspend fun downloadTelegramMedia(media: TelegramClientManager.TelegramMedia): String? =
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            TelegramClientManager.downloadMedia(media) { path ->
+                if (continuation.isActive) continuation.resumeWith(Result.success(path))
+            }
+        }
+
+    private fun isThumbnailUsable(raw: String): Boolean {
+        if (raw.isBlank()) return false
+        val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
+        if (uri.scheme != "file") return true
+        val file = uri.path?.let(::File) ?: return false
+        return file.isFile && file.length() > 0L &&
+            runCatching { android.graphics.BitmapFactory.decodeFile(file.absolutePath) != null }.getOrDefault(false)
+    }
+
+    private suspend fun repairVideoThumbnail(
+        context: Context,
+        mediaId: String,
+        existing: MediaItem,
+        media: TelegramClientManager.TelegramMedia
+    ): String? {
+        val uri = runCatching { Uri.parse(existing.url) }.getOrNull()
+        var videoFile = if (uri?.scheme == "file") uri.path?.let(::File) else null
+        if (videoFile == null || !videoFile.isFile || videoFile.length() <= 0L) {
+            val downloaded = downloadTelegramMedia(media) ?: return null
+            val source = File(downloaded)
+            if (!source.isFile || source.length() <= 0L) return null
+            val extension = source.extension.takeIf { it.isNotBlank() } ?: "mp4"
+            val target = File(context.filesDir, "telegram/imported/$mediaId.$extension")
+            target.parentFile?.mkdirs()
+            if (!target.exists() || target.length() != source.length()) source.copyTo(target, overwrite = true)
+            videoFile = target
+        }
+        return createVideoThumbnail(context, mediaId, videoFile)
+            .takeIf { it.isNotBlank() && isThumbnailUsable(it) }
+    }
+
     private fun createVideoThumbnail(context: Context, mediaId: String, videoFile: File): String {
         val thumbnailDir = File(context.filesDir, "telegram/thumbnails").apply { mkdirs() }
         val thumbnailFile = File(thumbnailDir, "$mediaId.jpg")
-        if (thumbnailFile.isFile && thumbnailFile.length() > 0L) return Uri.fromFile(thumbnailFile).toString()
+        if (thumbnailFile.isFile && thumbnailFile.length() > 0L &&
+            runCatching { android.graphics.BitmapFactory.decodeFile(thumbnailFile.absolutePath) != null }.getOrDefault(false)
+        ) return Uri.fromFile(thumbnailFile).toString()
+        if (thumbnailFile.exists()) thumbnailFile.delete()
 
         val retriever = MediaMetadataRetriever()
         return try {
@@ -150,11 +191,15 @@ object TelegramCatalogSync {
                 ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 ?: return ""
             FileOutputStream(thumbnailFile).use { output ->
-                if (!frame.compress(Bitmap.CompressFormat.JPEG, 82, output)) return ""
+                if (!frame.compress(Bitmap.CompressFormat.JPEG, 82, output)) {
+                    thumbnailFile.delete()
+                    return ""
+                }
             }
             Uri.fromFile(thumbnailFile).toString()
         } catch (error: Exception) {
-            Log.w(TAG, "Gagal membuat thumbnail untuk $mediaId", error)
+            thumbnailFile.delete()
+            Log.w(TAG, "Gagal membuat ulang thumbnail untuk $mediaId", error)
             ""
         } finally {
             retriever.release()
