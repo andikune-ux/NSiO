@@ -21,8 +21,10 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
       - name: Download pinned TDLib API 24 runtime release
+        id: tdlib_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           DEST="$RUNNER_TEMP/tdlib-api24"
@@ -34,10 +36,20 @@ jobs:
             cd "$RUNNER_TEMP"
             sha256sum -c "$ARCHIVE.sha256"
             tar -xzf "$ARCHIVE" -C "$DEST"
+            echo "use_artifact=false" >> "$GITHUB_OUTPUT"
           else
-            echo "TDLib release asset is temporarily unavailable; using the previously verified immutable Actions artifact."
-            gh run download 45986064975 --repo "$GITHUB_REPOSITORY" --name NSiO-TDLib-1.8.70-Android-API24 --dir "$DEST"
+            echo "TDLib release is missing; downloading the verified immutable Actions artifact."
+            echo "use_artifact=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Download previously verified TDLib artifact
+        if: steps.tdlib_release.outputs.use_artifact == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: NSiO-TDLib-1.8.70-Android-API24
+          repository: ${{ github.repository }}
+          run-id: 45986064975
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/tdlib-api24
       - name: Validate TDLib runtime payload
         run: |
           set -euo pipefail
