@@ -67,6 +67,12 @@ android {
     applicationId = "dev.andikune.NSiO"
     minSdk = 24
     targetSdk = 36
+    // Ship only Android device ABIs. Keeping both ARM generations preserves
+    // API 24-era 32-bit devices and modern 64-bit phones/Android TV.
+    // x86/x86_64 emulator libraries are intentionally excluded from the APK.
+    ndk {
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+    }
     versionCode = nsioVersionCode.get()
     versionName = nsioVersionName.get()
 

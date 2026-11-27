@@ -187,6 +187,54 @@ jobs:
           echo "version_tag=$NSIO_VERSION_TAG" >> "$GITHUB_OUTPUT"
       - name: Assemble APK
         run: gradle assembleDebug --no-daemon
+      - name: Verify APK ABIs, API floor, and persistent signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          test -s debug.keystore
+
+          # Prevent an accidental debug-key replacement from creating an APK
+          # that Android refuses to install over an existing NSiO installation.
+          EXPECTED_KEYSTORE_BLOB="2fef4288c1a9e8f5e34bd01b7941b881458fe938"
+          ACTUAL_KEYSTORE_BLOB="$(git hash-object debug.keystore)"
+          if [[ "$ACTUAL_KEYSTORE_BLOB" != "$EXPECTED_KEYSTORE_BLOB" ]]; then
+            echo "::error::The permanent NSiO debug.keystore changed. Do not publish an APK with a different signing identity."
+            exit 1
+          fi
+
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK_ROOT"
+          BUILD_TOOLS="$(find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          AAPT="$BUILD_TOOLS/aapt"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+
+          KEY_CERT_SHA="$(keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey | awk -F'SHA256: ' '/SHA256:/{gsub(":", "", $2); gsub(/[[:space:]]/, "", $2); print tolower($2); exit}')"
+          APK_CERT_SHA="$("$APKSIGNER" verify --verbose --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{gsub(":", "", $2); print tolower($2); exit}')"
+          test -n "$KEY_CERT_SHA"
+          test -n "$APK_CERT_SHA"
+          if [[ "$KEY_CERT_SHA" != "$APK_CERT_SHA" ]]; then
+            echo "::error::APK signer does not match the permanent NSiO debug.keystore."
+            exit 1
+          fi
+
+          APK_ABIS="$(unzip -Z1 "$APK" | awk -F/ '$1 == "lib" && NF >= 3 {print $2}' | sort -u | paste -sd ' ' -)"
+          if [[ "$APK_ABIS" != "arm64-v8a armeabi-v7a" ]]; then
+            echo "::error::Unexpected native ABIs in APK: $APK_ABIS"
+            exit 1
+          fi
+          "$AAPT" dump badging "$APK" | grep -q "sdkVersion:'24'"
+          {
+            echo "### APK compatibility verification"
+            echo "- Native ABIs: $APK_ABIS"
+            echo "- Minimum Android API: 24"
+            echo "- Signing certificate SHA-256: $APK_CERT_SHA"
+            echo "- Persistent signing key: verified against the committed debug.keystore"
+            echo "- Distribution: one ARM universal APK, preserving compatibility with the existing in-app updater."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Package APK and checksum
         env:
           VERSION_TAG: ${{ steps.version.outputs.version_tag }}
