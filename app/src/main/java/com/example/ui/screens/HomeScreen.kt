@@ -129,6 +129,7 @@ import com.example.embedded.api.ModuleMediaResult
 import com.example.embedded.api.ModuleMediaSource
 import com.example.embedded.host.CatalogMediaAdapter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
 
 @Composable
@@ -285,7 +286,10 @@ fun HomeScreen(
 
     LaunchedEffect(activeProfile?.id, telegramConnection.stage) {
         if (activeProfile != null && telegramConnection.stage == TelegramClientManager.AuthStage.READY) {
-            viewModel.syncTelegramPlaylists()
+            while (true) {
+                viewModel.syncTelegramPlaylists()
+                delay(30 * 60 * 1000L)
+            }
         }
     }
 
