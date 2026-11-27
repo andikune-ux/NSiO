@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +100,16 @@ fun PlaylistSelectionScreen(
                     val filter = "TELEGRAM_SOURCE:${playlist.id}"
                     val active = selectedFilter == filter
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)).clickable { viewModel.selectFilter(filter); onNavigateToHome() }.padding(horizontal = 10.dp, vertical = 10.dp).testTag("playlist_telegram_${playlist.id}"), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+                        if (playlist.thumbnailUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = playlist.thumbnailUrl,
+                                contentDescription = "Foto profil ${playlist.name}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(50))
+                            )
+                        } else {
+                            Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+                        }
                         Spacer(Modifier.size(9.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(playlist.name, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
