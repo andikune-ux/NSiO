@@ -172,7 +172,8 @@ object TelegramCatalogSync {
             if (!target.exists() || target.length() != source.length()) source.copyTo(target, overwrite = true)
             videoFile = target
         }
-        return createVideoThumbnail(context, mediaId, videoFile)
+        val resolvedVideoFile = videoFile ?: return null
+        return createVideoThumbnail(context, mediaId, resolvedVideoFile)
             .takeIf { it.isNotBlank() && isThumbnailUsable(it) }
     }
 
