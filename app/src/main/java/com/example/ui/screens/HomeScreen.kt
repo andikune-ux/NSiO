@@ -1692,7 +1692,8 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
                                         .clickable {
                                             showQuickActions = false
-                                            onNavigateToExtension()
+                                            expandedPlaylistCategory = null
+                                            showPlaylistPicker = true
                                         }
                                         .liquidGlassTvFocusable(shape = RoundedCornerShape(14.dp))
                                         .padding(vertical = 12.dp)
