@@ -19,14 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Download pinned TDLib API 24 runtime
-        uses: actions/download-artifact@v4
-        with:
-          name: NSiO-TDLib-1.8.70-Android-API24
-          repository: andikune-ux/NSiO
-          run-id: 45986064975
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/tdlib-api24
+      - name: Download pinned TDLib API 24 runtime release
+        env:
+          TDLib_RELEASE_URL: https://github.com/andikune-ux/NSiO/releases/download/tdlib-1.8.70-api24
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE" -o "$RUNNER_TEMP/$ARCHIVE"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE.sha256" -o "$RUNNER_TEMP/$ARCHIVE.sha256"
+          cd "$RUNNER_TEMP"
+          sha256sum -c "$ARCHIVE.sha256"
+          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
       - name: Stage verified TDLib Java/JNI runtime
         run: bash scripts/prepare-tdlib-android-api24.sh "${{ runner.temp }}/tdlib-api24"
       - uses: actions/setup-java@v4
@@ -45,14 +49,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Download pinned TDLib API 24 runtime
-        uses: actions/download-artifact@v4
-        with:
-          name: NSiO-TDLib-1.8.70-Android-API24
-          repository: andikune-ux/NSiO
-          run-id: 45986064975
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/tdlib-api24
+      - name: Download pinned TDLib API 24 runtime release
+        env:
+          TDLib_RELEASE_URL: https://github.com/andikune-ux/NSiO/releases/download/tdlib-1.8.70-api24
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE" -o "$RUNNER_TEMP/$ARCHIVE"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE.sha256" -o "$RUNNER_TEMP/$ARCHIVE.sha256"
+          cd "$RUNNER_TEMP"
+          sha256sum -c "$ARCHIVE.sha256"
+          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
       - name: Stage verified TDLib Java/JNI runtime
         run: bash scripts/prepare-tdlib-android-api24.sh "${{ runner.temp }}/tdlib-api24"
       - uses: actions/setup-java@v4
@@ -68,14 +76,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Download pinned TDLib API 24 runtime
-        uses: actions/download-artifact@v4
-        with:
-          name: NSiO-TDLib-1.8.70-Android-API24
-          repository: andikune-ux/NSiO
-          run-id: 45986064975
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/tdlib-api24
+      - name: Download pinned TDLib API 24 runtime release
+        env:
+          TDLib_RELEASE_URL: https://github.com/andikune-ux/NSiO/releases/download/tdlib-1.8.70-api24
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE" -o "$RUNNER_TEMP/$ARCHIVE"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE.sha256" -o "$RUNNER_TEMP/$ARCHIVE.sha256"
+          cd "$RUNNER_TEMP"
+          sha256sum -c "$ARCHIVE.sha256"
+          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
       - name: Stage verified TDLib Java/JNI runtime
         run: bash scripts/prepare-tdlib-android-api24.sh "${{ runner.temp }}/tdlib-api24"
       - uses: actions/setup-java@v4
@@ -99,14 +111,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Download pinned TDLib API 24 runtime
-        uses: actions/download-artifact@v4
-        with:
-          name: NSiO-TDLib-1.8.70-Android-API24
-          repository: andikune-ux/NSiO
-          run-id: 45986064975
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/tdlib-api24
+      - name: Download pinned TDLib API 24 runtime release
+        env:
+          TDLib_RELEASE_URL: https://github.com/andikune-ux/NSiO/releases/download/tdlib-1.8.70-api24
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE" -o "$RUNNER_TEMP/$ARCHIVE"
+          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE.sha256" -o "$RUNNER_TEMP/$ARCHIVE.sha256"
+          cd "$RUNNER_TEMP"
+          sha256sum -c "$ARCHIVE.sha256"
+          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
       - name: Stage verified TDLib Java/JNI runtime
         run: bash scripts/prepare-tdlib-android-api24.sh "${{ runner.temp }}/tdlib-api24"
       - uses: actions/setup-java@v4
