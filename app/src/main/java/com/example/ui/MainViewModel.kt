@@ -1081,6 +1081,90 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Synchronizes every saved Telegram group/channel playlist from the oldest accessible
+     * history to the newest post. Existing IDs are retained, so repeat syncs only add new media.
+     */
+    fun syncTelegramPlaylists() {
+        val profileId = _activeProfile.value?.id ?: return
+        if (TelegramClientManager.state.value.stage != TelegramClientManager.AuthStage.READY) return
+        viewModelScope.launch {
+            val playlists = sourcePlaylistDao.getForProfile(profileId)
+                .filter { it.sourceType.startsWith("TELEGRAM", true) }
+            if (playlists.isEmpty()) return@launch
+            for (playlist in playlists) {
+                val chatId = playlist.url.removePrefix("telegram://chat/").toLongOrNull() ?: continue
+                val history = kotlinx.coroutines.suspendCancellableCoroutine<Pair<List<TelegramClientManager.TelegramMedia>, String?>> { continuation ->
+                    TelegramClientManager.loadAllChatMedia(chatId) { items, error ->
+                        if (continuation.isActive) continuation.resume(items to error)
+                    }
+                }
+                val (mediaItems, historyError) = history
+                if (historyError != null) {
+                    Log.w("NSiO.TelegramSync", "History sync failed for ${playlist.name}: $historyError")
+                    continue
+                }
+                val existingIds = mediaDao.getPlaylistItems(playlist.id).mapTo(hashSetOf()) { it.id }
+                var added = 0
+                for (media in mediaItems.sortedBy { it.createdAt }) {
+                    val mediaId = "telegram:$profileId:${media.chatId}:${media.messageId}"
+                    if (mediaId in existingIds) continue
+                    try {
+                        val downloadedPath = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                            TelegramClientManager.downloadMedia(media) { path ->
+                                if (continuation.isActive) continuation.resume(path)
+                            }
+                        } ?: continue
+                        val sourceFile = java.io.File(downloadedPath)
+                        if (!sourceFile.isFile || sourceFile.length() <= 0L) continue
+                        val extension = sourceFile.extension.takeIf { it.isNotBlank() }
+                            ?: if (media.isPhoto) "jpg" else "mp4"
+                        val targetDir = java.io.File(getApplication<Application>().filesDir, "telegram/imported").apply { mkdirs() }
+                        val targetFile = java.io.File(targetDir, "${mediaId}.$extension")
+                        if (!targetFile.exists() || targetFile.length() != sourceFile.length()) {
+                            sourceFile.copyTo(targetFile, overwrite = true)
+                        }
+                        val localUri = Uri.fromFile(targetFile).toString()
+                        val item = MediaItem(
+                            id = mediaId,
+                            profileId = profileId,
+                            title = media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
+                            url = localUri,
+                            thumbnailUrl = if (media.isPhoto) localUri else "",
+                            type = if (media.isPhoto) "PHOTO" else "VIDEO",
+                            sourceType = "TELEGRAM",
+                            category = "Telegram",
+                            playlistId = playlist.id,
+                            sourceUrl = playlist.url,
+                            createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                            extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
+                            caption = media.caption
+                        )
+                        mediaDao.insertMedia(item)
+                        existingIds.add(mediaId)
+                        added++
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Log.w("NSiO.TelegramSync", "Media sync failed: ${media.messageId}", error)
+                    }
+                }
+                val count = mediaDao.countForPlaylist(playlist.id)
+                sourcePlaylistDao.updateCount(playlist.id, count)
+                if (added > 0) {
+                    authManager.currentUser?.let { user ->
+                        runCatching {
+                            cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(playlist.copy(itemCount = count)))
+                            mediaDao.getPlaylistItems(playlist.id).forEach { item ->
+                                cloudRepository.saveMediaItem(user.uid, item)
+                            }
+                        }.onFailure { Log.w("NSiO.TelegramSync", "Cloud metadata sync failed", it) }
+                    }
+                }
+            }
+        }
+    }
+
     /** Persist one selected Telegram post as a durable item in its Telegram playlist. */
     fun addTelegramMediaToPlaylist(
         media: TelegramClientManager.TelegramMedia,
@@ -1121,12 +1205,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val item = MediaItem(
                     id = mediaId, profileId = profileId,
-                    title = media.title.ifBlank { "Media Telegram" },
+                    title = media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
                     url = localUri, thumbnailUrl = if (media.isPhoto) localUri else "",
                     type = if (media.isPhoto) "PHOTO" else "VIDEO",
                     sourceType = "TELEGRAM", category = "Telegram",
                     playlistId = playlist.id, sourceUrl = cleanSourceUrl,
-                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}"
+                    createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
+                    caption = media.caption
                 )
                 mediaDao.insertMedia(item)
                 val count = mediaDao.countForPlaylist(playlist.id)
