@@ -1030,6 +1030,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return normalized
     }
 
+    // Telegram source registration. Media import will be connected after Telegram API credentials are configured.
+    fun addTelegramSource(url: String, sourceName: String = "", onFinished: (String) -> Unit) {
+        val profileId = _activeProfile.value?.id ?: run { onFinished("Error: profil aktif tidak ditemukan."); return }
+        viewModelScope.launch {
+            val message = runCatching {
+                val cleanUrl = url.trim().removeSuffix("/")
+                val uri = java.net.URI(cleanUrl)
+                val host = uri.host?.lowercase()?.removePrefix("www.")
+                require(uri.scheme.equals("https", true) && host in setOf("t.me", "telegram.me")) {
+                    "Gunakan tautan Telegram https://t.me/... atau https://telegram.me/..."
+                }
+                val path = uri.path.orEmpty().trim('/').split('/').filter { it.isNotBlank() }
+                require(path.isNotEmpty()) { "Tautan Telegram tidak memuat nama channel, grup, atau postingan." }
+                val isPost = path.size >= 2 && path.last().toLongOrNull() != null
+                val normalizedUrl = "https://t.me/" + path.joinToString("/")
+                val existing = sourcePlaylistDao.getForProfile(profileId).firstOrNull {
+                    it.sourceType.startsWith("TELEGRAM", true) && it.url.trimEnd('/') == normalizedUrl
+                }
+                if (existing != null) {
+                    "Tautan Telegram sudah terdaftar sebagai '${existing.name}'."
+                } else {
+                    val fallbackName = if (isPost) "Postingan Telegram ${path.last()}" else "Telegram ${path.first()}"
+                    val playlist = SourcePlaylist(
+                        id = UUID.randomUUID().toString(), profileId = profileId,
+                        name = sourceName.trim().take(48).ifBlank { fallbackName },
+                        url = normalizedUrl, sourceType = if (isPost) "TELEGRAM_POST" else "TELEGRAM_CHAT"
+                    )
+                    sourcePlaylistDao.insert(playlist)
+                    "Sumber Telegram '${playlist.name}' ditambahkan. Media belum diimpor; koneksi Telegram API ID/Hash perlu dikonfigurasi pada tahap integrasi berikutnya."
+                }
+            }.getOrElse { "Error: ${it.localizedMessage ?: "tautan Telegram tidak valid"}" }
+            onFinished(message)
+        }
+    }
+
     // --- Link Parsing (B1) ---
     fun parseAndAddLink(url: String, playlistName: String = "", onFinished: (String) -> Unit) {
         val profileId = _activeProfile.value?.id ?: return
@@ -1265,7 +1300,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             mediaDao.clearPlaylist(playlist.id)
             sourcePlaylistDao.delete(playlist)
-            if (_selectedFilter.value == "PLAYLIST:${playlist.id}") selectFilter("ALL")
+            if (_selectedFilter.value == "PLAYLIST:${playlist.id}" || _selectedFilter.value == "TELEGRAM_SOURCE:${playlist.id}") selectFilter("ALL")
 
             showStatus(
                 if (warnings.isEmpty()) "Playlist '${playlist.name}' dan data terkait berhasil dihapus"
