@@ -1060,7 +1060,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             " Cloud belum tersinkron: ${it.localizedMessage ?: "periksa koneksi"}."
                         }
                     }.orEmpty()
-                    "Sumber Telegram '${playlist.name}' disimpan. Media belum diimpor; tahap berikutnya adalah integrasi Telegram API." + cloudWarning
+                    "Playlist Telegram '${playlist.name}' berhasil disimpan. Impor media dari daftar postingan Telegram untuk menampilkannya di Beranda." + cloudWarning
                 }
             }.getOrElse { "Error: ${it.localizedMessage ?: "tautan Telegram tidak valid"}" }
             onFinished(message)
