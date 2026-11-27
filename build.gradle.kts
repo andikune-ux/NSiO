@@ -135,6 +135,7 @@ val nsioVersionValues = calculateNsioVersion()
 rootProject.extra["nsioVersionValues"] = nsioVersionValues
 
 tasks.register("printNsioVersion") {
+  notCompatibleWithConfigurationCache("This diagnostic task prints computed version values for the CI wrapper.")
   group = "versioning"
   description = "Print the shared NSiO version used by local and CI builds."
   doLast {
