@@ -254,6 +254,7 @@ fun SettingsScreen(
             var telegramPhone by remember { mutableStateOf("") }
             var telegramCode by remember { mutableStateOf("") }
             var telegramPassword by remember { mutableStateOf("") }
+            var selectedTelegramChatId by remember { mutableStateOf<Long?>(null) }
             val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
             LaunchedEffect(telegramCredentialStore) {
                 val saved = telegramCredentialStore.load()
@@ -413,7 +414,13 @@ fun SettingsScreen(
                             }
                             telegramState.chats.take(30).forEach { chat ->
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            selectedTelegramChatId = chat.id
+                                            com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id)
+                                        }
+                                        .padding(horizontal = 9.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
@@ -421,6 +428,38 @@ fun SettingsScreen(
                                         Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
+                                }
+                            }
+                            if (selectedTelegramChatId != null) {
+                                Text("Media terbaru", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                if (telegramState.media.isEmpty()) {
+                                    Text("Belum ada media yang didukung pada 50 pesan terbaru atau sumber sedang dimuat.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                telegramState.media.forEach { media ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(media.title, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                            Text(if (media.isPhoto) "Foto" else "Video", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        TextButton(onClick = {
+                                            com.example.data.telegram.TelegramClientManager.downloadMedia(media) { localPath ->
+                                                if (localPath == null) {
+                                                    Toast.makeText(context, "Media Telegram gagal diunduh.", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    viewModel.addLocalFileMedia(
+                                                        media.title,
+                                                        Uri.fromFile(java.io.File(localPath)).toString(),
+                                                        media.isPhoto
+                                                    ) { added ->
+                                                        Toast.makeText(context, if (added) "Media Telegram ditambahkan ke Beranda." else "Media gagal diimpor.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }
+                                        }) { Text("Impor") }
+                                    }
                                 }
                             }
                             TextButton(onClick = { com.example.data.telegram.TelegramClientManager.logout() }) {
