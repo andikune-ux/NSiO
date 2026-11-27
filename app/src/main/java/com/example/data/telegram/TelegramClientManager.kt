@@ -1,0 +1,209 @@
+package com.example.data.telegram
+
+import android.content.Context
+import android.os.Build
+import com.example.data.security.TelegramApiCredentialStore
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.drinkless.tdlib.Client
+import org.drinkless.tdlib.TdApi
+import java.io.File
+import java.security.SecureRandom
+
+/**
+ * Process-wide TDLib bridge. TDLib owns its own persistent encrypted database in app-private storage.
+ * No Telegram phone number, OTP, or 2FA password is persisted by NSiO.
+ */
+object TelegramClientManager {
+    enum class AuthStage { NOT_CONFIGURED, INITIALIZING, WAITING_PHONE, WAITING_CODE, WAITING_PASSWORD, READY, ERROR }
+
+    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int)
+
+    data class State(
+        val stage: AuthStage = AuthStage.NOT_CONFIGURED,
+        val message: String = "Telegram belum dihubungkan.",
+        val chats: List<TelegramChat> = emptyList()
+    )
+
+    private val mutableState = MutableStateFlow(State())
+    val state: StateFlow<State> = mutableState.asStateFlow()
+    @Volatile private var client: Client? = null
+    @Volatile private var appContext: Context? = null
+
+    @Synchronized
+    fun initialize(context: Context) {
+        val app = context.applicationContext
+        appContext = app
+        if (client != null) return
+        val credentials = TelegramApiCredentialStore(app).load()
+        if (credentials == null) {
+            mutableState.value = State(message = "Masukkan API ID dan API Hash di Pengaturan Telegram.")
+            return
+        }
+        val apiId = credentials.apiId.toIntOrNull()
+        if (apiId == null) {
+            mutableState.value = State(stage = AuthStage.ERROR, message = "API ID Telegram tidak valid.")
+            return
+        }
+        mutableState.value = State(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
+        client = Client.create({ update -> handleUpdate(update) }, { error ->
+            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
+        }, { error ->
+            mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
+        })
+        // A random local key protects TDLib's database. It never leaves app-private storage.
+        val root = File(app.filesDir, "telegram/tdlib").apply { mkdirs() }
+        val keyFile = File(root, ".database-key")
+        val databaseKey = if (keyFile.isFile && keyFile.length() == 32L) {
+            keyFile.readBytes()
+        } else {
+            ByteArray(32).also { SecureRandom().nextBytes(it); keyFile.writeBytes(it) }
+        }
+        keyFile.setReadable(false, false)
+        keyFile.setWritable(false, false)
+        keyFile.setReadable(true, true)
+        keyFile.setWritable(true, true)
+        // TDLib sends AuthorizationStateWaitTdlibParameters after Client.create.
+        pendingApiId = apiId
+        pendingApiHash = credentials.apiHash
+        pendingDatabaseDirectory = File(root, "database").apply { mkdirs() }.absolutePath
+        pendingFilesDirectory = File(root, "files").apply { mkdirs() }.absolutePath
+        pendingDatabaseKey = databaseKey
+    }
+
+    private var pendingApiId: Int = 0
+    private var pendingApiHash: String = ""
+    private var pendingDatabaseDirectory: String = ""
+    private var pendingFilesDirectory: String = ""
+    private var pendingDatabaseKey: ByteArray = byteArrayOf()
+
+    private fun handleUpdate(update: TdApi.Object) {
+        when (update) {
+            is TdApi.UpdateAuthorizationState -> handleAuthorizationState(update.authorizationState)
+            is TdApi.UpdateNewChat -> upsertChat(update.chat)
+            is TdApi.UpdateChatTitle -> refreshChat(update.chatId)
+            is TdApi.UpdateChatLastMessage -> refreshChat(update.chatId)
+        }
+    }
+
+    private fun handleAuthorizationState(auth: TdApi.AuthorizationState) {
+        when (auth) {
+            is TdApi.AuthorizationStateWaitTdlibParameters -> {
+                val parameters = TdApi.SetTdlibParameters().apply {
+                    useTestDc = false
+                    databaseDirectory = pendingDatabaseDirectory
+                    filesDirectory = pendingFilesDirectory
+                    databaseEncryptionKey = pendingDatabaseKey
+                    useFileDatabase = true
+                    useChatInfoDatabase = true
+                    useMessageDatabase = true
+                    useSecretChats = false
+                    apiId = pendingApiId
+                    apiHash = pendingApiHash
+                    systemLanguageCode = "id"
+                    deviceModel = listOf(Build.MANUFACTURER, Build.MODEL).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Android" }
+                    systemVersion = Build.VERSION.RELEASE.orEmpty()
+                    applicationVersion = "NSiO"
+                }
+                send(parameters)
+            }
+            is TdApi.AuthorizationStateWaitPhoneNumber ->
+                mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_PHONE, message = "Masukkan nomor telepon Telegram dengan kode negara.")
+            is TdApi.AuthorizationStateWaitCode ->
+                mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_CODE, message = "Masukkan kode verifikasi yang dikirim Telegram.")
+            is TdApi.AuthorizationStateWaitPassword ->
+                mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_PASSWORD, message = "Masukkan kata sandi verifikasi dua langkah Telegram.")
+            is TdApi.AuthorizationStateReady -> {
+                mutableState.value = mutableState.value.copy(stage = AuthStage.READY, message = "Telegram terhubung.")
+                loadChats()
+            }
+            is TdApi.AuthorizationStateClosed -> {
+                client = null
+                mutableState.value = State(message = "Sesi Telegram ditutup.")
+            }
+            else -> mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = auth.javaClass.simpleName)
+        }
+    }
+
+    fun submitPhoneNumber(phone: String) {
+        val normalized = phone.trim().replace(" ", "").replace("-", "")
+        require(Regex("^\\+[1-9][0-9]{7,14}$").matches(normalized)) {
+            "Gunakan format internasional, contoh +628123456789."
+        }
+        send(TdApi.SetAuthenticationPhoneNumber(normalized, null))
+    }
+
+    fun submitCode(code: String) {
+        val value = code.trim()
+        require(value.length in 3..10 && value.all(Char::isDigit)) { "Kode verifikasi tidak valid." }
+        send(TdApi.CheckAuthenticationCode(value))
+    }
+
+    fun submitPassword(password: String) {
+        require(password.isNotBlank()) { "Kata sandi tidak boleh kosong." }
+        send(TdApi.CheckAuthenticationPassword(password))
+    }
+
+    fun loadChats() {
+        val activeClient = client ?: return
+        activeClient.send(TdApi.LoadChats(null, 100), { result ->
+            if (result is TdApi.Error && result.code != 404) {
+                mutableState.value = mutableState.value.copy(message = "Gagal memuat daftar Telegram: ${result.message}")
+            }
+            activeClient.send(TdApi.GetChats(null, 100), { chatsResult ->
+                if (chatsResult is TdApi.Chats) {
+                    chatsResult.chatIds.forEach { refreshChat(it) }
+                } else if (chatsResult is TdApi.Error) {
+                    mutableState.value = mutableState.value.copy(message = "Gagal mengambil daftar Telegram: ${chatsResult.message}")
+                }
+            })
+        })
+    }
+
+    private fun refreshChat(chatId: Long) {
+        client?.send(TdApi.GetChat(chatId), { result ->
+            if (result is TdApi.Chat) upsertChat(result)
+        })
+    }
+
+    private fun upsertChat(chat: TdApi.Chat) {
+        val kind = when (val type = chat.type) {
+            is TdApi.ChatTypeSupergroup -> if (type.isChannel) "Channel" else "Grup"
+            is TdApi.ChatTypeBasicGroup -> "Grup"
+            else -> return
+        }
+        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount)
+        val updated = (mutableState.value.chats.filterNot { it.id == item.id } + item)
+            .sortedBy { it.title.lowercase() }
+        mutableState.value = mutableState.value.copy(chats = updated)
+    }
+
+    private fun send(function: TdApi.Function<*>) {
+        val activeClient = client
+        if (activeClient == null) {
+            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = "Koneksi Telegram belum diinisialisasi.")
+            return
+        }
+        activeClient.send(function, { result ->
+            if (result is TdApi.Error) {
+                mutableState.value = mutableState.value.copy(
+                    stage = AuthStage.ERROR,
+                    message = "Telegram (${result.code}): ${result.message}"
+                )
+            }
+        })
+    }
+
+    @Synchronized
+    fun logout() {
+        val activeClient = client ?: return
+        activeClient.send(TdApi.LogOut(), { result ->
+            if (result is TdApi.Error) {
+                mutableState.value = mutableState.value.copy(message = "Gagal keluar dari Telegram: ${result.message}")
+            }
+        })
+        client = null
+        mutableState.value = State(message = "Sesi Telegram sedang diakhiri.")
+    }
+}
