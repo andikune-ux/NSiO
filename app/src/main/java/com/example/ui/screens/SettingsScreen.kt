@@ -428,7 +428,11 @@ fun SettingsScreen(
                                 it.title.contains(telegramChatSearch.trim(), ignoreCase = true) ||
                                     it.kind.contains(telegramChatSearch.trim(), ignoreCase = true)
                             }
-                            visibleTelegramChats.forEach { chat ->
+                            val mainTelegramChats = visibleTelegramChats.filterNot { it.isArchived }
+                            val archivedTelegramChats = visibleTelegramChats.filter { it.isArchived }
+                            @Composable
+                            fun TelegramChatRows(chats: List<com.example.data.telegram.TelegramClientManager.TelegramChat>) {
+                                chats.forEach { chat ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth()
                                         .clip(RoundedCornerShape(10.dp))
@@ -454,6 +458,15 @@ fun SettingsScreen(
                                         Text("Media dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
                                     } else if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
                                 }
+                                }
+                            }
+                            if (mainTelegramChats.isNotEmpty()) {
+                                Text("Chat utama (${mainTelegramChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                TelegramChatRows(mainTelegramChats)
+                            }
+                            if (archivedTelegramChats.isNotEmpty()) {
+                                Text("Arsip Telegram (${archivedTelegramChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                TelegramChatRows(archivedTelegramChats)
                             }
                             if (visibleTelegramChats.isEmpty()) {
                                 Text("Tidak ada channel/grup yang cocok dengan pencarian.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
