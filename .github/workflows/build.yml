@@ -93,8 +93,34 @@ jobs:
         with: { distribution: zulu, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '9.3.1' }
-      - name: Run unit tests
-        run: gradle testDebugUnitTest --no-daemon
+      - name: Run unit tests (retry transient Robolectric downloads)
+        shell: bash
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            echo "Unit test attempt $attempt/3"
+            if gradle testDebugUnitTest --no-daemon --stacktrace; then
+              exit 0
+            fi
+            status=$?
+            if [[ "$attempt" -lt 3 ]]; then
+              delay=$((attempt * 20))
+              echo "Unit tests failed; retrying after ${delay}s. This also retries transient Robolectric SDK download failures."
+              sleep "$delay"
+            fi
+          done
+          echo "Unit tests failed after 3 attempts."
+          exit 1
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSiO-unit-test-reports-${{ github.run_number }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
 
   dependency_report:
     name: 📚 Dependency Report
