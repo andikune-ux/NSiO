@@ -102,13 +102,13 @@ fun PlaylistSelectionScreen(
                         Spacer(Modifier.size(9.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(playlist.name, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan Telegram" else "Channel / Grup Telegram", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan Telegram • media belum diimpor" else "Channel / Grup Telegram • media belum diimpor", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (active) Icon(Icons.Default.LockOpen, contentDescription = "Dipilih", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                     }
                 }
-                if (playlists.filterNot { it.sourceType.startsWith("TELEGRAM", true) }.isEmpty()) {
-                    Text("Belum ada playlist tersimpan. Tambahkan sumber melalui Manajemen Sumber.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (playlists.isEmpty()) {
+                    Text("Belum ada playlist atau sumber tersimpan. Tambahkan sumber melalui Manajemen Sumber.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     playlists.filterNot { it.sourceType.startsWith("TELEGRAM", true) }.forEach { playlist ->
                         val filter = "PLAYLIST:${playlist.id}"
