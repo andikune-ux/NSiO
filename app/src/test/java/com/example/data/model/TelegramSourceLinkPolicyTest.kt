@@ -30,13 +30,13 @@ class TelegramSourceLinkPolicyTest {
     fun acceptsPrivateInviteLinkWithoutTreatingItAsPost() {
         val result = TelegramSourceLinkPolicy.parse("https://t.me/+AbCdEf123")
         assertEquals("https://t.me/+AbCdEf123", result.url)
-        assertEquals("TELEGRAM_CHAT", result.sourceType)
+        assertEquals("TELEGRAM_INVITE", result.sourceType)
     }
 
     @Test
     fun acceptsLegacyPrivateInviteLink() {
         val result = TelegramSourceLinkPolicy.parse("https://t.me/joinchat/AbCdEf123")
-        assertEquals("TELEGRAM_CHAT", result.sourceType)
+        assertEquals("TELEGRAM_INVITE", result.sourceType)
     }
 
     @Test
