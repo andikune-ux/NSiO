@@ -12,7 +12,8 @@ internal object MediaCacheIdentity {
         "drive.google.com",
         "docs.google.com",
         "drive.usercontent.google.com",
-        "drive.googleusercontent.com"
+        "drive.googleusercontent.com",
+        "lh3.googleusercontent.com"
     )
 
     fun forUrl(rawUrl: String): String? {
@@ -35,7 +36,7 @@ internal object MediaCacheIdentity {
                     ?.substringAfter('=', "")
                     ?.takeIf(String::isNotBlank)
                     ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
-            if (driveId != null) return "drive:$driveId"
+            if (driveId != null) return "drive:${driveId.substringBefore("=")}"
         }
 
         val port = when {
