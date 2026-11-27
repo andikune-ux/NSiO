@@ -26,6 +26,8 @@ import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.model.TelegramSourceLinkPolicy
+import com.example.data.telegram.TelegramClientManager
+import kotlin.coroutines.resume
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
 import com.example.player.normalizePlaybackUrl
@@ -1062,6 +1064,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }.getOrElse { "Error: ${it.localizedMessage ?: "tautan Telegram tidak valid"}" }
             onFinished(message)
+        }
+    }
+
+    /** Persist one selected Telegram post as a durable item in its Telegram playlist. */
+    fun addTelegramMediaToPlaylist(
+        media: TelegramClientManager.TelegramMedia,
+        sourceUrl: String,
+        sourceName: String,
+        onFinished: (Boolean) -> Unit = {}
+    ) {
+        val profileId = _activeProfile.value?.id ?: run { showStatus("Profil aktif tidak ditemukan"); onFinished(false); return }
+        if (_isImportingLocalFile.value) { showStatus("Impor media sedang berjalan."); onFinished(false); return }
+        val mediaId = "telegram:$profileId:${media.chatId}:${media.messageId}"
+        viewModelScope.launch {
+            _isImportingLocalFile.value = true
+            var success = false
+            try {
+                if (mediaDao.getMediaListForProfile(profileId).any { it.id == mediaId }) {
+                    showStatus("Postingan ini sudah ada di playlist Telegram.")
+                    success = true
+                    return@launch
+                }
+                val downloadedPath = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                    TelegramClientManager.downloadMedia(media) { path ->
+                        if (continuation.isActive) continuation.resume(path)
+                    }
+                } ?: throw IllegalStateException("Telegram gagal mengunduh media.")
+                val sourceFile = java.io.File(downloadedPath)
+                if (!sourceFile.isFile || sourceFile.length() <= 0L) throw IllegalStateException("File media Telegram kosong atau tidak ditemukan.")
+                val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: if (media.isPhoto) "jpg" else "mp4"
+                val targetDir = java.io.File(getApplication<Application>().filesDir, "telegram/imported").apply { mkdirs() }
+                val targetFile = java.io.File(targetDir, "$mediaId.$extension")
+                sourceFile.copyTo(targetFile, overwrite = true)
+                val localUri = Uri.fromFile(targetFile).toString()
+                val cleanSourceUrl = sourceUrl.trim()
+                val playlist = ensureSourcePlaylist(
+                    cleanSourceUrl,
+                    sourceName.trim().take(48).ifBlank { "Telegram ${media.chatId}" },
+                    "TELEGRAM",
+                    profileId
+                )
+                val item = MediaItem(
+                    id = mediaId, profileId = profileId,
+                    title = media.title.ifBlank { "Media Telegram" },
+                    url = localUri, thumbnailUrl = if (media.isPhoto) localUri else "",
+                    type = if (media.isPhoto) "PHOTO" else "VIDEO",
+                    sourceType = "TELEGRAM", category = "Telegram",
+                    playlistId = playlist.id, sourceUrl = cleanSourceUrl,
+                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}"
+                )
+                mediaDao.insertMedia(item)
+                val count = mediaDao.countForPlaylist(playlist.id)
+                sourcePlaylistDao.updateCount(playlist.id, count)
+                authManager.currentUser?.let { user ->
+                    runCatching {
+                        cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(playlist.copy(itemCount = count)))
+                        cloudRepository.saveMediaItem(user.uid, item)
+                    }.onFailure { showStatus("Media tersimpan di perangkat, tetapi metadata Cloud gagal disinkronkan.") }
+                }
+                success = true
+                showStatus("Media berhasil ditambahkan ke playlist Telegram '${playlist.name}'.")
+            } catch (error: Exception) {
+                showStatus("Impor Telegram gagal: ${error.localizedMessage ?: "kesalahan tidak diketahui"}")
+            } finally {
+                _isImportingLocalFile.value = false
+                onFinished(success)
+            }
         }
     }
 
