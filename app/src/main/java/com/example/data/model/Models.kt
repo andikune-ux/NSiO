@@ -37,7 +37,8 @@ data class SourcePlaylist(
     val sourceType: String = "LINK",
     val itemCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val thumbnailUrl: String = ""
 )
 
 @Entity(tableName = "profiles")
