@@ -2439,8 +2439,34 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(15.dp)) {
                         itemsIndexed(comments) { i, comment ->
                             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Surface(shape = CircleShape, color = Color(0xFF343434), modifier = Modifier.size(34.dp)) {
-                                    Box(contentAlignment = Alignment.Center) { Text("👤", fontSize = 17.sp) }
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFF343434),
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val profileAvatar = activeProfile?.avatarEmoji.orEmpty()
+                                        if (
+                                            profileAvatar.startsWith("content://") ||
+                                            profileAvatar.startsWith("https://") ||
+                                            profileAvatar.startsWith("file://")
+                                        ) {
+                                            AsyncImage(
+                                                model = profileAvatar,
+                                                contentDescription = "Avatar ${activeProfile?.name ?: "Pengguna"}",
+                                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Text(
+                                                text = profileAvatar.ifBlank { "👤" },
+                                                fontSize = 17.sp
+                                            )
+                                        }
+                                    }
                                 }
                                 Column(Modifier.weight(1f)) {
                                     Text(activeProfile?.name ?: "Pengguna", color = Color.White.copy(alpha = .7f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
