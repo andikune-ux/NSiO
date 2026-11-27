@@ -1067,14 +1067,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Register a selected Telegram chat as a home playlist before importing individual posts. */
+    /** Register a selected Telegram chat and cache its original Telegram profile photo. */
     fun addTelegramChatPlaylist(chatId: Long, chatTitle: String) {
         val profileId = _activeProfile.value?.id ?: run { showStatus("Profil aktif tidak ditemukan"); return }
         viewModelScope.launch {
             runCatching {
-                ensureSourcePlaylist("telegram://chat/$chatId", chatTitle, "TELEGRAM", profileId)
-            }.onSuccess {
-                showStatus("Sumber Telegram '${it.name}' siap. Pilih media di bawah untuk mengimpornya.")
+                var playlist = ensureSourcePlaylist("telegram://chat/$chatId", chatTitle, "TELEGRAM", profileId)
+                val photoPath = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                    TelegramClientManager.downloadChatPhoto(chatId) { path ->
+                        if (continuation.isActive) continuation.resume(path)
+                    }
+                }
+                if (!photoPath.isNullOrBlank()) {
+                    val sourceFile = java.io.File(photoPath)
+                    if (sourceFile.isFile && sourceFile.length() > 0L) {
+                        val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
+                        val targetDir = java.io.File(getApplication<Application>().filesDir, "telegram/profiles").apply { mkdirs() }
+                        val targetFile = java.io.File(targetDir, "$chatId.$extension")
+                        sourceFile.copyTo(targetFile, overwrite = true)
+                        playlist = playlist.copy(thumbnailUrl = Uri.fromFile(targetFile).toString(), updatedAt = System.currentTimeMillis())
+                        sourcePlaylistDao.update(playlist)
+                    }
+                }
+                authManager.currentUser?.let { user ->
+                    runCatching { cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(playlist)) }
+                }
+                showStatus("Sumber Telegram '${playlist.name}' siap dan identitas profil sumber disimpan.")
             }.onFailure {
                 showStatus("Gagal menambahkan sumber Telegram: ${it.localizedMessage ?: "kesalahan database"}")
             }
