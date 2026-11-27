@@ -56,7 +56,7 @@ fun calculateNsioVersion(): Map<String, String> {
   val sourceSha = System.getenv("NSIO_SOURCE_SHA")
     ?: System.getenv("GITHUB_SHA")
     ?: gitOutput("rev-parse", "HEAD")
-  if (gitOutput("cat-file", "-e", "$sourceSha^{commit}").isNotEmpty()) {
+  if (gitOutput("rev-parse", "--verify", "$sourceSha^{commit}") != sourceSha) {
     throw GradleException("Cannot resolve NSiO source commit: $sourceSha")
   }
 
