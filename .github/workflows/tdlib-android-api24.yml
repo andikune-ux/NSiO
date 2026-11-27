@@ -1,11 +1,6 @@
 name: NSiO TDLib Android API 24
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/build-tdlib-android-api24.sh"
-      - ".github/workflows/tdlib-android-api24.yml"
 permissions:
   contents: write
   actions: write
