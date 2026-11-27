@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
     private var sessionUnlocked by mutableStateOf(false)
     private var sessionProfileLoggedIn by mutableStateOf(false)
     private var previousDecorForeground: android.graphics.drawable.Drawable? = null
+    private var privacyCoverApplied = false
     @Volatile private var coreStarted = false
 
     @androidx.media3.common.util.UnstableApi
@@ -376,10 +377,11 @@ class MainActivity : ComponentActivity() {
         val decor = window.decorView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             decor.setRenderEffect(RenderEffect.createBlurEffect(26f, 26f, Shader.TileMode.CLAMP))
-        } else if (decor.foreground == null) {
+        } else {
             // Older Android versions receive a privacy cover rather than an unblurred task snapshot.
             previousDecorForeground = decor.foreground
             decor.foreground = ColorDrawable(0xE6000000.toInt())
+            privacyCoverApplied = true
         }
     }
 
@@ -387,9 +389,10 @@ class MainActivity : ComponentActivity() {
         val decor = window.decorView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             decor.setRenderEffect(null)
-        } else if (previousDecorForeground != null || decor.foreground is ColorDrawable) {
+        } else if (privacyCoverApplied) {
             decor.foreground = previousDecorForeground
             previousDecorForeground = null
+            privacyCoverApplied = false
         }
     }
 
