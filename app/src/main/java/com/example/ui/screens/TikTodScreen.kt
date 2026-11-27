@@ -418,6 +418,9 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
         zoomScale = 1f
         zoomOffset = Offset.Zero
         videoAspectRatio = 0f
+        // A photo should enter with the same standard TikTod controls as a video.
+        // Clean Mode remains available and can still be enabled explicitly for that photo.
+        if (isPhotoMedia) isCleanMode = false
     }
 
     // Keep a small progressive preload for exactly one upcoming Drive video.
@@ -569,12 +572,20 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
     // make a stale item appear to be skipped.
     LaunchedEffect(playerState.isPlaying, media?.id, activeProfile?.id) {
         val profileId = activeProfile?.id
-        if (media != null && !media.type.equals("PHOTO", true) && profileId != null && playerState.isPlaying) {
-            // "Viewed" means playback actually started, not that the video completed.
-            store.markVideoStarted(profileId, media.id)
-            if (!countedView) {
-                views = store.addView(media.id)
-                countedView = true
+        if (media != null && profileId != null) {
+            if (media.type.equals("PHOTO", true)) {
+                // A still image counts once when it becomes the active feed item.
+                if (!countedView) {
+                    views = store.addView(media.id)
+                    countedView = true
+                }
+            } else if (playerState.isPlaying) {
+                // "Viewed" for video means playback actually started, not that it completed.
+                store.markVideoStarted(profileId, media.id)
+                if (!countedView) {
+                    views = store.addView(media.id)
+                    countedView = true
+                }
             }
         }
     }
