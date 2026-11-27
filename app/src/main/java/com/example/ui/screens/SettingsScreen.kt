@@ -244,6 +244,112 @@ fun SettingsScreen(
         }
 
         item {
+            val telegramCredentialStore = remember(context) {
+                com.example.data.security.TelegramApiCredentialStore(context)
+            }
+            var telegramApiId by remember { mutableStateOf("") }
+            var telegramApiHash by remember { mutableStateOf("") }
+            var telegramCredentialsSaved by remember { mutableStateOf(false) }
+            var telegramCredentialMessage by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(telegramCredentialStore) {
+                val saved = telegramCredentialStore.load()
+                if (saved != null) {
+                    telegramApiId = saved.apiId
+                    telegramApiHash = saved.apiHash
+                    telegramCredentialsSaved = true
+                }
+            }
+            SettingsGlassCard(
+                icon = Icons.Default.Language,
+                title = "Integrasi Telegram",
+                subtitle = "Simpan API ID dan API Hash Telegram secara terenkripsi di perangkat ini."
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = telegramApiId,
+                        onValueChange = {
+                            telegramApiId = it.filter(Char::isDigit).take(20)
+                            telegramCredentialsSaved = false
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("telegram_api_id_input"),
+                        singleLine = true,
+                        label = { Material3Text("API ID") },
+                        placeholder = { Material3Text("Masukkan API ID") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = telegramApiHash,
+                        onValueChange = {
+                            telegramApiHash = it.filter { ch -> ch.isLetterOrDigit() }.take(32)
+                            telegramCredentialsSaved = false
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("telegram_api_hash_input"),
+                        singleLine = true,
+                        label = { Material3Text("API Hash") },
+                        placeholder = { Material3Text("32 karakter API Hash") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                    )
+                    Text(
+                        "Kredensial disimpan memakai Android Keystore dan tidak disinkronkan ke Cloud atau GitHub.",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (telegramCredentialsSaved) {
+                        Text("API Telegram tersimpan di perangkat ini.", fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                    telegramCredentialMessage?.let {
+                        Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                telegramCredentialMessage = runCatching {
+                                    telegramCredentialStore.save(telegramApiId.trim(), telegramApiHash.trim())
+                                }.exceptionOrNull()?.localizedMessage
+                                if (telegramCredentialMessage == null) {
+                                    telegramCredentialsSaved = true
+                                    Toast.makeText(context, "Kredensial Telegram tersimpan.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = telegramApiId.isNotBlank() && telegramApiHash.length == 32,
+                            modifier = Modifier.weight(1f).heightIn(min = 46.dp)
+                        ) {
+                            Text("Simpan API", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                telegramCredentialStore.clear()
+                                telegramApiId = ""
+                                telegramApiHash = ""
+                                telegramCredentialsSaved = false
+                                telegramCredentialMessage = null
+                                Toast.makeText(context, "Kredensial Telegram dihapus.", Toast.LENGTH_SHORT).show()
+                            },
+                            enabled = telegramCredentialsSaved || telegramApiId.isNotBlank() || telegramApiHash.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f).heightIn(min = 46.dp)
+                        ) {
+                            Text("Hapus", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Text(
+                        "Catatan: penyimpanan API saja belum mengaktifkan login atau impor media Telegram. Tahap autentikasi MTProto masih diperlukan.",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        item {
             SettingsGlassCard(
                 icon = Icons.Default.CloudDownload,
                 title = "Download Manager",
