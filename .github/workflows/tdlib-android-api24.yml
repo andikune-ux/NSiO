@@ -32,7 +32,6 @@ jobs:
           sudo apt-get install -y gperf php-cli perl make zip unzip
       - name: Build official TDLib Java/JNI for API 24
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           CMAKE_BUILD_PARALLEL_LEVEL: "2"
         run: |
           bash scripts/build-tdlib-android-api24.sh "$RUNNER_TEMP/tdlib-api24-output"
