@@ -25,13 +25,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          DEST="$RUNNER_TEMP/tdlib-api24"
+          mkdir -p "$DEST"
           TAG="tdlib-1.8.70-api24"
           ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
-          gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256" --dir "$RUNNER_TEMP"
-          cd "$RUNNER_TEMP"
-          sha256sum -c "$ARCHIVE.sha256"
-          tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256" --dir "$RUNNER_TEMP"
+            cd "$RUNNER_TEMP"
+            sha256sum -c "$ARCHIVE.sha256"
+            tar -xzf "$ARCHIVE" -C "$DEST"
+          else
+            echo "TDLib release asset is temporarily unavailable; using the previously verified immutable Actions artifact."
+            gh run download 45986064975 --repo "$GITHUB_REPOSITORY" --name NSiO-TDLib-1.8.70-Android-API24 --dir "$DEST"
+          fi
       - name: Validate TDLib runtime payload
         run: |
           set -euo pipefail
