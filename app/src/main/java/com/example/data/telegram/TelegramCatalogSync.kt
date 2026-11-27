@@ -45,12 +45,12 @@ object TelegramCatalogSync {
             for (playlist in playlists) {
                 val chatId = playlist.url.removePrefix("telegram://chat/").toLongOrNull() ?: continue
                 try {
-                    val (history, error) = suspendCancellableCoroutine<Pair<List<TelegramClientManager.TelegramMedia>, String?>> { continuation ->
+                    val (history, _) = suspendCancellableCoroutine<Pair<List<TelegramClientManager.TelegramMedia>, String?>> { continuation ->
                         TelegramClientManager.loadAllChatMedia(chatId) { items, failure ->
                             if (continuation.isActive) continuation.resume(items to failure)
                         }
                     }
-                    if (error != null) continue
+                    // Import every successfully read page even if an older page later fails.
                     val existing = database.mediaDao().getPlaylistItems(playlist.id).mapTo(hashSetOf()) { it.id }
                     for (media in history) {
                         val id = "telegram:${profile.id}:${media.chatId}:${media.messageId}"
