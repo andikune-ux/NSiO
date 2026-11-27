@@ -394,7 +394,7 @@ class MainActivity : ComponentActivity() {
         // video layers, which ordinary View blur effects cannot reliably blur.
         if (!privacyCoverApplied) {
             previousDecorForeground = decor.foreground
-            decor.foreground = ColorDrawable(0xF0000000.toInt())
+            decor.foreground = ColorDrawable(0xD9000000.toInt())
             privacyCoverApplied = true
         }
     }
