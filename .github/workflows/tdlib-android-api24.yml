@@ -1,0 +1,54 @@
+name: NSiO TDLib Android API 24
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build-tdlib-android-api24.sh"
+      - ".github/workflows/tdlib-android-api24.yml"
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build_tdlib:
+    name: "🔧 Build TDLib API 24 (4 Android ABIs)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned Android toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "ndk;28.2.13676358" "cmake;3.22.1" "build-tools;34.0.0" "platforms;android-34"
+      - name: Install TDLib build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf php-cli perl make zip unzip
+      - name: Build official TDLib Java/JNI for API 24
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          CMAKE_BUILD_PARALLEL_LEVEL: "2"
+        run: |
+          bash scripts/build-tdlib-android-api24.sh "$RUNNER_TEMP/tdlib-api24-output"
+      - name: Validate packaged ABI set and Java bindings
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/tdlib-api24-output/java/org/drinkless/tdlib/Client.java"
+          test -s "$RUNNER_TEMP/tdlib-api24-output/java/org/drinkless/tdlib/TdApi.java"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            test -s "$RUNNER_TEMP/tdlib-api24-output/jniLibs/$abi/libtdjni.so"
+          done
+          cd "$RUNNER_TEMP/tdlib-api24-output"
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NSiO-TDLib-1.8.70-Android-API24
+          path: ${{ runner.temp }}/tdlib-api24-output/
+          if-no-files-found: error
+          retention-days: 30
