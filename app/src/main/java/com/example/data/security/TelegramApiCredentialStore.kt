@@ -51,8 +51,36 @@ class TelegramApiCredentialStore(context: Context) {
         }
     }
 
+    /**
+     * Returns a stable 256-bit TDLib database key. The key itself is encrypted with
+     * the same Android Keystore AES-GCM key as the API credentials.
+     */
+    fun loadOrCreateDatabaseEncryptionKey(): ByteArray {
+        val existing = preferences.getString(KEY_TDLIB_DATABASE_KEY, null)
+        if (existing != null) {
+            val decoded = Base64.decode(existing, Base64.NO_WRAP)
+            val ivSize = decoded[0].toInt() and 0xff
+            require(ivSize in 12..16 && decoded.size > ivSize + 1)
+            val iv = decoded.copyOfRange(1, 1 + ivSize)
+            val ciphertext = decoded.copyOfRange(1 + ivSize, decoded.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+            return cipher.doFinal(ciphertext).also { require(it.size == 32) }
+        }
+        val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val encrypted = cipher.doFinal(key)
+        val payload = byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + encrypted
+        check(preferences.edit().putString(
+            KEY_TDLIB_DATABASE_KEY,
+            Base64.encodeToString(payload, Base64.NO_WRAP)
+        ).commit()) { "Gagal menyimpan kunci database Telegram." }
+        return key
+    }
+
     fun clear() {
-        preferences.edit().remove(KEY_PAYLOAD).commit()
+        preferences.edit().remove(KEY_PAYLOAD).remove(KEY_TDLIB_DATABASE_KEY).commit()
     }
 
     private fun getOrCreateKey(): java.security.Key {
@@ -76,6 +104,7 @@ class TelegramApiCredentialStore(context: Context) {
     private companion object {
         const val KEY_ALIAS = "nsio_telegram_api_credentials_v1"
         const val KEY_PAYLOAD = "encrypted_credentials"
+        const val KEY_TDLIB_DATABASE_KEY = "encrypted_tdlib_database_key"
         const val ANDROID_KEY_STORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
