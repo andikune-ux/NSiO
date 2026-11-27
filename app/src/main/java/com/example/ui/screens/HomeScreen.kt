@@ -692,13 +692,17 @@ fun HomeScreen(
                                     modifier = Modifier.size(50.dp)
                                 )
                                 Text(
-                                    text = if (searchQuery.isNotEmpty()) "Tidak ada hasil untuk '$searchQuery'" else "Belum Ada Konten",
+                                    text = when {
+                                        searchQuery.isNotEmpty() -> "Tidak ada hasil untuk '$searchQuery'"
+                                        selectedFilter == "TELEGRAM_ALL" || selectedFilter.startsWith("TELEGRAM_SOURCE:") -> "Media Telegram belum diimpor"
+                                        else -> "Belum Ada Konten"
+                                    },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                                 Text(
-                                    text = "Buka Daftar Playlist untuk mengelola playlist, sumber konten, dan plugin.",
+                                    text = if (selectedFilter == "TELEGRAM_ALL" || selectedFilter.startsWith("TELEGRAM_SOURCE:")) "Link Telegram sudah tersimpan. Konten akan muncul setelah integrasi Telegram API dikonfigurasi." else "Buka Daftar Playlist untuk mengelola playlist, sumber konten, dan plugin.",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(320.dp),
@@ -1644,7 +1648,7 @@ fun HomeScreen(
                                                 Spacer(Modifier.width(9.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(playlist.name, color = if (active) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan • ${playlist.itemCount} media" else "Channel / Grup • ${playlist.itemCount} media", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan • media belum diimpor" else "Channel / Grup • media belum diimpor", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                                 }
                                             }
                                         }
