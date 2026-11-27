@@ -55,9 +55,8 @@ jobs:
             cmp "$ARCHIVE" "$RUNNER_TEMP/existing-tdlib-release/$(basename "$ARCHIVE")"
             echo "Pinned TDLib release already exists and matches the verified artifact."
           else
-            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "TDLib tag exists without release; refusing to move it."
-              exit 1
-            fi
-            gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --target "$GITHUB_SHA" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. ABIs: arm64-v8a, armeabi-v7a, x86_64, x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
+            # Reuse the existing immutable tag if its GitHub Release entry was removed.
+            # gh release create attaches to an existing tag; --target is intentionally omitted
+            # so this workflow never moves the pinned TDLib tag.
+            gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. ABIs: arm64-v8a, armeabi-v7a, x86_64, x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
           fi
