@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -256,6 +257,8 @@ fun SettingsScreen(
             var telegramCode by remember { mutableStateOf("") }
             var telegramPassword by remember { mutableStateOf("") }
             var selectedTelegramChatId by remember { mutableStateOf<Long?>(null) }
+            var selectedTelegramChatIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+            var telegramChatSearch by remember { mutableStateOf("") }
             val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
             LaunchedEffect(telegramCredentialStore) {
                 val saved = telegramCredentialStore.load()
@@ -410,10 +413,22 @@ fun SettingsScreen(
                         }
                         com.example.data.telegram.TelegramClientManager.AuthStage.READY -> {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Channel & grup (${telegramState.chats.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Channel & grup (${telegramState.chats.size} dimuat)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 TextButton(onClick = { com.example.data.telegram.TelegramClientManager.loadChats() }) { Text("Refresh") }
                             }
-                            telegramState.chats.take(30).forEach { chat ->
+                            Text("Pilih satu atau beberapa channel/grup. Setiap sumber akan dibuat sebagai playlist terpisah.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedTextField(
+                                value = telegramChatSearch,
+                                onValueChange = { telegramChatSearch = it },
+                                modifier = Modifier.fillMaxWidth().testTag("telegram_chat_search"),
+                                singleLine = true,
+                                label = { Material3Text("Cari channel atau grup") }
+                            )
+                            val visibleTelegramChats = telegramState.chats.filter {
+                                it.title.contains(telegramChatSearch.trim(), ignoreCase = true) ||
+                                    it.kind.contains(telegramChatSearch.trim(), ignoreCase = true)
+                            }
+                            visibleTelegramChats.forEach { chat ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth()
                                         .clip(RoundedCornerShape(10.dp))
@@ -421,24 +436,42 @@ fun SettingsScreen(
                                             selectedTelegramChatId = chat.id
                                             com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id)
                                         }
-                                        .padding(horizontal = 9.dp, vertical = 8.dp),
+                                        .padding(horizontal = 5.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Checkbox(
+                                        checked = chat.id in selectedTelegramChatIds,
+                                        onCheckedChange = { checked ->
+                                            selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id
+                                                else selectedTelegramChatIds - chat.id
+                                        }
+                                    )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                         Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
+                                    if (selectedTelegramChatId == chat.id) {
+                                        Text("Media dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+                                    } else if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
                                 }
+                            }
+                            if (visibleTelegramChats.isEmpty()) {
+                                Text("Tidak ada channel/grup yang cocok dengan pencarian.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Button(
+                                onClick = {
+                                    val chosen = telegramState.chats.filter { it.id in selectedTelegramChatIds }
+                                    chosen.forEach { viewModel.addTelegramChatPlaylist(it.id, it.title) }
+                                    selectedTelegramChatIds = emptySet()
+                                },
+                                enabled = selectedTelegramChatIds.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                            ) {
+                                Text("Tambahkan ${selectedTelegramChatIds.size} sumber ke Daftar Playlist")
                             }
                             if (selectedTelegramChatId != null) {
                                 val selectedChat = telegramState.chats.firstOrNull { it.id == selectedTelegramChatId }
-                                TextButton(onClick = {
-                                    selectedChat?.let { viewModel.addTelegramChatPlaylist(it.id, it.title) }
-                                }, enabled = selectedChat != null) {
-                                    Text("Tambahkan grup/channel ke playlist")
-                                }
-                                Text("Media terbaru", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Media terbaru — ${selectedChat?.title.orEmpty()}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 if (telegramState.media.isEmpty()) {
                                     Text("Belum ada media yang didukung pada 50 pesan terbaru atau sumber sedang dimuat.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
