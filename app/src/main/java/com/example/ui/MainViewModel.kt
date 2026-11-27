@@ -258,6 +258,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var playbackPersistenceJob: Job? = null
     private var playlistObserverJob: Job? = null
     private var sourceRefreshJob: Job? = null
+    private val _refreshingDrivePlaylistIds = MutableStateFlow<Set<String>>(emptySet())
+    val refreshingDrivePlaylistIds: StateFlow<Set<String>> = _refreshingDrivePlaylistIds.asStateFlow()
+    private val _isRefreshingAllDriveSources = MutableStateFlow(false)
+    val isRefreshingAllDriveSources: StateFlow<Boolean> = _isRefreshingAllDriveSources.asStateFlow()
     private var cloudStreamHomeRefreshJob: Job? = null
     private var cloudStreamHomeLoadMoreJob: Job? = null
     private val cloudStreamHomePages = mutableMapOf<String, Int>()
@@ -1064,8 +1068,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.getOrNull()
 
-    private fun googleDriveFileId(rawUrl: String): String? =
-        googleDriveResourceKey(rawUrl)?.takeIf { it.startsWith("file:") }?.removePrefix("file:")
+    private fun googleDriveFileId(rawUrl: String): String? = runCatching {
+        val uri = java.net.URI(rawUrl.trim())
+        if (uri.host.equals("lh3.googleusercontent.com", ignoreCase = true)) {
+            val segments = uri.path.orEmpty().split('/').filter(String::isNotBlank)
+            val marker = segments.indexOf("d")
+            segments.getOrNull(marker + 1)?.substringBefore("=")?.takeIf(String::isNotBlank)
+        } else {
+            googleDriveResourceKey(rawUrl)?.takeIf { it.startsWith("file:") }?.removePrefix("file:")
+        }
+    }.getOrNull()
 
     private suspend fun parseAndAddLinkInternal(url: String, profileId: String, playlistName: String = ""): String {
         val driveKey = googleDriveResourceKey(url)
@@ -1518,6 +1530,88 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Refresh one saved public Drive source. Existing rows are reconciled by stable URL/file ID,
+     * so Room keeps their local IDs, playback progress, favorites and TikTod Drive assignments.
+     */
+    private suspend fun refreshDrivePlaylistInternal(playlist: SourcePlaylist, profileId: String): String {
+        if (_activeProfile.value?.id != profileId) return "Error: profil aktif berubah; penyegaran dibatalkan."
+        val parsed = LinkExtractor.parseUrl(playlist.url, profileId)
+        val incoming = when (parsed) {
+            is ParseResult.Single -> listOf(parsed.item)
+            is ParseResult.Multiple -> parsed.items
+            is ParseResult.Error -> return "Error: ${parsed.message}. Data lama tetap dipertahankan."
+        }
+        if (incoming.isEmpty()) return "Error: sumber Drive tidak mengembalikan media. Data lama tetap dipertahankan."
+        val normalized = incoming.distinctBy { googleDriveFileId(it.url) ?: it.url }.map { item ->
+            item.copy(sourceType = "DRIVE", playlistId = playlist.id, sourceUrl = playlist.url)
+        }
+        if (normalized.isEmpty()) return "Error: tidak ditemukan media Drive yang valid. Data lama tetap dipertahankan."
+        // Room merges by stable media URL/type and preserves local ID, progress, duration and favorite state.
+        mediaDao.replacePlaylist(playlist.id, normalized)
+        val count = mediaDao.countForPlaylist(playlist.id)
+        sourcePlaylistDao.updateCount(playlist.id, count)
+        val savedItems = mediaDao.getPlaylistItems(playlist.id)
+        val cloudWarning = authManager.currentUser?.let { user ->
+            runCatching {
+                sourcePlaylistDao.getForProfile(profileId).firstOrNull { it.id == playlist.id }?.let {
+                    cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(it))
+                }
+                cloudRepository.syncPlaylistToCloud(user.uid, profileId, playlist.id, savedItems)
+            }.exceptionOrNull()?.let { " Sinkronisasi cloud tertunda: ${it.localizedMessage ?: "koneksi bermasalah"}." }
+        }.orEmpty()
+        return "Drive '${playlist.name}' diperbarui: ${normalized.size} media ditemukan.$cloudWarning"
+    }
+
+    fun refreshDrivePlaylist(playlistId: String) {
+        val profileId = _activeProfile.value?.id ?: return
+        if (sourceRefreshJob?.isActive == true) { showStatus("Penyegaran sumber sedang berjalan. Tunggu sampai selesai."); return }
+        sourceRefreshJob = viewModelScope.launch {
+            _refreshingDrivePlaylistIds.value = _refreshingDrivePlaylistIds.value + playlistId
+            try {
+                val playlist = sourcePlaylistDao.getForProfile(profileId).firstOrNull { it.id == playlistId }
+                    ?: run { showStatus("Sumber Drive tidak ditemukan."); return@launch }
+                showStatus(refreshDrivePlaylistInternal(playlist, profileId))
+            } catch (error: Exception) {
+                showStatus("Gagal memperbarui sumber Drive: ${error.localizedMessage ?: "koneksi bermasalah"}. Data lama tetap dipertahankan.")
+            } finally {
+                _refreshingDrivePlaylistIds.value = _refreshingDrivePlaylistIds.value - playlistId
+                sourceRefreshJob = null
+            }
+        }
+    }
+
+    fun refreshAllDrivePlaylists() {
+        val profileId = _activeProfile.value?.id ?: return
+        if (sourceRefreshJob?.isActive == true) { showStatus("Penyegaran sumber sedang berjalan. Tunggu sampai selesai."); return }
+        sourceRefreshJob = viewModelScope.launch {
+            _isRefreshingAllDriveSources.value = true
+            val refreshingIds = mutableSetOf<String>()
+            try {
+                val playlists = sourcePlaylistDao.getForProfile(profileId).filter {
+                    it.sourceType.equals("DRIVE", true) || googleDriveResourceKey(it.url) != null
+                }
+                if (playlists.isEmpty()) { showStatus("Belum ada sumber Google Drive yang tersimpan."); return@launch }
+                var success = 0
+                val failures = mutableListOf<String>()
+                playlists.forEach { playlist ->
+                    if (_activeProfile.value?.id != profileId) return@forEach
+                    _refreshingDrivePlaylistIds.value = _refreshingDrivePlaylistIds.value + playlist.id
+                    refreshingIds += playlist.id
+                    val result = runCatching { refreshDrivePlaylistInternal(playlist, profileId) }
+                        .getOrElse { "Error: ${it.localizedMessage ?: "gagal membaca sumber"}" }
+                    if (result.startsWith("Error:")) failures += "${playlist.name}: ${result.removePrefix("Error: ")}" else success++
+                    _refreshingDrivePlaylistIds.value = _refreshingDrivePlaylistIds.value - playlist.id
+                }
+                showStatus(if (failures.isEmpty()) "$success sumber Google Drive berhasil diperbarui."
+                    else "$success sumber berhasil diperbarui; ${failures.size} gagal. Data lama pada sumber yang gagal tetap dipertahankan. ${failures.joinToString(" • ")}")
+            } finally {
+                _refreshingDrivePlaylistIds.value = _refreshingDrivePlaylistIds.value - refreshingIds
+                _isRefreshingAllDriveSources.value = false
+                sourceRefreshJob = null
+            }
+        }
+    }
     fun refreshAllSourcePlaylists() {
         val profileId = _activeProfile.value?.id ?: return
         if (sourceRefreshJob?.isActive == true) {
@@ -1527,7 +1621,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sourceRefreshJob = viewModelScope.launch {
             try {
                 val playlists = sourcePlaylistDao.getForProfile(profileId)
-                    .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" }
+                    .filter { it.sourceType == "LINK" || it.sourceType == "STREAM" || it.sourceType == "REPO" || it.sourceType == "DRIVE" }
                 if (playlists.isEmpty()) {
                     showStatus("Belum ada playlist sumber untuk diperbarui")
                     return@launch
@@ -1538,8 +1632,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playlists.forEach { playlist ->
                     // A profile switch must not refresh the previous profile into the active UI.
                     if (_activeProfile.value?.id != profileId) return@forEach
-                    val result = runCatching { parseAndAddLinkInternal(playlist.url, profileId) }
-                        .getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
+                    val result = runCatching {
+                        if (playlist.sourceType.equals("DRIVE", true) || googleDriveResourceKey(playlist.url) != null) refreshDrivePlaylistInternal(playlist, profileId)
+                        else parseAndAddLinkInternal(playlist.url, profileId)
+                    }.getOrElse { "Error: ${it.localizedMessage ?: "gagal memuat sumber"}" }
                     if (result.startsWith("Error:")) failures += "${playlist.name}: $result"
                     else successCount++
                 }
