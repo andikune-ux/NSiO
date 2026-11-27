@@ -24,7 +24,8 @@ data class MediaItem(
     @ColumnInfo(defaultValue = "0") val lastWatchedAt: Long = 0L,
     val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val extraInfo: String = ""
+    val extraInfo: String = "",
+    val caption: String = ""
 )
 
 @Entity(tableName = "source_playlists")
