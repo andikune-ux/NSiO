@@ -26,10 +26,10 @@ object TelegramCatalogSync {
     private const val TAG = "NSiO.TelegramSync"
     private val syncMutex = Mutex()
 
-    suspend fun run(context: Context, database: AppDatabase): Int =
-        syncMutex.withLock { runLocked(context, database) }
+    suspend fun run(context: Context, database: AppDatabase, onlyPlaylistId: String? = null): Int =
+        syncMutex.withLock { runLocked(context, database, onlyPlaylistId) }
 
-    private suspend fun runLocked(context: Context, database: AppDatabase): Int {
+    private suspend fun runLocked(context: Context, database: AppDatabase, onlyPlaylistId: String?): Int {
         TelegramClientManager.initialize(context.applicationContext)
         val ready = withTimeoutOrNull(20_000L) {
             TelegramClientManager.state.first {
@@ -48,6 +48,7 @@ object TelegramCatalogSync {
         for (profile in profiles) {
             val playlists = database.sourcePlaylistDao().getForProfile(profile.id)
                 .filter { it.sourceType.startsWith("TELEGRAM", ignoreCase = true) }
+                .filter { onlyPlaylistId == null || it.id == onlyPlaylistId }
             for (playlist in playlists) {
                 val chatId = playlist.url.removePrefix("telegram://chat/").toLongOrNull() ?: continue
                 val pages = Channel<Pair<List<TelegramClientManager.TelegramMedia>, () -> Unit>>(capacity = 1)
