@@ -375,24 +375,24 @@ object TelegramClientManager {
                 is TdApi.Error -> completeDownload(fileId, null)
             }
         } ?: run {
-            downloadCallbacks.remove(fileId)?.invoke(null)
+            completeDownload(fileId, null)
         }
     }
 
     fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
         val activeClient = client ?: run { onFinished(null); return }
-        downloadCallbacks[media.fileId] = onFinished
+        registerDownloadCallback(media.fileId, onFinished)
         activeClient.send(TdApi.DownloadFile(media.fileId, 32, 0L, 0L, true), { result ->
             when (result) {
                 is TdApi.File -> {
                     val local = result.local
                     if (local.isDownloadingCompleted && local.path.isNotBlank()) {
-                        downloadCallbacks.remove(media.fileId)?.invoke(local.path)
+                        completeDownload(media.fileId, local.path)
                     }
                     // Otherwise UpdateFile completes the callback when TDLib finishes downloading.
                 }
                 is TdApi.Error -> {
-                    downloadCallbacks.remove(media.fileId)?.invoke(null)
+                    completeDownload(media.fileId, null)
                     mutableState.value = mutableState.value.copy(message = "Unduhan Telegram gagal: ${result.message}")
                 }
             }
