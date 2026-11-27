@@ -250,10 +250,14 @@ private fun LinkSourceTab(
             .sortedBy { it.name.lowercase() }
     }
     val telegramSources = remember(sourcePlaylists) { sourcePlaylists.filter { it.sourceType.startsWith("TELEGRAM", true) }.sortedBy { it.name.lowercase() } }
+    val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
     var telegramUrlInput by remember { mutableStateOf("") }
     var telegramNameInput by remember { mutableStateOf("") }
     var telegramFeedback by remember { mutableStateOf<String?>(null) }
     var isAddingTelegram by remember { mutableStateOf(false) }
+    var resolvedTelegramChatId by remember { mutableStateOf<Long?>(null) }
+    var resolvedTelegramUrl by remember { mutableStateOf("") }
+    var resolvedTelegramName by remember { mutableStateOf("") }
     val refreshingDriveIds by viewModel.refreshingDrivePlaylistIds.collectAsState()
     val isRefreshingAllDrive by viewModel.isRefreshingAllDriveSources.collectAsState()
     var urlInput by remember { mutableStateOf("") }
@@ -267,28 +271,55 @@ private fun LinkSourceTab(
     ) {
         item {
             Column(modifier = Modifier.fillMaxWidth().liquidGlass(shape = RoundedCornerShape(22.dp), alpha = 0.12f, borderAlpha = 0.35f, elevation = 8.dp).padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("B1.2. Sumber Telegram", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Tambahkan tautan postingan, channel, atau grup Telegram. Setiap tautan disimpan sebagai sumber tersendiri dan tersedia di filter Beranda.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(value = telegramUrlInput, onValueChange = { telegramUrlInput = it }, modifier = Modifier.fillMaxWidth().testTag("telegram_source_url_input"), singleLine = true, placeholder = { Text("https://t.me/nama_channel/123", fontSize = 11.sp) }, label = { Text("Link Telegram") })
-                OutlinedTextField(value = telegramNameInput, onValueChange = { telegramNameInput = it.take(48) }, modifier = Modifier.fillMaxWidth().testTag("telegram_source_name_input"), singleLine = true, placeholder = { Text("Nama sumber (opsional)", fontSize = 11.sp) }, label = { Text("Nama sumber") })
+                Text("B1.2. Pusat Impor Link Telegram", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Tempel link channel, grup, atau postingan. NSiO memeriksa akses melalui akun Telegram yang terhubung, lalu menampilkan media untuk dipilih dan diimpor.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(value = telegramUrlInput, onValueChange = { telegramUrlInput = it; resolvedTelegramChatId = null }, modifier = Modifier.fillMaxWidth().testTag("telegram_source_url_input"), singleLine = true, placeholder = { Text("https://t.me/nama_channel/123", fontSize = 11.sp) }, label = { Text("Link Telegram") })
+                OutlinedTextField(value = telegramNameInput, onValueChange = { telegramNameInput = it.take(48) }, modifier = Modifier.fillMaxWidth().testTag("telegram_source_name_input"), singleLine = true, placeholder = { Text("Nama playlist (opsional)", fontSize = 11.sp) }, label = { Text("Nama playlist") })
                 Button(onClick = {
                     isAddingTelegram = true
-                    viewModel.addTelegramSource(telegramUrlInput, telegramNameInput) { message ->
+                    com.example.data.telegram.TelegramClientManager.resolveSourceLink(telegramUrlInput) { chatId, message ->
                         isAddingTelegram = false
                         telegramFeedback = message
-                        if (!message.startsWith("Error:")) { telegramUrlInput = ""; telegramNameInput = "" }
+                        if (chatId != null) {
+                            resolvedTelegramChatId = chatId
+                            resolvedTelegramUrl = telegramUrlInput.trim()
+                            resolvedTelegramName = telegramNameInput.trim()
+                            com.example.data.telegram.TelegramClientManager.loadRecentMedia(chatId)
+                            viewModel.addTelegramSource(telegramUrlInput, telegramNameInput) { saved ->
+                                if (saved.startsWith("Error:")) telegramFeedback = saved
+                            }
+                        }
                     }
                 }, enabled = !isAddingTelegram && telegramUrlInput.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("btn_add_telegram_source")) {
-                    if (isAddingTelegram) CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp) else Text("Tambahkan Sumber Telegram")
+                    if (isAddingTelegram) CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp) else Text("Periksa Link & Tampilkan Media")
                 }
-                telegramFeedback?.let { Text(it, fontSize = 10.sp, color = if (it.startsWith("Error:")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
-                Text("Sumber tersimpan (${telegramSources.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                telegramFeedback?.let { Text(it, fontSize = 10.sp, color = if (it.startsWith("Error:") || it.contains("belum") || it.contains("private")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+                if (telegramState.stage != com.example.data.telegram.TelegramClientManager.AuthStage.READY) {
+                    Text("Hubungkan akun Telegram melalui Pengaturan terlebih dahulu.", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                }
+                if (resolvedTelegramChatId != null) {
+                    Text("Media yang dapat diakses", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    if (telegramState.media.isEmpty()) Text(telegramState.message, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    telegramState.media.forEach { media ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(media.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(if (media.isPhoto) "Foto" else "Video • pesan ${media.messageId}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = {
+                                viewModel.addTelegramMediaToPlaylist(media, resolvedTelegramUrl, resolvedTelegramName) { added ->
+                                    telegramFeedback = if (added) "Media berhasil diimpor ke playlist Telegram." else "Media gagal diimpor."
+                                }
+                            }) { Text("Impor") }
+                        }
+                    }
+                }
+                Text("Sumber Telegram tersimpan (${telegramSources.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 if (telegramSources.isEmpty()) Text("Belum ada sumber Telegram.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else telegramSources.forEach { source ->
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)).padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(source.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (source.sourceType == "TELEGRAM_POST") "Postingan" else "Channel / Grup", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
                             Text(source.url, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = { viewModel.deleteSourcePlaylist(source) }, modifier = Modifier.size(34.dp).testTag("btn_delete_telegram_${source.id}")) {
@@ -296,7 +327,7 @@ private fun LinkSourceTab(
                         }
                     }
                 }
-                Text("Catatan: pendaftaran link tersedia. Pengambilan media memerlukan integrasi akun Telegram (API ID/Hash); media belum diunduh pada tahap ini.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Link undangan private tidak membuat NSiO bergabung otomatis. Gabung melalui Telegram resmi dengan persetujuan Anda, lalu periksa link kembali.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         item {
