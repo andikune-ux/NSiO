@@ -446,18 +446,13 @@ fun SettingsScreen(
                                             Text(if (media.isPhoto) "Foto" else "Video", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         TextButton(onClick = {
-                                            com.example.data.telegram.TelegramClientManager.downloadMedia(media) { localPath ->
-                                                if (localPath == null) {
-                                                    Toast.makeText(context, "Media Telegram gagal diunduh.", Toast.LENGTH_SHORT).show()
-                                                } else {
-                                                    viewModel.addLocalFileMedia(
-                                                        media.title,
-                                                        Uri.fromFile(java.io.File(localPath)).toString(),
-                                                        media.isPhoto
-                                                    ) { added ->
-                                                        Toast.makeText(context, if (added) "Media Telegram ditambahkan ke Beranda." else "Media gagal diimpor.", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
+                                            val chatTitle = telegramState.chats.firstOrNull { it.id == media.chatId }?.title ?: "Telegram ${media.chatId}"
+                                            viewModel.addTelegramMediaToPlaylist(
+                                                media,
+                                                "telegram://chat/${media.chatId}",
+                                                chatTitle
+                                            ) { added ->
+                                                Toast.makeText(context, if (added) "Media ditambahkan ke playlist Telegram '$chatTitle'." else "Media gagal diimpor.", Toast.LENGTH_SHORT).show()
                                             }
                                         }) { Text("Impor") }
                                     }
