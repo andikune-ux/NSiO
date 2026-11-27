@@ -1094,6 +1094,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     runCatching { cloudRepository.syncSourcePlaylists(user.uid, profileId, listOf(playlist)) }
                 }
                 showStatus("Sumber Telegram '${playlist.name}' siap dan identitas profil sumber disimpan.")
+                // Start the first import immediately; do not wait for HomeScreen's 30-minute cycle.
+                syncTelegramPlaylists()
             }.onFailure {
                 showStatus("Gagal menambahkan sumber Telegram: ${it.localizedMessage ?: "kesalahan database"}")
             }
