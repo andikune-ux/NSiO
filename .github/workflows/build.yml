@@ -21,8 +21,6 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
       - name: Download permanent pinned TDLib API 24 release
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -31,17 +29,22 @@ jobs:
           TAG="tdlib-1.8.70-api24"
           ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
           CHECKSUM="$ARCHIVE.sha256"
-          # The TDLib publishing workflow may be creating the first permanent release
-          # in parallel with this build. Wait for that release; never rebuild TDLib here.
-          for attempt in $(seq 1 20); do
-            if gh release view "$TAG" >/dev/null 2>&1; then
+          BASE="https://github.com/andikune-ux/NSiO/releases/download/$TAG"
+          # Use the immutable public asset URLs instead of the GitHub Releases API.
+          # This avoids API rate limits and never triggers a TDLib rebuild.
+          for attempt in $(seq 1 12); do
+            if curl --fail --location --silent --show-error "$BASE/$ARCHIVE" --output "$RUNNER_TEMP/$ARCHIVE" &&
+               curl --fail --location --silent --show-error "$BASE/$CHECKSUM" --output "$RUNNER_TEMP/$CHECKSUM"; then
               break
             fi
-            echo "Pinned TDLib release not published yet (attempt $attempt/20); waiting 15s."
-            sleep 15
+            rm -f "$RUNNER_TEMP/$ARCHIVE" "$RUNNER_TEMP/$CHECKSUM"
+            if [[ "$attempt" -eq 12 ]]; then
+              echo "::error::Pinned TDLib release assets are unavailable after 12 attempts."
+              exit 1
+            fi
+            echo "Pinned TDLib assets not available yet (attempt $attempt/12); waiting 10s."
+            sleep 10
           done
-          gh release view "$TAG" >/dev/null
-          gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$CHECKSUM" --dir "$RUNNER_TEMP"
           cd "$RUNNER_TEMP"
           sha256sum -c "$CHECKSUM"
           tar -xzf "$ARCHIVE" -C "$DEST"
