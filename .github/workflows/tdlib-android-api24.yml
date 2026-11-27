@@ -7,7 +7,7 @@ on:
       - "scripts/build-tdlib-android-api24.sh"
       - ".github/workflows/tdlib-android-api24.yml"
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -61,3 +61,29 @@ jobs:
           path: ${{ runner.temp }}/tdlib-api24-output/
           if-no-files-found: error
           retention-days: 30
+      - name: Package reproducible TDLib runtime
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          tar -czf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24-output" .
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+      - name: Publish immutable TDLib runtime release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="tdlib-1.8.70-api24"
+          ARCHIVE="$RUNNER_TEMP/NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          CHECKSUM="$ARCHIVE.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-tdlib-release"
+            gh release download "$TAG" --pattern "$(basename "$ARCHIVE")" --dir "$RUNNER_TEMP/existing-tdlib-release"
+            cmp "$ARCHIVE" "$RUNNER_TEMP/existing-tdlib-release/$(basename "$ARCHIVE")"
+            echo "Pinned TDLib release already exists and matches this reproducible build."
+          else
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "TDLib tag exists without a release; refusing to move it."
+              exit 1
+            fi
+            gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --target "$GITHUB_SHA" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. Includes arm64-v8a, armeabi-v7a, x86_64, and x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
+          fi
