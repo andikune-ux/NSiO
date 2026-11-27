@@ -9,6 +9,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
 import com.example.data.model.MediaRefreshPolicy
 import com.example.data.plugin.PluginManager
+import com.example.data.telegram.TelegramCatalogSync
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -163,6 +164,16 @@ class CatalogRefreshWorker(
                     failures++
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            failures++
+        }
+
+        // Telegram uses the same periodic catalog lifecycle; its last successful
+        // Room cache is never cleared when the account or a source is unavailable.
+        try {
+            refreshed += TelegramCatalogSync.run(applicationContext, database)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
