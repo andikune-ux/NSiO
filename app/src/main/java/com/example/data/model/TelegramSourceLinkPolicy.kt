@@ -3,8 +3,7 @@ package com.example.data.model
 import java.net.URI
 
 /**
- * Validates and canonicalizes Telegram share links for source registration.
- * This does not fetch Telegram content; API integration is handled separately.
+ * Validates and canonicalizes Telegram share links before TDLib resolves them.
  */
 data class TelegramSourceLink(
     val url: String,
@@ -52,6 +51,7 @@ object TelegramSourceLinkPolicy {
             "Tautan tersebut bukan tautan channel, grup, atau postingan Telegram."
         }
 
+        val isInvite = segments.first().startsWith("+") || segments.first().equals("joinchat", ignoreCase = true)
         val isPost = segments.size >= 2 && segments.last().toLongOrNull() != null
         val normalizedPath = segments.joinToString("/") { segment ->
             if (segment.startsWith("+")) segment else segment
@@ -66,7 +66,11 @@ object TelegramSourceLinkPolicy {
 
         return TelegramSourceLink(
             url = normalizedUrl,
-            sourceType = if (isPost) "TELEGRAM_POST" else "TELEGRAM_CHAT",
+            sourceType = when {
+                isInvite -> "TELEGRAM_INVITE"
+                isPost -> "TELEGRAM_POST"
+                else -> "TELEGRAM_CHAT"
+            },
             fallbackName = fallbackName
         )
     }
