@@ -27,6 +27,7 @@ import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.model.TelegramSourceLinkPolicy
 import com.example.data.telegram.TelegramClientManager
+import com.example.data.telegram.TelegramCatalogSync
 import kotlin.coroutines.resume
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
