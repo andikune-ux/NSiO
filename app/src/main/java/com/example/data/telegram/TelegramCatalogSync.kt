@@ -8,6 +8,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import kotlin.coroutines.resume
 
@@ -16,13 +18,21 @@ import kotlin.coroutines.resume
  * Downloads media into app-private storage and keeps stable message IDs in Room.
  */
 object TelegramCatalogSync {
-    suspend fun run(context: Context, database: AppDatabase): Int {
+    private val syncMutex = Mutex()
+
+    suspend fun run(context: Context, database: AppDatabase): Int =
+        syncMutex.withLock { runLocked(context, database) }
+
+    private suspend fun runLocked(context: Context, database: AppDatabase): Int {
         TelegramClientManager.initialize(context.applicationContext)
         val ready = withTimeoutOrNull(20_000L) {
             TelegramClientManager.state.first {
                 it.stage == TelegramClientManager.AuthStage.READY ||
                     it.stage == TelegramClientManager.AuthStage.ERROR ||
-                    it.stage == TelegramClientManager.AuthStage.WAITING_PHONE
+                    it.stage == TelegramClientManager.AuthStage.WAITING_PHONE ||
+                    it.stage == TelegramClientManager.AuthStage.WAITING_CODE ||
+                    it.stage == TelegramClientManager.AuthStage.WAITING_PASSWORD ||
+                    it.stage == TelegramClientManager.AuthStage.NOT_CONFIGURED
             }.stage == TelegramClientManager.AuthStage.READY
         } ?: false
         if (!ready) return 0
