@@ -251,6 +251,10 @@ fun SettingsScreen(
             var telegramApiHash by remember { mutableStateOf("") }
             var telegramCredentialsSaved by remember { mutableStateOf(false) }
             var telegramCredentialMessage by remember { mutableStateOf<String?>(null) }
+            var telegramPhone by remember { mutableStateOf("") }
+            var telegramCode by remember { mutableStateOf("") }
+            var telegramPassword by remember { mutableStateOf("") }
+            val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
             LaunchedEffect(telegramCredentialStore) {
                 val saved = telegramCredentialStore.load()
                 if (saved != null) {
@@ -341,10 +345,92 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        "Catatan: penyimpanan API saja belum mengaktifkan login atau impor media Telegram. Tahap autentikasi MTProto masih diperlukan.",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Status: ${telegramState.message}",
+                        fontSize = 11.sp,
+                        color = if (telegramState.stage == com.example.data.telegram.TelegramClientManager.AuthStage.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     )
+                    when (telegramState.stage) {
+                        com.example.data.telegram.TelegramClientManager.AuthStage.NOT_CONFIGURED,
+                        com.example.data.telegram.TelegramClientManager.AuthStage.ERROR -> {
+                            Button(
+                                onClick = {
+                                    runCatching { com.example.data.telegram.TelegramClientManager.initialize(context) }
+                                        .onFailure { telegramCredentialMessage = it.localizedMessage }
+                                },
+                                enabled = telegramCredentialsSaved,
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp)
+                            ) { Text("Hubungkan Telegram", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        }
+                        com.example.data.telegram.TelegramClientManager.AuthStage.INITIALIZING -> {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        }
+                        com.example.data.telegram.TelegramClientManager.AuthStage.WAITING_PHONE -> {
+                            OutlinedTextField(
+                                value = telegramPhone, onValueChange = { telegramPhone = it.take(18) },
+                                modifier = Modifier.fillMaxWidth().testTag("telegram_phone_input"),
+                                singleLine = true, label = { Material3Text("Nomor telepon (+62…)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                            )
+                            Button(onClick = {
+                                runCatching { com.example.data.telegram.TelegramClientManager.submitPhoneNumber(telegramPhone) }
+                                    .onFailure { telegramCredentialMessage = it.localizedMessage }
+                            }, enabled = telegramPhone.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                                Text("Kirim kode Telegram")
+                            }
+                        }
+                        com.example.data.telegram.TelegramClientManager.AuthStage.WAITING_CODE -> {
+                            OutlinedTextField(
+                                value = telegramCode, onValueChange = { telegramCode = it.filter(Char::isDigit).take(10) },
+                                modifier = Modifier.fillMaxWidth().testTag("telegram_code_input"),
+                                singleLine = true, label = { Material3Text("Kode verifikasi") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            Button(onClick = {
+                                runCatching { com.example.data.telegram.TelegramClientManager.submitCode(telegramCode) }
+                                    .onFailure { telegramCredentialMessage = it.localizedMessage }
+                            }, enabled = telegramCode.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                                Text("Verifikasi kode")
+                            }
+                        }
+                        com.example.data.telegram.TelegramClientManager.AuthStage.WAITING_PASSWORD -> {
+                            OutlinedTextField(
+                                value = telegramPassword, onValueChange = { telegramPassword = it },
+                                modifier = Modifier.fillMaxWidth().testTag("telegram_2fa_input"),
+                                singleLine = true, label = { Material3Text("Kata sandi 2 langkah") },
+                                visualTransformation = PasswordVisualTransformation()
+                            )
+                            Button(onClick = {
+                                runCatching { com.example.data.telegram.TelegramClientManager.submitPassword(telegramPassword) }
+                                    .onFailure { telegramCredentialMessage = it.localizedMessage }
+                            }, enabled = telegramPassword.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                                Text("Verifikasi 2 langkah")
+                            }
+                        }
+                        com.example.data.telegram.TelegramClientManager.AuthStage.READY -> {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Channel & grup (${telegramState.chats.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = { com.example.data.telegram.TelegramClientManager.loadChats() }) { Text("Refresh") }
+                            }
+                            telegramState.chats.take(30).forEach { chat ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
+                                }
+                            }
+                            TextButton(onClick = { com.example.data.telegram.TelegramClientManager.logout() }) {
+                                Text("Keluar dari Telegram", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                    telegramCredentialMessage?.let {
+                        Text(it, fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
