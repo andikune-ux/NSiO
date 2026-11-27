@@ -319,6 +319,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        // Apply before Activity.onPause so the task snapshot has a chance to capture
+        // the protected rendering state. PiP mode clears this again when it starts.
+        applyRecentAppsPrivacyBlur()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val media = viewModel.currentlyPlaying.value ?: return
         if (media.type.equals("PHOTO", ignoreCase = true)) return
@@ -345,6 +348,7 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isPipMode = isInPictureInPictureMode
+        if (isInPictureInPictureMode) clearRecentAppsPrivacyBlur()
     }
 
     override fun onPause() {
