@@ -1067,6 +1067,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Register a selected Telegram chat as a home playlist before importing individual posts. */
+    fun addTelegramChatPlaylist(chatId: Long, chatTitle: String) {
+        val profileId = _activeProfile.value?.id ?: run { showStatus("Profil aktif tidak ditemukan"); return }
+        viewModelScope.launch {
+            runCatching {
+                ensureSourcePlaylist("telegram://chat/$chatId", chatTitle, "TELEGRAM", profileId)
+            }.onSuccess {
+                showStatus("Sumber Telegram '${it.name}' siap. Pilih media di bawah untuk mengimpornya.")
+            }.onFailure {
+                showStatus("Gagal menambahkan sumber Telegram: ${it.localizedMessage ?: "kesalahan database"}")
+            }
+        }
+    }
+
     /** Persist one selected Telegram post as a durable item in its Telegram playlist. */
     fun addTelegramMediaToPlaylist(
         media: TelegramClientManager.TelegramMedia,
