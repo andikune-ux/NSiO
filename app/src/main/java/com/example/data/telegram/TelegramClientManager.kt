@@ -176,6 +176,51 @@ object TelegramClientManager {
         })
     }
 
+    /** Resolve public Telegram links through TDLib; never auto-join private invites. */
+    fun resolveSourceLink(rawUrl: String, onResolved: (Long?, String) -> Unit) {
+        val activeClient = client
+        if (activeClient == null || mutableState.value.stage != AuthStage.READY) {
+            onResolved(null, "Hubungkan akun Telegram terlebih dahulu melalui Pengaturan.")
+            return
+        }
+        val parsed = runCatching { com.example.data.model.TelegramSourceLinkPolicy.parse(rawUrl) }
+            .getOrElse { onResolved(null, it.localizedMessage ?: "Link Telegram tidak valid."); return }
+        val path = runCatching { java.net.URI(parsed.url).path.orEmpty().split('/').filter(String::isNotBlank) }.getOrDefault(emptyList())
+        if (parsed.sourceType == "TELEGRAM_INVITE") {
+            onResolved(null, "Ini link undangan private. Buka melalui Telegram resmi dan gabung secara manual dengan persetujuan Anda, lalu coba link kembali.")
+            return
+        }
+        if (path.firstOrNull() == "c" && path.size >= 2) {
+            val internalId = path.getOrNull(1)?.toLongOrNull()
+            val chatId = internalId?.let { "-100$it".toLongOrNull() }
+            if (chatId == null) { onResolved(null, "ID channel private pada link tidak valid."); return }
+            activeClient.send(TdApi.GetChat(chatId), { result ->
+                if (result is TdApi.Chat) {
+                    upsertChat(result)
+                    onResolved(result.id, "Sumber private ditemukan. Akun Anda memiliki akses.")
+                } else if (result is TdApi.Error) {
+                    onResolved(null, "Channel private belum dapat diakses (${result.code}). Pastikan akun sudah bergabung dan memiliki izin melihat pesan.")
+                } else onResolved(null, "Telegram tidak mengembalikan informasi channel tersebut.")
+            })
+            return
+        }
+        val username = path.firstOrNull()
+        if (username.isNullOrBlank() || username.startsWith("+") || username.equals("joinchat", true)) {
+            onResolved(null, "Link undangan private harus dibuka melalui Telegram resmi terlebih dahulu.")
+            return
+        }
+        activeClient.send(TdApi.SearchPublicChat(username), { result ->
+            if (result is TdApi.Chat) {
+                upsertChat(result)
+                onResolved(result.id, "Sumber Telegram ditemukan: ${result.title}.")
+            } else if (result is TdApi.Error) {
+                onResolved(null, if (result.code == 400 || result.code == 404)
+                    "Sumber tidak ditemukan atau tidak dapat diakses. Periksa link dan izin akun."
+                else "Telegram gagal memeriksa sumber (${result.code}): ${result.message}")
+            } else onResolved(null, "Telegram tidak dapat mengenali link tersebut.")
+        })
+    }
+
     fun loadRecentMedia(chatId: Long) {
         val activeClient = client ?: return
         mutableState.value = mutableState.value.copy(media = emptyList(), message = "Memuat media Telegram…")
