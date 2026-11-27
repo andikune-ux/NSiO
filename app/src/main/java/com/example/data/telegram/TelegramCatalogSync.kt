@@ -16,7 +16,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.coroutines.resume
 
 /**
  * Background reconciliation for saved Telegram channel/group playlists.
@@ -74,7 +73,7 @@ object TelegramCatalogSync {
                                 try {
                                     val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
                                         TelegramClientManager.downloadMedia(media) { filePath ->
-                                            if (continuation.isActive) continuation.resume(filePath)
+                                            if (continuation.isActive) continuation.resumeWith(Result.success(filePath))
                                         }
                                     } ?: continue
                                     val source = File(downloaded)
