@@ -10,6 +10,7 @@ import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Process-wide TDLib bridge. TDLib owns its own persistent encrypted database in app-private storage.
@@ -42,7 +43,7 @@ object TelegramClientManager {
     val state: StateFlow<State> = mutableState.asStateFlow()
     @Volatile private var client: Client? = null
     @Volatile private var appContext: Context? = null
-    private val downloadCallbacks = ConcurrentHashMap<Int, (String?) -> Unit>()
+    private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
 
     @Synchronized
@@ -93,7 +94,7 @@ object TelegramClientManager {
                 val file = update.file
                 val local = file.local
                 if (local.isDownloadingCompleted && local.path.isNotBlank()) {
-                    downloadCallbacks.remove(file.id)?.invoke(local.path)
+                    completeDownload(file.id, local.path)
                 }
             }
         }
@@ -362,16 +363,16 @@ object TelegramClientManager {
             onFinished(null)
             return
         }
-        downloadCallbacks[fileId] = onFinished
+        registerDownloadCallback(fileId, onFinished)
         client?.send(TdApi.DownloadFile(fileId, 16, 0L, 0L, true)) { result ->
             when (result) {
                 is TdApi.File -> {
                     val local = result.local
                     if (local.isDownloadingCompleted && local.path.isNotBlank()) {
-                        downloadCallbacks.remove(fileId)?.invoke(local.path)
+                        completeDownload(fileId, local.path)
                     }
                 }
-                is TdApi.Error -> downloadCallbacks.remove(fileId)?.invoke(null)
+                is TdApi.Error -> completeDownload(fileId, null)
             }
         } ?: run {
             downloadCallbacks.remove(fileId)?.invoke(null)
@@ -428,6 +429,16 @@ object TelegramClientManager {
                     )
                 }
             }
+        }
+    }
+
+    private fun registerDownloadCallback(fileId: Int, callback: (String?) -> Unit) {
+        downloadCallbacks.computeIfAbsent(fileId) { CopyOnWriteArrayList() }.add(callback)
+    }
+
+    private fun completeDownload(fileId: Int, path: String?) {
+        downloadCallbacks.remove(fileId)?.forEach { callback ->
+            runCatching { callback(path) }
         }
     }
 
