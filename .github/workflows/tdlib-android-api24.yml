@@ -1,66 +1,45 @@
 name: NSiO TDLib Android API 24
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tdlib-android-api24.yml"
 permissions:
   contents: write
-  actions: write
+  actions: read
 
 jobs:
-  build_tdlib:
-    name: "🔧 Build TDLib API 24 (4 Android ABIs)"
+  publish_tdlib:
+    name: "📦 Publish pinned TDLib API 24 runtime"
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: "17"
-      - name: Install pinned Android toolchain
-        run: |
-          set -euo pipefail
-          SDK_ROOT="$RUNNER_TEMP/android-sdk"
-          mkdir -p "$SDK_ROOT/cmdline-tools"
-          curl -fsSLo "$RUNNER_TEMP/android-commandline-tools.zip" "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
-          unzip -q "$RUNNER_TEMP/android-commandline-tools.zip" -d "$SDK_ROOT/cmdline-tools"
-          mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          set +o pipefail
-          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" --licenses >/dev/null
-          set -o pipefail
-          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" "ndk;28.2.13676358" "cmake;3.22.1" "build-tools;34.0.0" "platforms;android-34"
-      - name: Install TDLib build prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gperf php-cli perl make zip unzip
-      - name: Build official TDLib Java/JNI for API 24
-        env:
-          CMAKE_BUILD_PARALLEL_LEVEL: "2"
-        run: |
-          bash scripts/build-tdlib-android-api24.sh "$RUNNER_TEMP/tdlib-api24-output"
-      - name: Validate packaged ABI set and Java bindings
-        run: |
-          set -euo pipefail
-          test -s "$RUNNER_TEMP/tdlib-api24-output/java/org/drinkless/tdlib/Client.java"
-          test -s "$RUNNER_TEMP/tdlib-api24-output/java/org/drinkless/tdlib/TdApi.java"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
-            test -s "$RUNNER_TEMP/tdlib-api24-output/jniLibs/$abi/libtdjni.so"
-          done
-          cd "$RUNNER_TEMP/tdlib-api24-output"
-          sha256sum -c SHA256SUMS
-      - uses: actions/upload-artifact@v4
+        with: { fetch-depth: 0 }
+      - name: Download validated TDLib API 24 build
+        uses: actions/download-artifact@v4
         with:
           name: NSiO-TDLib-1.8.70-Android-API24
-          path: ${{ runner.temp }}/tdlib-api24-output/
-          if-no-files-found: error
-          retention-days: 30
-      - name: Package reproducible TDLib runtime
+          repository: andikune-ux/NSiO
+          run-id: 45986064975
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/tdlib-api24
+      - name: Verify runtime and create release archive
         run: |
           set -euo pipefail
+          ROOT="$RUNNER_TEMP/tdlib-api24"
+          test -s "$ROOT/java/org/drinkless/tdlib/Client.java"
+          test -s "$ROOT/java/org/drinkless/tdlib/TdApi.java"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            test -s "$ROOT/jniLibs/$abi/libtdjni.so"
+          done
+          (
+            cd "$ROOT"
+            awk '{ path = $2; prefix = "tdlib-api24-output/"; pos = index(path, prefix); if (pos > 0) path = substr(path, pos + length(prefix)); print $1 "  " path }' SHA256SUMS | sha256sum -c -
+          )
           ARCHIVE="$RUNNER_TEMP/NSiO-TDLib-1.8.70-Android-API24.tar.gz"
-          tar -czf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24-output" .
+          tar -czf "$ARCHIVE" -C "$ROOT" .
           sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
       - name: Publish immutable TDLib runtime release
         env:
@@ -74,11 +53,11 @@ jobs:
             mkdir -p "$RUNNER_TEMP/existing-tdlib-release"
             gh release download "$TAG" --pattern "$(basename "$ARCHIVE")" --dir "$RUNNER_TEMP/existing-tdlib-release"
             cmp "$ARCHIVE" "$RUNNER_TEMP/existing-tdlib-release/$(basename "$ARCHIVE")"
-            echo "Pinned TDLib release already exists and matches this reproducible build."
+            echo "Pinned TDLib release already exists and matches the verified artifact."
           else
             if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "TDLib tag exists without a release; refusing to move it."
+              echo "TDLib tag exists without release; refusing to move it."
               exit 1
             fi
-            gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --target "$GITHUB_SHA" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. Includes arm64-v8a, armeabi-v7a, x86_64, and x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
+            gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --target "$GITHUB_SHA" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. ABIs: arm64-v8a, armeabi-v7a, x86_64, x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
           fi
