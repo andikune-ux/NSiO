@@ -16,7 +16,8 @@ import javax.crypto.spec.GCMParameterSpec
  * Credentials are never synchronized to Firestore or written to BuildConfig.
  */
 class TelegramApiCredentialStore(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(
         "nsio_telegram_credentials", Context.MODE_PRIVATE
     )
 
@@ -82,7 +83,7 @@ class TelegramApiCredentialStore(context: Context) {
     fun clear() {
         preferences.edit().remove(KEY_PAYLOAD).remove(KEY_TDLIB_DATABASE_KEY).commit()
         // The TDLib database is encrypted with the wrapped key; remove it as one unit.
-        java.io.File(context.filesDir, "telegram/tdlib").deleteRecursively()
+        java.io.File(appContext.filesDir, "telegram/tdlib").deleteRecursively()
     }
 
     private fun getOrCreateKey(): java.security.Key {
