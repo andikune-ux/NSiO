@@ -10,7 +10,8 @@ for abi in arm64-v8a armeabi-v7a x86_64 x86; do
 done
 (
   cd "$ARTIFACT_DIR"
-  sha256sum -c SHA256SUMS
+  # The first build recorded absolute runner paths; normalize them after artifact download.
+  awk '{ path = $2; sub(/^.*tdlib-api24-output\\//, "", path); print $1 "  " path }' SHA256SUMS | sha256sum -c -
 )
 mkdir -p "$APP_DIR/java/org/drinkless/tdlib" "$APP_DIR/jniLibs"
 cp "$ARTIFACT_DIR/java/org/drinkless/tdlib/"*.java "$APP_DIR/java/org/drinkless/tdlib/"
