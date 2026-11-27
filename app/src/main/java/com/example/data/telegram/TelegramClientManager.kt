@@ -423,7 +423,7 @@ object TelegramClientManager {
                 if (!path.isNullOrBlank()) {
                     mutableState.value = mutableState.value.copy(
                         chats = mutableState.value.chats.map { current ->
-                            if (current.id == chat.id && current.photoFileId == photoFileId) current.copy(photoPath = path)
+                            if (current.id == chat.id && current.photoFileId == photoFileId) current.copy(photoPath = android.net.Uri.fromFile(File(path)).toString())
                             else current
                         }
                     )
