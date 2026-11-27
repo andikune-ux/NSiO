@@ -81,6 +81,8 @@ class TelegramApiCredentialStore(context: Context) {
 
     fun clear() {
         preferences.edit().remove(KEY_PAYLOAD).remove(KEY_TDLIB_DATABASE_KEY).commit()
+        // The TDLib database is encrypted with the wrapped key; remove it as one unit.
+        java.io.File(context.filesDir, "telegram/tdlib").deleteRecursively()
     }
 
     private fun getOrCreateKey(): java.security.Key {
