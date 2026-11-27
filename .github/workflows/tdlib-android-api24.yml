@@ -49,14 +49,12 @@ jobs:
           TAG="tdlib-1.8.70-api24"
           ARCHIVE="$RUNNER_TEMP/NSiO-TDLib-1.8.70-Android-API24.tar.gz"
           CHECKSUM="$ARCHIVE.sha256"
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          RELEASE_JSON="$RUNNER_TEMP/tdlib-release.json"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RELEASE_JSON" 2>/dev/null; then
             mkdir -p "$RUNNER_TEMP/existing-tdlib-release"
             gh release download "$TAG" --pattern "$(basename "$ARCHIVE")" --dir "$RUNNER_TEMP/existing-tdlib-release"
             cmp "$ARCHIVE" "$RUNNER_TEMP/existing-tdlib-release/$(basename "$ARCHIVE")"
             echo "Pinned TDLib release already exists and matches the verified artifact."
           else
-            # Reuse the existing immutable tag if its GitHub Release entry was removed.
-            # gh release create attaches to an existing tag; --target is intentionally omitted
-            # so this workflow never moves the pinned TDLib tag.
             gh release create "$TAG" "$ARCHIVE" "$CHECKSUM" --title "NSiO TDLib 1.8.70 Android API 24" --notes "Pinned TDLib 1.8.70 Java/JNI runtime built for Android API 24. ABIs: arm64-v8a, armeabi-v7a, x86_64, x86. Source commit: c8828d50f5eac2fc7089ce1089d7ce9095c61b5e."
           fi
