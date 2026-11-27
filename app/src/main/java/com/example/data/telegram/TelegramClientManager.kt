@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 object TelegramClientManager {
     enum class AuthStage { NOT_CONFIGURED, INITIALIZING, WAITING_PHONE, WAITING_CODE, WAITING_PASSWORD, READY, ERROR }
 
-    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int, val photoFileId: Int = 0, val isArchived: Boolean = false)
+    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int, val photoFileId: Int = 0, val isArchived: Boolean = false, val photoPath: String = "")
 
     data class TelegramMedia(
         val chatId: Long,
@@ -43,6 +43,7 @@ object TelegramClientManager {
     @Volatile private var client: Client? = null
     @Volatile private var appContext: Context? = null
     private val downloadCallbacks = ConcurrentHashMap<Int, (String?) -> Unit>()
+    private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
 
     @Synchronized
     fun initialize(context: Context) {
@@ -404,10 +405,30 @@ object TelegramClientManager {
             else -> return
         }
         val isArchived = chat.positions.any { it.list is TdApi.ChatListArchive }
-        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount, chat.photo?.small?.id ?: 0, isArchived)
+        val photoFileId = chat.photo?.small?.id ?: 0
+        val previous = mutableState.value.chats.firstOrNull { it.id == chat.id }
+        val item = TelegramChat(
+            chat.id, chat.title.orEmpty(), kind, chat.unreadCount, photoFileId, isArchived,
+            previous?.photoPath.orEmpty().takeIf { previous?.photoFileId == photoFileId }.orEmpty()
+        )
         val updated = (mutableState.value.chats.filterNot { it.id == item.id } + item)
             .sortedBy { it.title.lowercase() }
         mutableState.value = mutableState.value.copy(chats = updated)
+
+        // Load profile photos for the integration list even before a playlist is created.
+        if (photoFileId > 0 && item.photoPath.isBlank() && photoDownloadsInFlight.add(chat.id)) {
+            downloadChatPhoto(chat.id) { path ->
+                photoDownloadsInFlight.remove(chat.id)
+                if (!path.isNullOrBlank()) {
+                    mutableState.value = mutableState.value.copy(
+                        chats = mutableState.value.chats.map { current ->
+                            if (current.id == chat.id && current.photoFileId == photoFileId) current.copy(photoPath = path)
+                            else current
+                        }
+                    )
+                }
+            }
+        }
     }
 
     private fun send(function: TdApi.Function<*>) {
