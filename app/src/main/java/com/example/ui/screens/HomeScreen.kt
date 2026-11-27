@@ -113,6 +113,7 @@ import com.example.data.model.MediaSourceClassifier
 import com.example.data.model.MediaItem
 import com.example.data.model.WatchHistoryPolicy
 import com.example.ui.MainViewModel
+import com.example.data.telegram.TelegramClientManager
 import com.example.ui.components.MediaGridCard
 import com.example.ui.components.PinDialog
 import com.example.ui.components.liquidGlass
@@ -139,6 +140,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val mediaList by viewModel.mediaList.collectAsState()
+    val telegramConnection by TelegramClientManager.state.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -281,6 +283,12 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(activeProfile?.id, telegramConnection.stage) {
+        if (activeProfile != null && telegramConnection.stage == TelegramClientManager.AuthStage.READY) {
+            viewModel.syncTelegramPlaylists()
+        }
+    }
+
     LaunchedEffect(activeProfile?.id, selectedFilter) {
         val selectedCloudStreamPluginId = selectedFilter
             .takeIf { it.startsWith("CLOUDSTREAM_PLUGIN:") }
@@ -367,7 +375,8 @@ fun HomeScreen(
                 item.sourceType == "CLOUDSTREAM" && item.repositoryId == selectedFilter.removePrefix("CLOUDSTREAM_REPO:")
             } else true
         }
-        matchesServerAccess && matchesSearch && matchesFilter && matchesExpandedSource && matchesVideoCategories
+        val matchesTelegramHomeMedia = !item.sourceType.startsWith("TELEGRAM", true) || item.type.equals("VIDEO", true)
+        matchesServerAccess && matchesSearch && matchesFilter && matchesExpandedSource && matchesVideoCategories && matchesTelegramHomeMedia
     }
 
     val filteredList = when (selectedSort) {
