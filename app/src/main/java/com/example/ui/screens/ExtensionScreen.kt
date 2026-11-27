@@ -318,7 +318,7 @@ private fun LinkSourceTab(
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)).padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(source.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(source.url, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("Telegram • ${source.itemCount} media", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = { viewModel.deleteSourcePlaylist(source) }, modifier = Modifier.size(34.dp).testTag("btn_delete_telegram_${source.id}")) {
                             Icon(Icons.Default.Delete, contentDescription = "Hapus ${source.name}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(17.dp))
