@@ -23,8 +23,17 @@ jobs:
           java-version: "17"
       - name: Install pinned Android toolchain
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "ndk;28.2.13676358" "cmake;3.22.1" "build-tools;34.0.0" "platforms;android-34"
+          set -euo pipefail
+          SDK_ROOT="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+          curl -fsSLo "$RUNNER_TEMP/android-commandline-tools.zip" "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
+          unzip -q "$RUNNER_TEMP/android-commandline-tools.zip" -d "$SDK_ROOT/cmdline-tools"
+          mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" --licenses >/dev/null
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" "ndk;28.2.13676358" "cmake;3.22.1" "build-tools;34.0.0" "platforms;android-34"
       - name: Install TDLib build prerequisites
         run: |
           sudo apt-get update
