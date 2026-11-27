@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 object TelegramClientManager {
     enum class AuthStage { NOT_CONFIGURED, INITIALIZING, WAITING_PHONE, WAITING_CODE, WAITING_PASSWORD, READY, ERROR }
 
-    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int)
+    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int, val photoFileId: Int = 0)
 
     data class TelegramMedia(
         val chatId: Long,
@@ -326,6 +326,29 @@ object TelegramClientManager {
         loadPage()
     }
 
+    fun downloadChatPhoto(chatId: Long, onFinished: (String?) -> Unit) {
+        val chat = mutableState.value.chats.firstOrNull { it.id == chatId }
+        val fileId = chat?.photoFileId ?: 0
+        if (fileId <= 0) {
+            onFinished(null)
+            return
+        }
+        downloadCallbacks[fileId] = onFinished
+        client?.send(TdApi.DownloadFile(fileId, 16, 0L, 0L, true)) { result ->
+            when (result) {
+                is TdApi.File -> {
+                    val local = result.local
+                    if (local.isDownloadingCompleted && local.path.isNotBlank()) {
+                        downloadCallbacks.remove(fileId)?.invoke(local.path)
+                    }
+                }
+                is TdApi.Error -> downloadCallbacks.remove(fileId)?.invoke(null)
+            }
+        } ?: run {
+            downloadCallbacks.remove(fileId)?.invoke(null)
+        }
+    }
+
     fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
         val activeClient = client ?: run { onFinished(null); return }
         downloadCallbacks[media.fileId] = onFinished
@@ -352,7 +375,7 @@ object TelegramClientManager {
             is TdApi.ChatTypeBasicGroup -> "Grup"
             else -> return
         }
-        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount)
+        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount, chat.photo?.small?.id ?: 0)
         val updated = (mutableState.value.chats.filterNot { it.id == item.id } + item)
             .sortedBy { it.title.lowercase() }
         mutableState.value = mutableState.value.copy(chats = updated)
