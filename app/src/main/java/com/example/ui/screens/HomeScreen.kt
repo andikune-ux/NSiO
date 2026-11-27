@@ -1648,7 +1648,13 @@ fun HomeScreen(
                                                 Spacer(Modifier.width(9.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(playlist.name, color = if (active) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan • media belum diimpor" else "Channel / Grup • media belum diimpor", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                                    val importedCount = mediaList.count { it.playlistId == playlist.id }
+                                                    val sourceLabel = if (playlist.sourceType == "TELEGRAM_POST") "Postingan" else "Channel / Grup"
+                                                    Text(
+                                                        if (importedCount == 0) "$sourceLabel • belum ada media" else "$sourceLabel • $importedCount media",
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 10.sp
+                                                    )
                                                 }
                                             }
                                         }
