@@ -432,6 +432,12 @@ fun SettingsScreen(
                                 }
                             }
                             if (selectedTelegramChatId != null) {
+                                val selectedChat = telegramState.chats.firstOrNull { it.id == selectedTelegramChatId }
+                                TextButton(onClick = {
+                                    selectedChat?.let { viewModel.addTelegramChatPlaylist(it.id, it.title) }
+                                }, enabled = selectedChat != null) {
+                                    Text("Tambahkan grup/channel ke playlist")
+                                }
                                 Text("Media terbaru", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 if (telegramState.media.isEmpty()) {
                                     Text("Belum ada media yang didukung pada 50 pesan terbaru atau sumber sedang dimuat.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
