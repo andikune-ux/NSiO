@@ -430,43 +430,40 @@ fun SettingsScreen(
                             }
                             val mainTelegramChats = visibleTelegramChats.filterNot { it.isArchived }
                             val archivedTelegramChats = visibleTelegramChats.filter { it.isArchived }
-                            @Composable
-                            fun TelegramChatRows(chats: List<com.example.data.telegram.TelegramClientManager.TelegramChat>) {
-                                chats.forEach { chat ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable {
-                                            selectedTelegramChatId = chat.id
-                                            com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id)
+                            listOf(
+                                "Chat utama" to mainTelegramChats,
+                                "Arsip Telegram" to archivedTelegramChats
+                            ).forEach { (sectionTitle, sectionChats) ->
+                                if (sectionChats.isNotEmpty()) {
+                                    Text("$sectionTitle (${sectionChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    sectionChats.forEach { chat ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .clickable {
+                                                    selectedTelegramChatId = chat.id
+                                                    com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id)
+                                                }
+                                                .padding(horizontal = 5.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = chat.id in selectedTelegramChatIds,
+                                                onCheckedChange = { checked ->
+                                                    selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id
+                                                        else selectedTelegramChatIds - chat.id
+                                                }
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            if (selectedTelegramChatId == chat.id) {
+                                                Text("Media dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+                                            } else if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
                                         }
-                                        .padding(horizontal = 5.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = chat.id in selectedTelegramChatIds,
-                                        onCheckedChange = { checked ->
-                                            selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id
-                                                else selectedTelegramChatIds - chat.id
-                                        }
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    if (selectedTelegramChatId == chat.id) {
-                                        Text("Media dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
-                                    } else if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
                                 }
-                                }
-                            }
-                            if (mainTelegramChats.isNotEmpty()) {
-                                Text("Chat utama (${mainTelegramChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                TelegramChatRows(mainTelegramChats)
-                            }
-                            if (archivedTelegramChats.isNotEmpty()) {
-                                Text("Arsip Telegram (${archivedTelegramChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                TelegramChatRows(archivedTelegramChats)
                             }
                             if (visibleTelegramChats.isEmpty()) {
                                 Text("Tidak ada channel/grup yang cocok dengan pencarian.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
