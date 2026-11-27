@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Process-wide TDLib bridge. TDLib owns its own persistent encrypted database in app-private storage.
@@ -39,6 +40,7 @@ object TelegramClientManager {
     val state: StateFlow<State> = mutableState.asStateFlow()
     @Volatile private var client: Client? = null
     @Volatile private var appContext: Context? = null
+    private val downloadCallbacks = ConcurrentHashMap<Int, (String?) -> Unit>()
 
     @Synchronized
     fun initialize(context: Context) {
@@ -84,6 +86,13 @@ object TelegramClientManager {
             is TdApi.UpdateNewChat -> upsertChat(update.chat)
             is TdApi.UpdateChatTitle -> refreshChat(update.chatId)
             is TdApi.UpdateChatLastMessage -> refreshChat(update.chatId)
+            is TdApi.UpdateFile -> {
+                val file = update.file
+                val local = file.local
+                if (local.isDownloadingCompleted && local.path.isNotBlank()) {
+                    downloadCallbacks.remove(file.id)?.invoke(local.path)
+                }
+            }
         }
     }
 
@@ -202,14 +211,20 @@ object TelegramClientManager {
 
     fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
         val activeClient = client ?: run { onFinished(null); return }
+        downloadCallbacks[media.fileId] = onFinished
         activeClient.send(TdApi.DownloadFile(media.fileId, 32, 0L, 0L, true), { result ->
-            if (result is TdApi.File && result.local?.isDownloadingCompleted == true && result.local.path.isNotBlank()) {
-                onFinished(result.local.path)
-            } else {
-                if (result is TdApi.Error) {
+            when (result) {
+                is TdApi.File -> {
+                    val local = result.local
+                    if (local.isDownloadingCompleted && local.path.isNotBlank()) {
+                        downloadCallbacks.remove(media.fileId)?.invoke(local.path)
+                    }
+                    // Otherwise UpdateFile completes the callback when TDLib finishes downloading.
+                }
+                is TdApi.Error -> {
+                    downloadCallbacks.remove(media.fileId)?.invoke(null)
                     mutableState.value = mutableState.value.copy(message = "Unduhan Telegram gagal: ${result.message}")
                 }
-                onFinished(null)
             }
         })
     }
