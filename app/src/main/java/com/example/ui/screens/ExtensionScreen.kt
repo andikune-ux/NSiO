@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -213,7 +214,7 @@ fun SourceManagementScreen(
         // Tab Contents
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (selectedTabIndex) {
-                0 -> LinkSourceTab(viewModel, onNavigateToHome)
+                0 -> LinkSourceTab(viewModel, onNavigateToHome, sourcePlaylists)
                 1 -> FileSourceTab(viewModel, onNavigateToHome)
                 2 -> ServerSourceTab(viewModel, onNavigateToHome, mediaList.filter { it.sourceType == "SERVER" })
                 3 -> PluginRepoTab(viewModel, plugins, repos, sourcePlaylists, onNavigateToHome)
@@ -241,8 +242,15 @@ fun SourceManagementScreen(
 @Composable
 private fun LinkSourceTab(
     viewModel: MainViewModel,
-    onNavigateToHome: () -> Unit
+    onNavigateToHome: () -> Unit,
+    sourcePlaylists: List<SourcePlaylist>
 ) {
+    val driveSources = remember(sourcePlaylists) {
+        sourcePlaylists.filter { it.sourceType.equals("DRIVE", true) || it.url.contains("drive.google.com", true) }
+            .sortedBy { it.name.lowercase() }
+    }
+    val refreshingDriveIds by viewModel.refreshingDrivePlaylistIds.collectAsState()
+    val isRefreshingAllDrive by viewModel.isRefreshingAllDriveSources.collectAsState()
     var urlInput by remember { mutableStateOf("") }
     var playlistNameInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -410,6 +418,42 @@ private fun LinkSourceTab(
             }
         }
 
+        item {
+            Column(
+                modifier = Modifier.fillMaxWidth().liquidGlass(shape = RoundedCornerShape(20.dp), alpha = 0.10f, borderAlpha = 0.28f, elevation = 4.dp).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sumber Google Drive", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("${driveSources.size} sumber tersimpan • Perbarui nama dan daftar media dari Drive", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(onClick = { viewModel.refreshAllDrivePlaylists() }, enabled = driveSources.isNotEmpty() && !isRefreshingAllDrive && refreshingDriveIds.isEmpty(), shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)) {
+                        if (isRefreshingAllDrive) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Refresh Semua", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (driveSources.isEmpty()) {
+                    Text("Belum ada sumber Drive. Tambahkan link file atau folder publik di atas.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    driveSources.forEach { source ->
+                        Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)).padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(source.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${source.itemCount} media • Terakhir diperbarui: ${android.text.format.DateFormat.format("dd MMM, HH:mm", source.updatedAt)}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            IconButton(onClick = { viewModel.refreshDrivePlaylist(source.id) }, enabled = source.id !in refreshingDriveIds && !isRefreshingAllDrive, modifier = Modifier.size(38.dp).testTag("btn_refresh_drive_${source.id}")) {
+                                if (source.id in refreshingDriveIds) CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
+                                else Icon(Icons.Default.Refresh, contentDescription = "Refresh ${source.name}")
+                            }
+                        }
+                    }
+                }
+                Text("Refresh folder mendeteksi file baru dan perubahan nama. Link file tunggal hanya memperbarui file tersebut.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 
