@@ -20,14 +20,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
-      - name: Download verified NSiO TDLib Android API 24 runtime
-        uses: actions/download-artifact@v4
-        with:
-          name: NSiO-TDLib-1.8.70-Android-API24
-          repository: andikune-ux/NSiO
-          run-id: 45986064975
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/tdlib-api24
+      - name: Download permanent pinned TDLib API 24 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$RUNNER_TEMP/tdlib-api24"
+          mkdir -p "$DEST"
+          TAG="tdlib-1.8.70-api24"
+          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
+          CHECKSUM="$ARCHIVE.sha256"
+          # The TDLib publishing workflow may be creating the first permanent release
+          # in parallel with this build. Wait for that release; never rebuild TDLib here.
+          for attempt in $(seq 1 20); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              break
+            fi
+            echo "Pinned TDLib release not published yet (attempt $attempt/20); waiting 15s."
+            sleep 15
+          done
+          gh release view "$TAG" >/dev/null
+          gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$CHECKSUM" --dir "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          sha256sum -c "$CHECKSUM"
+          tar -xzf "$ARCHIVE" -C "$DEST"
       - name: Validate TDLib runtime payload
         run: |
           set -euo pipefail
