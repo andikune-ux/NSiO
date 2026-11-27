@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -173,6 +174,7 @@ fun HomeScreen(
         }.sortedBy { it.name.lowercase() }
     }
     val drivePlaylistIds = remember(drivePlaylists) { drivePlaylists.mapTo(hashSetOf()) { it.id } }
+    val telegramPlaylists = remember(sourcePlaylists) { sourcePlaylists.filter { it.sourceType.startsWith("TELEGRAM", true) }.sortedBy { it.name.lowercase() } }
     val orderedCloudStreamPluginFilters = remember(cloudStreamPluginFilters, cloudStreamPluginOrder) {
         cloudStreamPluginFilters.sortedWith(compareBy<Pair<String, String>> { pair ->
             val index = cloudStreamPluginOrder.indexOf(pair.first)
@@ -338,8 +340,9 @@ fun HomeScreen(
         val matchesVideoCategories = selectedVideoFilters.isEmpty() || selectedVideoFilters.any { category -> matchesVideoCategory(category, "${item.type} ${item.category} ${item.title}") }
         val isDriveMedia = MediaSourceClassifier.isDriveMedia(item, drivePlaylistIds)
         val matchesFilter = when (selectedFilter) {
-            "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM"
+            "ALL_SOURCES" -> isDriveMedia || item.sourceType == "CLOUDSTREAM" || item.sourceType.startsWith("TELEGRAM", true)
             "DRIVE_ALL" -> isDriveMedia
+            "TELEGRAM_ALL" -> item.sourceType.startsWith("TELEGRAM", true)
             "CLOUDSTREAM_ALL" -> item.sourceType == "CLOUDSTREAM"
             "LINK" -> item.sourceType == "LINK"
             "STREAM" -> item.sourceType == "STREAM"
@@ -352,6 +355,8 @@ fun HomeScreen(
                 val selectedCategory = selectedFilter.removePrefix("CATEGORY:")
                 item.category.split("•", ",", "|", ";")
                     .any { it.trim().equals(selectedCategory, ignoreCase = true) }
+            } else if (selectedFilter.startsWith("TELEGRAM_SOURCE:")) {
+                item.sourceType.startsWith("TELEGRAM", true) && item.playlistId == selectedFilter.removePrefix("TELEGRAM_SOURCE:")
             } else if (selectedFilter.startsWith("DRIVE_PLAYLIST:")) {
                 isDriveMedia && item.playlistId == selectedFilter.removePrefix("DRIVE_PLAYLIST:")
             } else if (selectedFilter.startsWith("PLAYLIST:")) {
@@ -1416,8 +1421,7 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    if (expandedPlaylistCategory == null) "Pilih Sumber Playlist" else
-                                        if (expandedPlaylistCategory == "DRIVE") "Pilih Drive" else "Pilih Plugin CloudStream",
+                                    if (expandedPlaylistCategory == null) "Pilih Sumber Playlist" else when (expandedPlaylistCategory) { "DRIVE" -> "Pilih Drive"; "CLOUDSTREAM" -> "Pilih Plugin CloudStream"; else -> "Pilih Telegram" },
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -1460,7 +1464,7 @@ fun HomeScreen(
                                             Text("Semua Sumber", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             Spacer(Modifier.weight(1f))
                                             Text(
-                                                "${drivePlaylists.sumOf { it.itemCount } + mediaList.count { it.sourceType == "CLOUDSTREAM" }}",
+                                                "${drivePlaylists.sumOf { it.itemCount } + mediaList.count { it.sourceType == "CLOUDSTREAM" || it.sourceType.startsWith("TELEGRAM", true) }}",
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 10.sp
                                             )
@@ -1496,6 +1500,15 @@ fun HomeScreen(
                                             Text("CloudStream", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                             Spacer(Modifier.weight(1f))
                                             Text("${orderedCloudStreamPluginFilters.size}  ›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                                        }
+                                    }
+                                    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).clickable { expandedPlaylistCategory = "TELEGRAM" }.padding(horizontal = 10.dp, vertical = 11.dp).testTag("playlist_category_telegram")) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Send, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(9.dp))
+                                            Text("Telegram", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Spacer(Modifier.weight(1f))
+                                            Text("${telegramPlaylists.size}  ›", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                         }
                                     }
                                     Box(
@@ -1570,7 +1583,7 @@ fun HomeScreen(
                                             }
                                         }
                                     }
-                                } else {
+                                } else if (expandedPlaylistCategory == "CLOUDSTREAM") {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1613,6 +1626,25 @@ fun HomeScreen(
                                                         Text(pluginName, color = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                         Text("$itemCount media", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                                     }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(if (selectedFilter == "TELEGRAM_ALL") accentColor.copy(alpha = 0.16f) else Color.Transparent).clickable { viewModel.selectFilter("TELEGRAM_ALL"); showPlaylistPicker = false; expandedPlaylistCategory = null }.padding(horizontal = 10.dp, vertical = 10.dp).testTag("playlist_filter_all_telegram")) {
+                                        Text("Semua Telegram", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    if (telegramPlaylists.isEmpty()) Text("Belum ada link Telegram tersimpan.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                                    else telegramPlaylists.forEach { playlist ->
+                                        val filter = "TELEGRAM_SOURCE:${playlist.id}"
+                                        val active = selectedFilter == filter
+                                        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(if (active) accentColor.copy(alpha = 0.16f) else Color.Transparent).clickable { viewModel.selectFilter(filter); showPlaylistPicker = false; expandedPlaylistCategory = null }.padding(horizontal = 10.dp, vertical = 10.dp).testTag("playlist_telegram_${playlist.id}")) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Send, contentDescription = null, tint = if (active) accentColor else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(9.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(playlist.name, color = if (active) accentColor else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan • ${playlist.itemCount} media" else "Channel / Grup • ${playlist.itemCount} media", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                                 }
                                             }
                                         }
