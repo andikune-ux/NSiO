@@ -20,13 +20,13 @@ jobs:
     steps:
       - name: Download pinned TDLib API 24 runtime release
         env:
-          TDLib_RELEASE_URL: https://github.com/andikune-ux/NSiO/releases/download/tdlib-1.8.70-api24
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/tdlib-api24"
+          TAG="tdlib-1.8.70-api24"
           ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
-          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE" -o "$RUNNER_TEMP/$ARCHIVE"
-          curl -fL --retry 5 --retry-delay 3 "$TDLib_RELEASE_URL/$ARCHIVE.sha256" -o "$RUNNER_TEMP/$ARCHIVE.sha256"
+          gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256" --dir "$RUNNER_TEMP"
           cd "$RUNNER_TEMP"
           sha256sum -c "$ARCHIVE.sha256"
           tar -xzf "$ARCHIVE" -C "$RUNNER_TEMP/tdlib-api24"
