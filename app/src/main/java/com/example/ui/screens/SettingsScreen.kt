@@ -452,6 +452,7 @@ fun SettingsScreen(
                                                 .firstOrNull { it.url == "telegram://chat/${chat.id}" }
                                                 ?.thumbnailUrl
                                                 ?.takeIf { it.isNotBlank() }
+                                                ?: chat.photoPath.takeIf { it.isNotBlank() }
                                             Box(
                                                 modifier = Modifier
                                                     .size(38.dp)
