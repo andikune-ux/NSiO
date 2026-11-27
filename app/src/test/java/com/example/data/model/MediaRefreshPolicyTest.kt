@@ -117,4 +117,50 @@ class MediaRefreshPolicyTest {
         assertEquals(setOf("new", "watched", "favorite"), result.map { it.id }.toSet())
     }
 
+    @Test
+    fun drivePhotoRenameKeepsStableRowIdentityAndAddsNewFolderMedia() {
+        val existingPhoto = MediaItem(
+            id = "photo-row-id",
+            profileId = "profile-a",
+            title = "Nama lama.jpg",
+            url = "https://lh3.googleusercontent.com/d/drive-photo-id=w2000",
+            thumbnailUrl = "https://lh3.googleusercontent.com/d/drive-photo-id=w800",
+            type = "PHOTO",
+            sourceType = "DRIVE",
+            playlistId = "drive-folder",
+            sourceUrl = "https://drive.google.com/drive/folders/folder-id",
+            isFavorite = true,
+            progressMs = 0L,
+            createdAt = 100L
+        )
+        val renamedPhoto = existingPhoto.copy(
+            id = "fresh-photo-random-id",
+            title = "Nama baru.jpg",
+            isFavorite = false,
+            createdAt = 999L
+        )
+        val newVideo = MediaItem(
+            id = "new-video-row",
+            profileId = "profile-a",
+            title = "Video baru.mp4",
+            url = "https://drive.google.com/file/d/new-video-id/preview",
+            type = "VIDEO",
+            sourceType = "DRIVE",
+            playlistId = "drive-folder",
+            sourceUrl = "https://drive.google.com/drive/folders/folder-id"
+        )
+
+        val result = MediaRefreshPolicy.mergePlaylist(
+            existing = listOf(existingPhoto),
+            incoming = listOf(renamedPhoto, newVideo)
+        )
+
+        val savedPhoto = result.single { it.type == "PHOTO" }
+        assertEquals("photo-row-id", savedPhoto.id)
+        assertEquals("Nama baru.jpg", savedPhoto.title)
+        assertEquals(true, savedPhoto.isFavorite)
+        assertEquals(100L, savedPhoto.createdAt)
+        assertEquals("new-video-row", result.single { it.type == "VIDEO" }.id)
+    }
+
 }
