@@ -397,6 +397,13 @@ class MainActivity : ComponentActivity() {
             decor.foreground = ColorDrawable(0xD9000000.toInt())
             privacyCoverApplied = true
         }
+
+        // Force both roots dirty immediately. This does not guarantee how every
+        // OEM launcher captures task snapshots, but avoids waiting for a Compose
+        // recomposition or a later animation frame to schedule the protected draw.
+        content.invalidate()
+        decor.invalidate()
+        decor.requestLayout()
     }
 
     private fun clearRecentAppsPrivacyBlur() {
@@ -414,6 +421,13 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
+        // Window focus is normally lost before Activity.onPause when opening Recents.
+        // Apply protection here as the earliest reliable app-side lifecycle signal.
+        if (hasFocus) {
+            clearRecentAppsPrivacyBlur()
+        } else {
+            applyRecentAppsPrivacyBlur()
+        }
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemNotificationBar()
     }
