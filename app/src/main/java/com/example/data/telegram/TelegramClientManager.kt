@@ -451,7 +451,7 @@ object TelegramClientManager {
                 // TDLib represents bot conversations as private chats too; resolve the user
                 // first so ordinary person-to-person conversations are excluded without history access.
                 client?.send(TdApi.GetUser(type.userId)) { result ->
-                    if (result is TdApi.User && result.isBot) enqueueMediaCheck(chat, "Bot")
+                    if (result is TdApi.User && result.type is TdApi.UserTypeBot) enqueueMediaCheck(chat, "Bot")
                 }
             }
             else -> Unit
