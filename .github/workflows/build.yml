@@ -183,8 +183,6 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/compute-nsio-version.sh
-          source nsio-version.env
-          echo "version_tag=$NSIO_VERSION_TAG" >> "$GITHUB_OUTPUT"
       - name: Assemble APK
         run: gradle assembleDebug --no-daemon
       - name: Verify APK ABIs, API floor, and persistent signing identity
