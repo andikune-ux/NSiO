@@ -20,33 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
-      - name: Download pinned TDLib API 24 runtime release
-        id: tdlib_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          DEST="$RUNNER_TEMP/tdlib-api24"
-          mkdir -p "$DEST"
-          TAG="tdlib-1.8.70-api24"
-          ARCHIVE="NSiO-TDLib-1.8.70-Android-API24.tar.gz"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release download "$TAG" --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256" --dir "$RUNNER_TEMP"
-            cd "$RUNNER_TEMP"
-            sha256sum -c "$ARCHIVE.sha256"
-            tar -xzf "$ARCHIVE" -C "$DEST"
-            echo "use_artifact=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "TDLib release is missing; downloading the verified immutable Actions artifact."
-            echo "use_artifact=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Download previously verified TDLib artifact
-        if: steps.tdlib_release.outputs.use_artifact == 'true'
+      - name: Download verified NSiO TDLib Android API 24 runtime
         uses: actions/download-artifact@v4
         with:
           name: NSiO-TDLib-1.8.70-Android-API24
-          repository: ${{ github.repository }}
+          repository: andikune-ux/NSiO
           run-id: 45986064975
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/tdlib-api24
