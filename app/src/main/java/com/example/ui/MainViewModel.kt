@@ -266,6 +266,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val refreshingDrivePlaylistIds: StateFlow<Set<String>> = _refreshingDrivePlaylistIds.asStateFlow()
     private val _isRefreshingAllDriveSources = MutableStateFlow(false)
     val isRefreshingAllDriveSources: StateFlow<Boolean> = _isRefreshingAllDriveSources.asStateFlow()
+    private var telegramSyncJob: Job? = null
+    private val _refreshingTelegramPlaylistIds = MutableStateFlow<Set<String>>(emptySet())
+    val refreshingTelegramPlaylistIds: StateFlow<Set<String>> = _refreshingTelegramPlaylistIds.asStateFlow()
+    private val _isRefreshingAllTelegramSources = MutableStateFlow(false)
+    val isRefreshingAllTelegramSources: StateFlow<Boolean> = _isRefreshingAllTelegramSources.asStateFlow()
     private var cloudStreamHomeRefreshJob: Job? = null
     private var cloudStreamHomeLoadMoreJob: Job? = null
     private val cloudStreamHomePages = mutableMapOf<String, Int>()
@@ -1107,13 +1112,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * history to the newest post. Existing IDs are retained, so repeat syncs only add new media.
      */
     fun syncTelegramPlaylists() {
-        if (_activeProfile.value == null || TelegramClientManager.state.value.stage != TelegramClientManager.AuthStage.READY) return
-        viewModelScope.launch {
-            val added = runCatching {
-                TelegramCatalogSync.run(getApplication<Application>(), database)
-            }.onFailure { Log.w("NSiO.TelegramSync", "Telegram sync failed", it) }.getOrDefault(0)
-            if (added > 0 && authManager.currentUser != null) {
-                runCatching { syncToCloud() }
+        startTelegramPlaylistRefresh(onlyPlaylistId = null, announceResult = false)
+    }
+
+    fun refreshTelegramPlaylist(playlistId: String) {
+        startTelegramPlaylistRefresh(onlyPlaylistId = playlistId, announceResult = true)
+    }
+
+    fun refreshAllTelegramPlaylists() {
+        startTelegramPlaylistRefresh(onlyPlaylistId = null, announceResult = true)
+    }
+
+    private fun startTelegramPlaylistRefresh(onlyPlaylistId: String?, announceResult: Boolean) {
+        val profileId = _activeProfile.value?.id
+        if (profileId == null || TelegramClientManager.state.value.stage != TelegramClientManager.AuthStage.READY) {
+            if (announceResult) showStatus("Hubungkan akun Telegram terlebih dahulu untuk memperbarui sumber.")
+            return
+        }
+        if (telegramSyncJob?.isActive == true) {
+            if (announceResult) showStatus("Pembaruan Telegram sedang berjalan. Tunggu sampai selesai.")
+            return
+        }
+        telegramSyncJob = viewModelScope.launch {
+            if (onlyPlaylistId == null) _isRefreshingAllTelegramSources.value = true
+            else _refreshingTelegramPlaylistIds.value = _refreshingTelegramPlaylistIds.value + onlyPlaylistId
+            try {
+                val added = TelegramCatalogSync.run(
+                    getApplication<Application>(),
+                    database,
+                    onlyPlaylistId
+                )
+                if (added > 0 && authManager.currentUser != null) {
+                    runCatching { syncToCloud() }
+                }
+                if (announceResult) {
+                    val target = if (onlyPlaylistId == null) "semua sumber Telegram" else
+                        sourcePlaylistDao.getForProfile(profileId).firstOrNull { it.id == onlyPlaylistId }?.name ?: "sumber Telegram"
+                    showStatus(if (added > 0) "$target diperbarui: $added media baru ditambahkan."
+                        else "$target sudah diperiksa. Tidak ada media baru yang ditemukan.")
+                }
+            } catch (error: Exception) {
+                Log.w("NSiO.TelegramSync", "Telegram refresh failed", error)
+                if (announceResult) showStatus("Gagal memperbarui Telegram: ${error.localizedMessage ?: "periksa koneksi dan akses akun"}. Media yang sudah tersimpan tetap dipertahankan.")
+            } finally {
+                if (onlyPlaylistId == null) _isRefreshingAllTelegramSources.value = false
+                else _refreshingTelegramPlaylistIds.value = _refreshingTelegramPlaylistIds.value - onlyPlaylistId
+                telegramSyncJob = null
             }
         }
     }
