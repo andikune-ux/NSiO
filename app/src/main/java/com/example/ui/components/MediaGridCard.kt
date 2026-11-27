@@ -34,6 +34,9 @@ import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +68,8 @@ fun MediaGridCard(
     onRename: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    var captionExpanded by remember(item.id) { mutableStateOf(false) }
+    val captionNeedsExpansion = item.caption.length > 110
 
     Box(
         modifier = modifier
@@ -201,6 +206,29 @@ fun MediaGridCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (item.caption.isNotBlank()) {
+                    Material3Text(
+                        text = item.caption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 9.sp,
+                        maxLines = if (captionExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (captionNeedsExpansion) Modifier.clickable { captionExpanded = !captionExpanded } else Modifier)
+                    )
+                    if (captionNeedsExpansion) {
+                        Material3Text(
+                            text = if (captionExpanded) "Tampilkan lebih sedikit" else "Lihat selengkapnya",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clickable { captionExpanded = !captionExpanded }
+                                .padding(top = 2.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
