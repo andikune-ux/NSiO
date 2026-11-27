@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.coroutines.resume
 
 /**
  * Background reconciliation for saved Telegram channel/group playlists.
