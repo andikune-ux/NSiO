@@ -47,11 +47,6 @@ object TelegramClientManager {
             return
         }
         mutableState.value = State(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
-        client = Client.create({ update -> handleUpdate(update) }, { error ->
-            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
-        }, { error ->
-            mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
-        })
         // A random local key protects TDLib's database. It never leaves app-private storage.
         val root = File(app.filesDir, "telegram/tdlib").apply { mkdirs() }
         val keyFile = File(root, ".database-key")
@@ -70,6 +65,11 @@ object TelegramClientManager {
         pendingDatabaseDirectory = File(root, "database").apply { mkdirs() }.absolutePath
         pendingFilesDirectory = File(root, "files").apply { mkdirs() }.absolutePath
         pendingDatabaseKey = databaseKey
+        client = Client.create({ update -> handleUpdate(update) }, { error ->
+            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
+        }, { error ->
+            mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
+        })
     }
 
     private var pendingApiId: Int = 0
