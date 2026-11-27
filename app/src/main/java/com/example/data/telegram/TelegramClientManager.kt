@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.File
-import java.security.SecureRandom
 
 /**
  * Process-wide TDLib bridge. TDLib owns its own persistent encrypted database in app-private storage.
@@ -57,18 +56,9 @@ object TelegramClientManager {
             return
         }
         mutableState.value = State(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
-        // A random local key protects TDLib's database. It never leaves app-private storage.
+        // The stable 256-bit database key is wrapped by Android Keystore.
         val root = File(app.filesDir, "telegram/tdlib").apply { mkdirs() }
-        val keyFile = File(root, ".database-key")
-        val databaseKey = if (keyFile.isFile && keyFile.length() == 32L) {
-            keyFile.readBytes()
-        } else {
-            ByteArray(32).also { SecureRandom().nextBytes(it); keyFile.writeBytes(it) }
-        }
-        keyFile.setReadable(false, false)
-        keyFile.setWritable(false, false)
-        keyFile.setReadable(true, true)
-        keyFile.setWritable(true, true)
+        val databaseKey = TelegramApiCredentialStore(app).loadOrCreateDatabaseEncryptionKey()
         // TDLib sends AuthorizationStateWaitTdlibParameters after Client.create.
         pendingApiId = apiId
         pendingApiHash = credentials.apiHash
