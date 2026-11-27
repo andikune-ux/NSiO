@@ -776,7 +776,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 translationY = swipeOffset
             }
         ) {
-        if (!isCleanMode || isPhotoMedia) {
+        if (!isCleanMode) {
             Row(
                 modifier = Modifier.align(Alignment.TopCenter)
                     .statusBarsPadding()
@@ -992,7 +992,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             // TikTok-style creator identity and caption: compact, anchored bottom-left.
-            if (!isCleanMode || isPhotoMedia) {
+            if (!isCleanMode) {
             Column(
                 Modifier.align(Alignment.BottomStart)
                     .padding(start = 14.dp, end = 82.dp, bottom = 76.dp),
@@ -1084,7 +1084,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
             }
 
             // Separate TikTok-style action buttons: each icon has its own background and spacing.
-            if (!isCleanMode || isPhotoMedia) {
+            if (!isCleanMode) {
             Column(
                 Modifier.align(Alignment.BottomEnd)
                     .padding(end = 9.dp, bottom = 90.dp)
@@ -1276,7 +1276,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                 }
             }
             // Draw category navigation last inside the video layer so PlayerView cannot cover it.
-            if (!isCleanMode || isPhotoMedia) {
+            if (!isCleanMode) {
                 Row(
                     modifier = Modifier.align(Alignment.TopCenter)
                         .statusBarsPadding()
