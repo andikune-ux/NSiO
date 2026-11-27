@@ -106,6 +106,7 @@ fun SettingsScreen(
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
     val downloads by viewModel.downloads.collectAsState(initial = emptyList())
+    val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
     var showServerPinDialog by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
@@ -447,6 +448,33 @@ fun SettingsScreen(
                                                 .padding(horizontal = 5.dp, vertical = 5.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            val telegramAvatar = sourcePlaylists
+                                                .firstOrNull { it.url == "telegram://chat/${chat.id}" }
+                                                ?.thumbnailUrl
+                                                ?.takeIf { it.isNotBlank() }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (telegramAvatar != null) {
+                                                    AsyncImage(
+                                                        model = telegramAvatar,
+                                                        contentDescription = "Foto profil ${chat.title}",
+                                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Language,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(19.dp)
+                                                    )
+                                                }
+                                            }
                                             Checkbox(
                                                 checked = chat.id in selectedTelegramChatIds,
                                                 onCheckedChange = { checked ->
