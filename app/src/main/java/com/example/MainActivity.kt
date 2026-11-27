@@ -379,21 +379,34 @@ class MainActivity : ComponentActivity() {
     private fun applyRecentAppsPrivacyBlur() {
         if (isInPictureInPictureMode) return
         val decor = window.decorView
+        val content = findViewById<android.view.View>(android.R.id.content)
+
+        // RenderEffect on the content root as well as the decor root. Some OEM
+        // launchers capture the content surface rather than the outer decor view.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            decor.setRenderEffect(RenderEffect.createBlurEffect(26f, 26f, Shader.TileMode.CLAMP))
-        } else {
-            // Older Android versions receive a privacy cover rather than an unblurred task snapshot.
+            val blur = RenderEffect.createBlurEffect(30f, 30f, Shader.TileMode.CLAMP)
+            decor.setRenderEffect(blur)
+            content.setRenderEffect(blur)
+        }
+
+        // A foreground privacy veil is the fallback for devices whose Recents
+        // snapshot pipeline ignores View RenderEffect. It also covers SurfaceView
+        // video layers, which ordinary View blur effects cannot reliably blur.
+        if (!privacyCoverApplied) {
             previousDecorForeground = decor.foreground
-            decor.foreground = ColorDrawable(0xE6000000.toInt())
+            decor.foreground = ColorDrawable(0xF0000000.toInt())
             privacyCoverApplied = true
         }
     }
 
     private fun clearRecentAppsPrivacyBlur() {
         val decor = window.decorView
+        val content = findViewById<android.view.View>(android.R.id.content)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             decor.setRenderEffect(null)
-        } else if (privacyCoverApplied) {
+            content.setRenderEffect(null)
+        }
+        if (privacyCoverApplied) {
             decor.foreground = previousDecorForeground
             previousDecorForeground = null
             privacyCoverApplied = false
