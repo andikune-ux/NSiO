@@ -796,6 +796,7 @@ fun HomeScreen(
                                             "STREAM" -> "Stream"
                                             "REPO" -> "Repository"
                                             "CLOUDSTREAM" -> "CloudStream"
+                                            "TELEGRAM" -> "Telegram"
                                             "FILE" -> "File Lokal"
                                             "SERVER" -> "Server"
                                             else -> sourceType.ifBlank { "Sumber Lain" }
@@ -976,6 +977,7 @@ fun HomeScreen(
                                     } else {
                                         playlistNames[playlistId] ?: "Playlist tidak dikenal"
                                     }
+                                    val playlistMeta = sourcePlaylists.firstOrNull { it.id == playlistId }
                                     item(
                                         key = "playlist_header_${sourceType}_${playlistId}",
                                         span = { GridItemSpan(maxLineSpan) }
@@ -987,14 +989,28 @@ fun HomeScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Text(
-                                                text = playlistTitle,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                if (sourceType == "TELEGRAM" && !playlistMeta?.thumbnailUrl.isNullOrBlank()) {
+                                                    AsyncImage(
+                                                        model = playlistMeta?.thumbnailUrl,
+                                                        contentDescription = "Foto profil ${playlistTitle}",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.size(25.dp).clip(CircleShape)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = playlistTitle,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Text(
                                                     text = "${playlistItems.size}",
