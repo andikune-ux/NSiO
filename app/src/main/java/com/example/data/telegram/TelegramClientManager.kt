@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 object TelegramClientManager {
     enum class AuthStage { NOT_CONFIGURED, INITIALIZING, WAITING_PHONE, WAITING_CODE, WAITING_PASSWORD, READY, ERROR }
 
-    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int, val photoFileId: Int = 0)
+    data class TelegramChat(val id: Long, val title: String, val kind: String, val unreadCount: Int, val photoFileId: Int = 0, val isArchived: Boolean = false)
 
     data class TelegramMedia(
         val chatId: Long,
@@ -158,18 +158,28 @@ object TelegramClientManager {
 
     fun loadChats() {
         val activeClient = client ?: return
-        activeClient.send(TdApi.LoadChats(null, 100), { result ->
-            if (result is TdApi.Error && result.code != 404) {
-                mutableState.value = mutableState.value.copy(message = "Gagal memuat daftar Telegram: ${result.message}")
-            }
-            activeClient.send(TdApi.GetChats(null, 100), { chatsResult ->
-                if (chatsResult is TdApi.Chats) {
-                    chatsResult.chatIds.forEach { refreshChat(it) }
-                } else if (chatsResult is TdApi.Error) {
-                    mutableState.value = mutableState.value.copy(message = "Gagal mengambil daftar Telegram: ${chatsResult.message}")
+        val lists = listOf(
+            TdApi.ChatListMain() to "utama",
+            TdApi.ChatListArchive() to "arsip"
+        )
+        lists.forEach { (chatList, label) ->
+            activeClient.send(TdApi.LoadChats(chatList, 100), { loadResult ->
+                if (loadResult is TdApi.Error && loadResult.code != 404) {
+                    mutableState.value = mutableState.value.copy(
+                        message = "Gagal memuat chat $label Telegram: ${loadResult.message}"
+                    )
                 }
+                activeClient.send(TdApi.GetChats(chatList, 100), { chatsResult ->
+                    if (chatsResult is TdApi.Chats) {
+                        chatsResult.chatIds.forEach { refreshChat(it) }
+                    } else if (chatsResult is TdApi.Error) {
+                        mutableState.value = mutableState.value.copy(
+                            message = "Gagal mengambil chat $label Telegram: ${chatsResult.message}"
+                        )
+                    }
+                })
             })
-        })
+        }
     }
 
     private fun refreshChat(chatId: Long) {
@@ -375,7 +385,8 @@ object TelegramClientManager {
             is TdApi.ChatTypeBasicGroup -> "Grup"
             else -> return
         }
-        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount, chat.photo?.small?.id ?: 0)
+        val isArchived = chat.positions.any { it.list is TdApi.ChatListArchive }
+        val item = TelegramChat(chat.id, chat.title.orEmpty(), kind, chat.unreadCount, chat.photo?.small?.id ?: 0, isArchived)
         val updated = (mutableState.value.chats.filterNot { it.id == item.id } + item)
             .sortedBy { it.title.lowercase() }
         mutableState.value = mutableState.value.copy(chats = updated)
