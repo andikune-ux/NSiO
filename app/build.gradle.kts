@@ -1,8 +1,4 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.ZoneId
-
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -11,53 +7,17 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
-// Keep local builds aligned with the same Asia/Jakarta + mainline-commit
-// version policy used by GitHub Actions. CI-provided values still take priority.
-val computedNsioFallback: Pair<String, Int> = kotlin.run {
-  val stateFile = rootProject.file(".versioning/nsio-version-state.json")
-  if (!stateFile.isFile) {
-    throw GradleException("Missing NSiO version state: ${stateFile.path}")
-  }
-  val state = stateFile.readText()
-  fun stateInt(key: String): Int =
-    Regex("\"$key\"\\s*:\\s*(\\d+)")
-      .find(state)?.groupValues?.get(1)?.toIntOrNull()
-      ?: throw GradleException("Invalid NSiO version state field: $key")
-
-  val baselineText = Regex("\"baseline_month\"\\s*:\\s*\"(\\d{4}-\\d{2})\"")
-    .find(state)?.groupValues?.get(1)
-    ?: throw GradleException("Invalid NSiO baseline_month")
-  val baseline = YearMonth.parse(baselineText)
-  val today = LocalDate.now(ZoneId.of("Asia/Jakarta"))
-  val monthDelta = (today.year - baseline.year) * 12 + today.monthValue - baseline.monthValue
-  if (monthDelta < 0) throw GradleException("NSiO version baseline is later than the current Jakarta date")
-
-  // Gradle's provider-based process API is compatible with configuration cache.
-  val gitOutput = providers.exec {
-    workingDir(rootProject.projectDir)
-    commandLine("git", "rev-list", "--count", "HEAD")
-  }.standardOutput.asText.get().trim()
-  val commitOrdinal = gitOutput.toIntOrNull()
-    ?: throw GradleException("Cannot calculate NSiO commit ordinal from git output: $gitOutput")
-  if (commitOrdinal !in 1..99999) throw GradleException("NSiO commit ordinal outside supported range: $commitOrdinal")
-
-  val major = stateInt("base_major") + monthDelta + stateInt("major_overhaul_count")
-  val versionName = "$major.${today.dayOfMonth}.$commitOrdinal"
-  val versionCodeLong = major.toLong() * 50_000_000L +
-    today.dayOfYear.toLong() * 100_000L + commitOrdinal.toLong()
-  if (versionCodeLong > 2_100_000_000L) {
-    throw GradleException("NSiO versionCode exceeds Android's safe integer limit")
-  }
-  versionName to versionCodeLong.toInt()
-}
+// The root build script calculates the version once for both local builds and CI.
+@Suppress("UNCHECKED_CAST")
+val sharedNsioVersion = rootProject.extra["nsioVersionValues"] as Map<String, String>
 
 val nsioVersionName = providers.gradleProperty("nsioVersionName")
   .orElse(providers.environmentVariable("NSIO_VERSION_NAME"))
-  .orElse(computedNsioFallback.first)
+  .orElse(sharedNsioVersion.getValue("NSIO_VERSION_NAME"))
 val nsioVersionCode = providers.gradleProperty("nsioVersionCode")
   .orElse(providers.environmentVariable("NSIO_VERSION_CODE"))
   .map { it.toInt() }
-  .orElse(computedNsioFallback.second)
+  .orElse(sharedNsioVersion.getValue("NSIO_VERSION_CODE").toInt())
 
 android {
   namespace = "com.example"
