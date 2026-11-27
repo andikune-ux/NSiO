@@ -6,7 +6,7 @@ TDLIB_COMMIT="c8828d50f5eac2fc7089ce1089d7ce9095c61b5e"
 TDLIB_VERSION="1.8.70"
 ANDROID_NDK_VERSION="28.2.13676358"
 ANDROID_API_LEVEL="24"
-ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 BUILD_ROOT="${RUNNER_TEMP:-$PWD}/nsio-tdlib-build"
 SOURCE_DIR="$BUILD_ROOT/td"
 
@@ -59,5 +59,5 @@ Android NDK: $ANDROID_NDK_VERSION
 Interface: Java/JNI
 ABIs: arm64-v8a, armeabi-v7a, x86_64, x86
 INFO
-find "$OUT_DIR" -type f -print0 | sort -z | xargs -0 sha256sum > "$OUT_DIR/SHA256SUMS"
+find "$OUT_DIR" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$OUT_DIR/SHA256SUMS"
 echo "TDLib $TDLIB_VERSION built for Android API $ANDROID_API_LEVEL."
