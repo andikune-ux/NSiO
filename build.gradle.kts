@@ -38,11 +38,11 @@ fun calculateNsioVersion(): Map<String, String> {
   if (!stateFile.isFile) throw GradleException("Missing NSiO version state: ${stateFile.path}")
   val state = stateFile.readText()
   fun stateInt(key: String): Int =
-    Regex("\\\"$key\\\"\\\\s*:\\\\s*(\\\\d+)")
+    Regex("\\\"$key\\\"\\s*:\\s*(\\d+)")
       .find(state)?.groupValues?.get(1)?.toIntOrNull()
       ?: throw GradleException("Invalid NSiO version state field: $key")
 
-  val baselineText = Regex("\\\"baseline_month\\\"\\\\s*:\\\\s*\\\"(\\\\d{4}-\\\\d{2})\\\"")
+  val baselineText = Regex("\\\"baseline_month\\\"\\s*:\\s*\\\"(\\d{4}-\\d{2})\\\"")
     .find(state)?.groupValues?.get(1) ?: throw GradleException("Invalid NSiO baseline_month")
   val baseline = YearMonth.parse(baselineText)
   val overhaulCount = stateInt("major_overhaul_count")
