@@ -90,6 +90,8 @@ object TelegramClientManager {
             is TdApi.UpdateNewChat -> upsertChat(update.chat)
             is TdApi.UpdateChatTitle -> refreshChat(update.chatId)
             is TdApi.UpdateChatLastMessage -> refreshChat(update.chatId)
+            // Keep the integration list synchronized when a chat moves between Main and Archive.
+            is TdApi.UpdateChatPosition -> refreshChat(update.chatId)
             is TdApi.UpdateFile -> {
                 val file = update.file
                 val local = file.local
@@ -158,30 +160,61 @@ object TelegramClientManager {
         send(TdApi.CheckAuthenticationPassword(password))
     }
 
+    @Volatile private var chatsLoading = false
+
+    /**
+     * Load every available dialog from Main and Archive.
+     * 100 is only the TDLib page size; loading continues until TDLib returns 404
+     * to indicate that the selected list has been fully loaded.
+     */
+    @Synchronized
     fun loadChats() {
         val activeClient = client ?: return
+        if (chatsLoading) return
+        chatsLoading = true
         val lists = listOf(
             TdApi.ChatListMain() to "utama",
             TdApi.ChatListArchive() to "arsip"
         )
-        lists.forEach { (chatList, label) ->
-            activeClient.send(TdApi.LoadChats(chatList, 100), { loadResult ->
-                if (loadResult is TdApi.Error && loadResult.code != 404) {
-                    mutableState.value = mutableState.value.copy(
-                        message = "Gagal memuat chat $label Telegram: ${loadResult.message}"
-                    )
-                }
-                activeClient.send(TdApi.GetChats(chatList, 100), { chatsResult ->
-                    if (chatsResult is TdApi.Chats) {
-                        chatsResult.chatIds.forEach { refreshChat(it) }
-                    } else if (chatsResult is TdApi.Error) {
-                        mutableState.value = mutableState.value.copy(
-                            message = "Gagal mengambil chat $label Telegram: ${chatsResult.message}"
-                        )
+
+        fun loadList(index: Int) {
+            if (index >= lists.size) {
+                chatsLoading = false
+                mutableState.value = mutableState.value.copy(
+                    message = "Daftar grup dan channel Telegram selesai dimuat: ${mutableState.value.chats.size} dialog."
+                )
+                return
+            }
+
+            val (chatList, label) = lists[index]
+            fun loadNextBatch() {
+                activeClient.send(TdApi.LoadChats(chatList, 100)) { result ->
+                    when (result) {
+                        is TdApi.Ok -> loadNextBatch()
+                        is TdApi.Error -> {
+                            if (result.code == 404) {
+                                // TDLib has exhausted this list; continue with the next one.
+                                loadList(index + 1)
+                            } else {
+                                chatsLoading = false
+                                mutableState.value = mutableState.value.copy(
+                                    message = "Gagal memuat seluruh dialog $label Telegram: ${result.message}"
+                                )
+                            }
+                        }
+                        else -> {
+                            chatsLoading = false
+                            mutableState.value = mutableState.value.copy(
+                                message = "Respons tidak dikenal saat memuat dialog $label Telegram."
+                            )
+                        }
                     }
-                })
-            })
+                }
+            }
+            loadNextBatch()
         }
+
+        loadList(0)
     }
 
     private fun refreshChat(chatId: Long) {

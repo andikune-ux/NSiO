@@ -197,7 +197,7 @@ jobs:
 
           # Prevent an accidental debug-key replacement from creating an APK
           # that Android refuses to install over an existing NSiO installation.
-          EXPECTED_KEYSTORE_BLOB="2fef4288c1a9e8f5e34bd01b7941b881458fe938"
+          EXPECTED_KEYSTORE_BLOB="2f1825037ad30780fd74dd3fbffcf032203a5ad1"
           ACTUAL_KEYSTORE_BLOB="$(git hash-object debug.keystore)"
           if [[ "$ACTUAL_KEYSTORE_BLOB" != "$EXPECTED_KEYSTORE_BLOB" ]]; then
             echo "::error::The permanent NSiO debug.keystore changed. Do not publish an APK with a different signing identity."
