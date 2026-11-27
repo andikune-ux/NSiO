@@ -284,7 +284,6 @@ private fun LinkSourceTab(
                             resolvedTelegramChatId = chatId
                             resolvedTelegramUrl = telegramUrlInput.trim()
                             resolvedTelegramName = telegramNameInput.trim()
-                            com.example.data.telegram.TelegramClientManager.loadRecentMedia(chatId)
                             viewModel.addTelegramSource(telegramUrlInput, telegramNameInput) { saved ->
                                 if (saved.startsWith("Error:")) telegramFeedback = saved
                             }
