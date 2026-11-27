@@ -69,7 +69,8 @@ fun MediaGridCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     var captionExpanded by remember(item.id) { mutableStateOf(false) }
-    val captionNeedsExpansion = item.caption.length > 110
+    var captionHasOverflow by remember(item.id) { mutableStateOf(false) }
+    val captionNeedsExpansion = captionHasOverflow
 
     Box(
         modifier = modifier
@@ -213,6 +214,7 @@ fun MediaGridCard(
                         fontSize = 9.sp,
                         maxLines = if (captionExpanded) Int.MAX_VALUE else 2,
                         overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { if (it.hasVisualOverflow) captionHasOverflow = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (captionNeedsExpansion) Modifier.clickable { captionExpanded = !captionExpanded } else Modifier)
