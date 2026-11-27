@@ -47,6 +47,7 @@ fun PlaylistSelectionScreen(
     val mediaItems by viewModel.mediaList.collectAsState()
     val repos by viewModel.pluginManager.repositories.collectAsState()
     val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val telegramPlaylists = remember(playlists) { playlists.filter { it.sourceType.startsWith("TELEGRAM", true) }.sortedBy { it.name.lowercase() } }
     val drivePlaylists = remember(playlists, mediaItems) {
         playlists.filter { playlist ->
             playlist.sourceType.equals("DRIVE", ignoreCase = true) ||
@@ -81,16 +82,35 @@ fun PlaylistSelectionScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Playlist tersimpan", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                OutlinedButton(onClick = { viewModel.selectFilter("ALL_SOURCES"); onNavigateToHome() }, modifier = Modifier.fillMaxWidth().testTag("playlist_all_combined")) {
+                    Text("Tampilkan Drive + CloudStream + Telegram", fontSize = 11.sp)
+                }
                 OutlinedButton(
                     onClick = { viewModel.selectFilter("DRIVE_ALL"); onNavigateToHome() },
                     modifier = Modifier.fillMaxWidth().testTag("playlist_all_drive")
                 ) {
                     Text("Tampilkan Semua Playlist Drive (${drivePlaylists.size})", fontSize = 11.sp)
                 }
-                if (playlists.isEmpty()) {
+                OutlinedButton(onClick = { viewModel.selectFilter("TELEGRAM_ALL"); onNavigateToHome() }, modifier = Modifier.fillMaxWidth().testTag("playlist_all_telegram")) {
+                    Text("Tampilkan Semua Telegram (${telegramPlaylists.size})", fontSize = 11.sp)
+                }
+                telegramPlaylists.forEach { playlist ->
+                    val filter = "TELEGRAM_SOURCE:${playlist.id}"
+                    val active = selectedFilter == filter
+                    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)).clickable { viewModel.selectFilter(filter); onNavigateToHome() }.padding(horizontal = 10.dp, vertical = 10.dp).testTag("playlist_telegram_${playlist.id}"), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.size(9.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(playlist.name, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (playlist.sourceType == "TELEGRAM_POST") "Postingan Telegram" else "Channel / Grup Telegram", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (active) Icon(Icons.Default.LockOpen, contentDescription = "Dipilih", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    }
+                }
+                if (playlists.filterNot { it.sourceType.startsWith("TELEGRAM", true) }.isEmpty()) {
                     Text("Belum ada playlist tersimpan. Tambahkan sumber melalui Manajemen Sumber.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    playlists.forEach { playlist ->
+                    playlists.filterNot { it.sourceType.startsWith("TELEGRAM", true) }.forEach { playlist ->
                         val filter = "PLAYLIST:${playlist.id}"
                         val active = selectedFilter == filter
                         Row(
