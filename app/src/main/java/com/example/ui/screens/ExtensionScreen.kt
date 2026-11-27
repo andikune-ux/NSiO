@@ -260,6 +260,8 @@ private fun LinkSourceTab(
     var resolvedTelegramName by remember { mutableStateOf("") }
     val refreshingDriveIds by viewModel.refreshingDrivePlaylistIds.collectAsState()
     val isRefreshingAllDrive by viewModel.isRefreshingAllDriveSources.collectAsState()
+    val refreshingTelegramIds by viewModel.refreshingTelegramPlaylistIds.collectAsState()
+    val isRefreshingAllTelegram by viewModel.isRefreshingAllTelegramSources.collectAsState()
     var urlInput by remember { mutableStateOf("") }
     var playlistNameInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -312,19 +314,41 @@ private fun LinkSourceTab(
                         }
                     }
                 }
-                Text("Sumber Telegram tersimpan (${telegramSources.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sumber Telegram tersimpan (${telegramSources.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    OutlinedButton(
+                        onClick = { viewModel.refreshAllTelegramPlaylists() },
+                        enabled = telegramSources.isNotEmpty() && !isRefreshingAllTelegram && refreshingTelegramIds.isEmpty(),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)
+                    ) {
+                        if (isRefreshingAllTelegram) CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Refresh Semua", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 if (telegramSources.isEmpty()) Text("Belum ada sumber Telegram.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else telegramSources.forEach { source ->
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)).padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(source.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("Telegram • ${source.itemCount} media", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${source.itemCount} media • Terakhir diperiksa: ${android.text.format.DateFormat.format("dd MMM, HH:mm", source.updatedAt)}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconButton(
+                            onClick = { viewModel.refreshTelegramPlaylist(source.id) },
+                            enabled = source.id !in refreshingTelegramIds && !isRefreshingAllTelegram,
+                            modifier = Modifier.size(38.dp).testTag("btn_refresh_telegram_${source.id}")
+                        ) {
+                            if (source.id in refreshingTelegramIds || isRefreshingAllTelegram) CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
+                            else Icon(Icons.Default.Refresh, contentDescription = "Refresh ${source.name}")
                         }
                         IconButton(onClick = { viewModel.deleteSourcePlaylist(source) }, modifier = Modifier.size(34.dp).testTag("btn_delete_telegram_${source.id}")) {
                             Icon(Icons.Default.Delete, contentDescription = "Hapus ${source.name}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(17.dp))
                         }
                     }
                 }
+                Text("Sumber juga diperiksa otomatis saat Beranda aktif dan melalui sinkronisasi latar belakang. Refresh manual memeriksa sumber yang dipilih atau semua sumber Telegram.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Link undangan private tidak membuat NSiO bergabung otomatis. Gabung melalui Telegram resmi dengan persetujuan Anda, lalu periksa link kembali.", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
