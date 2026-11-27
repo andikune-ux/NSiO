@@ -282,11 +282,10 @@ private fun LinkSourceTab(
                         telegramFeedback = message
                         if (chatId != null) {
                             resolvedTelegramChatId = chatId
-                            resolvedTelegramUrl = telegramUrlInput.trim()
-                            resolvedTelegramName = telegramNameInput.trim()
-                            viewModel.addTelegramSource(telegramUrlInput, telegramNameInput) { saved ->
-                                if (saved.startsWith("Error:")) telegramFeedback = saved
-                            }
+                            val chatTitle = telegramState.chats.firstOrNull { it.id == chatId }?.title ?: "Telegram $chatId"
+                            resolvedTelegramUrl = "telegram://chat/$chatId"
+                            resolvedTelegramName = telegramNameInput.trim().ifBlank { chatTitle }
+                            viewModel.addTelegramChatPlaylist(chatId, resolvedTelegramName)
                         }
                     }
                 }, enabled = !isAddingTelegram && telegramUrlInput.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("btn_add_telegram_source")) {
