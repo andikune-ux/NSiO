@@ -14,6 +14,9 @@ import android.provider.Settings
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Bundle
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.graphics.drawable.ColorDrawable
 import android.util.Rational
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
@@ -82,6 +85,9 @@ import com.example.update.AppUpdateManager
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private var isPipMode by mutableStateOf(false)
+    private var sessionUnlocked by mutableStateOf(false)
+    private var sessionProfileLoggedIn by mutableStateOf(false)
+    private var previousDecorForeground: android.graphics.drawable.Drawable? = null
     @Volatile private var coreStarted = false
 
     @androidx.media3.common.util.UnstableApi
@@ -90,11 +96,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemNotificationBar()
+        val restoredSession = SessionLockManager.restore(this)
+        sessionUnlocked = restoredSession.unlocked
+        sessionProfileLoggedIn = restoredSession.profileLoggedIn
 
         setContent {
             val context = LocalContext.current
-            var unlocked by remember { mutableStateOf(false) }
-            var profileLoggedIn by remember { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
             var showShortcutUpdatePopup by remember { mutableStateOf(false) }
@@ -106,13 +113,14 @@ class MainActivity : ComponentActivity() {
             var shortcutReadyVersion by remember { mutableStateOf<String?>(null) }
             var shortcutDownloadProgress by remember { mutableStateOf(0) }
 
-            if (!unlocked) {
+            if (!sessionUnlocked) {
                 MyApplicationTheme(themeMode = "system") {
                     CalculatorAccessGate(
                         onUnlock = {
                             // Only this transition composes MainApplicationContent and creates MainViewModel.
                             coreStarted = true
-                            unlocked = true
+                            SessionLockManager.markUnlocked(this@MainActivity)
+                            sessionUnlocked = true
                         },
                         onSecretCode = { code ->
                             val message = when (code) {
@@ -153,9 +161,12 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-            } else if (!profileLoggedIn) {
+            } else if (!sessionProfileLoggedIn) {
                 MyApplicationTheme(themeMode = "system") {
-                    ProfileLoginScreen(viewModel = viewModel, onLogin = { profileLoggedIn = true })
+                    ProfileLoginScreen(viewModel = viewModel, onLogin = {
+                        SessionLockManager.markProfileLoggedIn(this@MainActivity)
+                        sessionProfileLoggedIn = true
+                    })
                 }
             } else {
                 MainApplicationContent(viewModel, isPipMode)
@@ -336,8 +347,50 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        // Blur only the task preview while the Activity is not in the foreground.
+        // RenderEffect is temporary; it is removed in onResume so manual screenshots remain available.
+        applyRecentAppsPrivacyBlur()
         // MediaSessionService now owns background playback; do not pause on Activity onPause.
         super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        clearRecentAppsPrivacyBlur()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val session = SessionLockManager.resume(this)
+        sessionUnlocked = session.unlocked
+        sessionProfileLoggedIn = session.profileLoggedIn
+    }
+
+    override fun onStop() {
+        SessionLockManager.markBackgrounded(this)
+        super.onStop()
+    }
+
+    private fun applyRecentAppsPrivacyBlur() {
+        if (isInPictureInPictureMode) return
+        val decor = window.decorView
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            decor.setRenderEffect(RenderEffect.createBlurEffect(26f, 26f, Shader.TileMode.CLAMP))
+        } else if (decor.foreground == null) {
+            // Older Android versions receive a privacy cover rather than an unblurred task snapshot.
+            previousDecorForeground = decor.foreground
+            decor.foreground = ColorDrawable(0xE6000000.toInt())
+        }
+    }
+
+    private fun clearRecentAppsPrivacyBlur() {
+        val decor = window.decorView
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            decor.setRenderEffect(null)
+        } else if (previousDecorForeground != null || decor.foreground is ColorDrawable) {
+            decor.foreground = previousDecorForeground
+            previousDecorForeground = null
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
