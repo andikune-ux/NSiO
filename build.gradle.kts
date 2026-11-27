@@ -23,6 +23,8 @@ fun gitOutput(vararg args: String): String =
     commandLine("git", *args)
   }.standardOutput.asText.get().trim()
 
+data class NsioTaggedVersion(val name: String, val version: NsioVersionTuple)
+
 fun parseNsioTag(raw: String): NsioVersionTuple? {
   val value = raw.trim().removePrefix("refs/tags/")
   val match = Regex("^[vV]\\.?([0-9]+)\\.([0-9]+)\\.([0-9]+)$").matchEntire(value) ?: return null
@@ -67,40 +69,46 @@ fun calculateNsioVersion(): Map<String, String> {
   if (commitOrdinal !in 1..99999) throw GradleException("NSiO commit ordinal outside supported range: $commitOrdinal")
 
   val allTags = gitOutput("tag", "--list", "v*").lineSequence()
-    .mapNotNull(::parseNsioTag).toList()
-  val highestPublished = allTags.maxOrNull()
+    .mapNotNull { name -> parseNsioTag(name)?.let { NsioTaggedVersion(name, it) } }
+    .toList()
+  val highestPublished = allTags.maxByOrNull { it.version }
   val sourceTags = gitOutput("tag", "--points-at", sourceSha).lineSequence()
-    .mapNotNull(::parseNsioTag)
-  val existingSourceVersion = sourceTags.maxOrNull()
+    .mapNotNull { name -> parseNsioTag(name)?.let { NsioTaggedVersion(name, it) } }
+  val existingSourceTag = sourceTags.maxByOrNull { it.version }
 
   val selected: NsioVersionTuple
   val selectedDate: LocalDate
-  if (existingSourceVersion != null) {
-    if (highestPublished != null && existingSourceVersion < highestPublished) {
+  if (existingSourceTag != null) {
+    val existingVersion = existingSourceTag.version
+    if (highestPublished != null && existingVersion < highestPublished.version) {
       throw GradleException(
-        "This source commit is already tagged $existingSourceVersion, below the newest published version $highestPublished. " +
+        "This source commit is already tagged $existingVersion, below the newest published version ${highestPublished.version}. " +
           "Rebuild from a newer source commit to prevent an update downgrade."
       )
     }
-    selected = existingSourceVersion
-    val monthOffset = selected.major - baseMajor - overhaulCount
-    val taggedMonth = baseline.plusMonths(monthOffset.toLong())
-    selectedDate = try {
-      taggedMonth.atDay(selected.day)
-    } catch (error: Exception) {
-      throw GradleException("Existing NSiO tag $selected has an invalid day for $taggedMonth.", error)
+    selected = existingVersion
+    val tagEpoch = gitOutput(
+      "for-each-ref", "--format=%(creatordate:unix)", "refs/tags/${existingSourceTag.name}"
+    ).toLongOrNull() ?: throw GradleException("Cannot read creation date for existing NSiO tag ${existingSourceTag.name}.")
+    selectedDate = java.time.Instant.ofEpochSecond(tagEpoch).atZone(ZoneId.of("Asia/Jakarta")).toLocalDate()
+    if (selectedDate.dayOfMonth != selected.day) {
+      throw GradleException("Tag ${existingSourceTag.name} creation date does not match its encoded day.")
     }
   } else {
     var ordinal = commitOrdinal
     if (highestPublished != null) {
-      val currentPrefix = calculatedMajor to today.dayOfMonth
-      val latestPrefix = highestPublished.major to highestPublished.day
+      val latest = highestPublished.version
+      val prefixComparison = if (calculatedMajor != latest.major) {
+        calculatedMajor.compareTo(latest.major)
+      } else {
+        today.dayOfMonth.compareTo(latest.day)
+      }
       when {
-        currentPrefix < latestPrefix -> throw GradleException(
-          "Calculated NSiO version $calculatedMajor.${today.dayOfMonth} is behind the newest published version $highestPublished. " +
+        prefixComparison < 0 -> throw GradleException(
+          "Calculated NSiO version $calculatedMajor.${today.dayOfMonth} is behind the newest published version $latest. " +
             "Update the version baseline instead of publishing a lower version."
         )
-        currentPrefix == latestPrefix -> ordinal = maxOf(ordinal, highestPublished.ordinal + 1)
+        prefixComparison == 0 -> ordinal = maxOf(ordinal, latest.ordinal + 1)
       }
     }
     if (ordinal !in 1..99999) throw GradleException("NSiO version ordinal outside supported range: $ordinal")
