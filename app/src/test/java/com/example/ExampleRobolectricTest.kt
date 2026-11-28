@@ -43,6 +43,37 @@ class ExampleRobolectricTest {
   }
 
 
+
+  @Test
+  fun `profile backup crypto still opens legacy version one envelopes`() {
+    val pin = "2468"
+    val payload = """{"backupType":"PROFILE_BACKUP","version":4,"mediaItems":[]}"""
+    val salt = ByteArray(16) { it.toByte() }
+    val nonce = ByteArray(12) { (it + 1).toByte() }
+    val spec = javax.crypto.spec.PBEKeySpec(pin.toCharArray(), salt, 600_000, 256)
+    val keyBytes = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+      .generateSecret(spec).encoded
+    spec.clearPassword()
+    val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(
+      javax.crypto.Cipher.ENCRYPT_MODE,
+      javax.crypto.spec.SecretKeySpec(keyBytes, "AES"),
+      javax.crypto.spec.GCMParameterSpec(128, nonce)
+    )
+    val ciphertext = cipher.doFinal(payload.toByteArray(Charsets.UTF_8))
+    val encoder = java.util.Base64.getEncoder()
+    val envelope = JSONObject()
+      .put("backupType", "PROFILE_BACKUP_ENCRYPTED")
+      .put("encryption", "PBKDF2-HMAC-SHA256+A256GCM")
+      .put("formatVersion", 1)
+      .put("iterations", 600_000)
+      .put("salt", encoder.encodeToString(salt))
+      .put("nonce", encoder.encodeToString(nonce))
+      .put("ciphertext", encoder.encodeToString(ciphertext))
+
+    assertEquals(payload, ProfileBackupCrypto.decrypt(envelope, pin))
+  }
+
   @Test
   fun `profile backup encryption uses profile pin and rejects wrong pin`() {
     val payload = """{"backupType":"PROFILE_BACKUP","version":3,"sourceProfileName":"Balqyz","mediaItems":[]}"""
