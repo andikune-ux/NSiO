@@ -69,6 +69,38 @@ class TelegramApiCredentialStore(context: Context) {
             return cipher.doFinal(ciphertext).also { require(it.size == 32) }
         }
         val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        storeDatabaseEncryptionKey(key)
+        return key
+    }
+
+    fun clear() {
+        // Keep the wrapped database key so a user can re-enter the same API credentials
+        // without making an existing encrypted TDLib database permanently unreadable.
+        preferences.edit().remove(KEY_PAYLOAD).commit()
+    }
+
+    /** Portable secrets are included only inside the PIN-encrypted profile backup envelope. */
+    fun exportPortableData(): JSONObject? {
+        val credentials = load() ?: return null
+        val databaseKey = loadOrCreateDatabaseEncryptionKey()
+        return JSONObject()
+            .put("apiId", credentials.apiId)
+            .put("apiHash", credentials.apiHash)
+            .put("tdlibDatabaseKey", Base64.encodeToString(databaseKey, Base64.NO_WRAP))
+    }
+
+    /** Re-wraps the portable TDLib key with this installation's Android Keystore key. */
+    fun importPortableData(payload: JSONObject) {
+        val apiId = payload.optString("apiId")
+        val apiHash = payload.optString("apiHash")
+        val databaseKey = Base64.decode(payload.getString("tdlibDatabaseKey"), Base64.NO_WRAP)
+        require(databaseKey.size == 32) { "Kunci database Telegram dalam backup tidak valid." }
+        save(apiId, apiHash)
+        storeDatabaseEncryptionKey(databaseKey)
+    }
+
+    private fun storeDatabaseEncryptionKey(key: ByteArray) {
+        require(key.size == 32) { "Kunci database Telegram harus 256-bit." }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(key)
@@ -77,13 +109,6 @@ class TelegramApiCredentialStore(context: Context) {
             KEY_TDLIB_DATABASE_KEY,
             Base64.encodeToString(payload, Base64.NO_WRAP)
         ).commit()) { "Gagal menyimpan kunci database Telegram." }
-        return key
-    }
-
-    fun clear() {
-        // Keep the wrapped database key so a user can re-enter the same API credentials
-        // without making an existing encrypted TDLib database permanently unreadable.
-        preferences.edit().remove(KEY_PAYLOAD).commit()
     }
 
     private fun getOrCreateKey(): java.security.Key {
