@@ -139,7 +139,9 @@ object TelegramClientManager {
                     databaseEncryptionKey = pendingDatabaseKey
                     useFileDatabase = true
                     useChatInfoDatabase = true
-                    useMessageDatabase = true
+                    // Message history is fetched from Telegram on demand instead of
+                    // accumulating a persistent local copy in app-private data.
+                    useMessageDatabase = false
                     useSecretChats = false
                     apiId = pendingApiId
                     apiHash = pendingApiHash

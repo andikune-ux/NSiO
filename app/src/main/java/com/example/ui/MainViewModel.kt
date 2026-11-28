@@ -76,6 +76,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cloudStreamVerifierJob: Job? = null
 
     init {
+        scheduleLegacyTelegramStorageCleanup(application)
+
         // Only CloudStream items may enter the plugin URL refresh path.
         player.isCloudStreamSourceActive = {
             _currentlyPlaying.value?.sourceType.equals("CLOUDSTREAM", ignoreCase = true)
@@ -129,6 +131,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     true
                 }.getOrDefault(false)
+            }
+        }
+    }
+
+    /**
+     * Older builds stored Telegram media under filesDir, which Android's
+     * Clear cache action cannot remove. Reconcile DB references and reclaim
+     * only managed legacy media when the app starts; account/database data
+     * and explicit user downloads are outside these directories.
+     */
+    private fun scheduleLegacyTelegramStorageCleanup(context: Application) {
+        val legacyDirectories = listOf(
+            java.io.File(context.filesDir, "telegram/tdlib/files"),
+            java.io.File(context.filesDir, "telegram/imported"),
+            java.io.File(context.filesDir, "telegram/thumbnails"),
+            java.io.File(context.filesDir, "telegram/profiles")
+        )
+        if (legacyDirectories.none { it.exists() && !it.list().isNullOrEmpty() }) return
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // Let the initial UI/player construction finish before acquiring the
+            // cache maintenance lease. Active playback/downloads are never interrupted.
+            kotlinx.coroutines.delay(1_500L)
+            val cleaned = runCatching {
+                com.example.data.cache.AppCacheCleaner.clear(context)
+            }.onFailure {
+                Log.w("NSiO.TelegramStorage", "Pembersihan penyimpanan Telegram lama gagal.", it)
+            }.getOrDefault(false)
+
+            if (cleaned) {
+                Log.i("NSiO.TelegramStorage", "Cache Telegram lama di filesDir berhasil dibersihkan.")
+            } else {
+                Log.w("NSiO.TelegramStorage", "Pembersihan cache Telegram lama belum tuntas; file yang masih direferensikan atau sedang digunakan dipertahankan.")
             }
         }
     }
