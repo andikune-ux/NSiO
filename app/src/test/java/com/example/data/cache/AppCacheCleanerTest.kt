@@ -40,6 +40,14 @@ class AppCacheCleanerTest {
             parentFile?.mkdirs()
             writeText("keep")
         }
+        val telegramThumbnail = File(context.filesDir, "telegram/thumbnails/old.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 1, 1))
+        }
+        val telegramProfilePhoto = File(context.cacheDir, "telegram/profiles/old.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(2, 2, 2))
+        }
         val profileAvatar = File(context.filesDir, "profile_avatars/keep.png").apply {
             parentFile?.mkdirs()
             writeBytes(byteArrayOf(7, 7, 7))
@@ -56,6 +64,8 @@ class AppCacheCleanerTest {
         assertFalse(legacyCache.exists())
         assertTrue(database.exists())
         assertTrue(telegramSession.exists())
+        assertFalse(telegramThumbnail.exists())
+        assertFalse(telegramProfilePhoto.exists())
         assertTrue(profileAvatar.exists())
         assertTrue(installedPlugin.exists())
         assertEquals("video-keep", localPreferences.getString("last_video:profile-1", null))
