@@ -926,6 +926,7 @@ fun HomeScreen(
                                         ) { mediaItem ->
                                             MediaGridCard(
                                                 item = mediaItem,
+                                                onVisible = { viewModel.ensureTelegramMediaMetadata(mediaItem) },
                                                 onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                 onLongClick = { viewModel.toggleFavorite(mediaItem) },
                                                 onDownload = { viewModel.downloadMedia(mediaItem) },
@@ -1046,6 +1047,7 @@ fun HomeScreen(
                                         ) { mediaItem ->
                                             MediaGridCard(
                                                 item = mediaItem,
+                                                onVisible = { viewModel.ensureTelegramMediaMetadata(mediaItem) },
                                                 onClick = { viewModel.playMedia(mediaItem) },
                                                 onLongClick = { viewModel.toggleFavorite(mediaItem) },
                                                 onDownload = { viewModel.downloadMedia(mediaItem) },
