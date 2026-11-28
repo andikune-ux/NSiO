@@ -30,6 +30,7 @@
     <application
         android:name=".NSiOApplication"
         android:allowBackup="false"
+        android:manageSpaceActivity=".StorageManagementActivity"
         android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -40,6 +41,12 @@
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.example.player.NSiOCastOptionsProvider" />
+        <activity
+            android:name=".StorageManagementActivity"
+            android:exported="true"
+            android:label="Kelola Penyimpanan NSiO"
+            android:theme="@style/Theme.MyApplication" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
