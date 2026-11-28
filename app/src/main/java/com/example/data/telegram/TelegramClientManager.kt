@@ -438,6 +438,16 @@ object TelegramClientManager {
         })
     }
 
+    /** Remove TDLib's downloaded local copy after it has been placed in NSiO's bounded cache. */
+    fun deleteDownloadedFile(fileId: Int) {
+        if (fileId <= 0) return
+        client?.send(TdApi.DeleteFile(fileId)) { result ->
+            if (result is TdApi.Error) {
+                android.util.Log.w("NSiO.Telegram", "TDLib local file cleanup failed: ${result.message}")
+            }
+        }
+    }
+
     /**
      * The integration catalog is intentionally limited to groups, channels, and bots
      * that contain at least one accessible photo/video. Regular private conversations
