@@ -328,7 +328,7 @@ class CS3IPlayer(
                     } else {
                         DefaultDataSource.Factory(context, httpDataSourceFactory)
                     }
-                // Drive and Telegram share one Media3 SimpleCache and its 1 GiB LRU
+                // Every remote source shares one Media3 SimpleCache and its 1 GiB LRU
                 // limit. Telegram bytes arrive from TDLib in small ranges on demand.
                 return if (activeMediaCacheKey != null) {
                     DriveMediaCache.track(
