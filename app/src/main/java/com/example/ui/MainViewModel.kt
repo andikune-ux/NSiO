@@ -28,6 +28,7 @@ import com.example.data.model.SourcePlaylist
 import com.example.data.model.TelegramSourceLinkPolicy
 import com.example.data.telegram.TelegramClientManager
 import com.example.data.telegram.TelegramCatalogSync
+import com.example.data.telegram.TelegramDeferredMediaCache
 import kotlin.coroutines.resume
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
@@ -2550,7 +2551,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val source = java.net.URI(item.sourceUrl)
                     if (!headers.containsKey("Origin") && !source.host.isNullOrBlank()) {
-                        headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":\${source.port}" else ""}"
+                        headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":${source.port}" else ""}"
                     }
                 }
             }
