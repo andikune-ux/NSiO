@@ -455,7 +455,7 @@ object TelegramClientManager {
     fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File =
         sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
 
-    private fun sendBlocking(request: TdApi.Function): TdApi.File {
+    private fun sendBlocking(request: TdApi.Function<TdApi.File>): TdApi.File {
         val activeClient = client ?: throw IllegalStateException("Telegram belum terhubung.")
         val latch = CountDownLatch(1)
         val response = AtomicReference<TdApi.Object?>()
