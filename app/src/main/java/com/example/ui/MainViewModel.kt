@@ -2501,7 +2501,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (continuation.isActive) continuation.resume(path)
                 }
             } ?: return null
-            TelegramDeferredMediaCache.store(context, cacheKey, extension, java.io.File(downloaded)) ?: return null
+            val stored = TelegramDeferredMediaCache.store(context, cacheKey, extension, java.io.File(downloaded)) ?: return null
+            TelegramClientManager.deleteDownloadedFile(fileId)
+            stored
         }
         return item.copy(url = Uri.fromFile(playableFile).toString())
     }
