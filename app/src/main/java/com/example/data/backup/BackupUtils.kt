@@ -154,6 +154,16 @@ object BackupUtils {
                     }
                 })
                 put("tikTodPreferences", TikTodLocalStore(context).exportProfilePreferences(profile.id))
+                val catalogPrefs = context.getSharedPreferences("nsio_catalog_preferences", Context.MODE_PRIVATE)
+                val pluginOrderPrefs = context.getSharedPreferences("nsio_cloudstream_plugin_order", Context.MODE_PRIVATE)
+                put("profilePreferences", JSONObject().apply {
+                    put("homeFilter", catalogPrefs.getString("home_filter_${profile.id}", "ALL") ?: "ALL")
+                    put("homeSort", catalogPrefs.getString("home_sort_${profile.id}", "RECENT") ?: "RECENT")
+                    val order = pluginOrderPrefs.getString("plugin_order_${profile.id}", null)
+                    if (!order.isNullOrBlank()) {
+                        runCatching { put("cloudStreamPluginOrder", JSONArray(order)) }
+                    }
+                })
             }
             val fileContent = if (profile.isPinEnabled) {
                 ProfileBackupCrypto.encrypt(payload.toString(), profilePin)
@@ -511,6 +521,23 @@ object BackupUtils {
                     }
                     root.optJSONObject("tikTodPreferences")?.let {
                         tikTodStore.importProfilePreferences(currentProfileId, it, mediaIdMapping)
+                    }
+                    root.optJSONObject("profilePreferences")?.let { preferences ->
+                        val catalogPrefs = context.getSharedPreferences("nsio_catalog_preferences", Context.MODE_PRIVATE)
+                        val pluginOrderPrefs = context.getSharedPreferences("nsio_cloudstream_plugin_order", Context.MODE_PRIVATE)
+                        val editor = catalogPrefs.edit()
+                        preferences.optString("homeFilter").takeIf(String::isNotBlank)?.let {
+                            editor.putString("home_filter_$currentProfileId", it)
+                        }
+                        preferences.optString("homeSort").takeIf(String::isNotBlank)?.let {
+                            editor.putString("home_sort_$currentProfileId", it)
+                        }
+                        editor.apply()
+                        preferences.optJSONArray("cloudStreamPluginOrder")?.let { order ->
+                            pluginOrderPrefs.edit()
+                                .putString("plugin_order_$currentProfileId", order.toString())
+                                .apply()
+                        }
                     }
                     existingPlaylists.forEach { playlist ->
                         playlistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
