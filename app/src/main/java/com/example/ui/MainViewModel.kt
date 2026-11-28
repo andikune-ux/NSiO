@@ -2515,7 +2515,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers, "${item.profileId}:${item.id}")
+            if (item.sourceType.equals("TELEGRAM", ignoreCase = true)) {
+                // Telegram extraInfo contains source identifiers and MIME metadata, not HTTP headers.
+                val declaredMimeType = headers.remove("mimeType")
+                headers.remove("chatId")
+                headers.remove("messageId")
+                headers.remove("fileId")
+                val mimeType = resolveTelegramPlaybackMimeType(declaredMimeType, item.url)
+                player.playWithMimeType(
+                    url = normalizePlaybackUrl(item.url),
+                    title = item.title,
+                    startPositionMs = item.progressMs,
+                    requestHeaders = headers,
+                    mimeType = mimeType,
+                    mediaCacheKey = "${item.profileId}:${item.id}"
+                )
+            } else {
+                player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers, "${item.profileId}:${item.id}")
+            }
             startPlaybackProgressPersistence(item)
         } else {
             player.clearError()
