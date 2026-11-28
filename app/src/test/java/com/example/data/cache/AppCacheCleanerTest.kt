@@ -46,7 +46,7 @@ class AppCacheCleanerTest {
     fun clearRefusesToRunWhilePlaybackDataSourceIsOpen() {
         val mediaCache = File(context.cacheDir, "nsio_drive_media_cache").apply { mkdirs() }
         val sentinel = File(mediaCache, "segment.bin").apply { writeBytes(byteArrayOf(1, 2, 3)) }
-        val tracked = DriveMediaCache.track(NoOpDataSource())
+        val tracked = DriveMediaCache.track(NoOpDataSource(), context)
         tracked.open(DataSpec(Uri.parse("https://example.test/video.mp4")))
 
         assertFalse(AppCacheCleaner.clear(context))
