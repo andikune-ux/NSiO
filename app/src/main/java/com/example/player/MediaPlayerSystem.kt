@@ -322,9 +322,14 @@ class CS3IPlayer(
         httpDataSourceFactory = createHttpDataSourceFactory(null)
         val dataSourceFactory = object : DataSource.Factory {
             override fun createDataSource(): DataSource {
-                val upstreamFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-                // All HTTP(S) playback routes use the shared cache. Local/content
-                // sources remain direct and are not copied into the media cache.
+                val upstreamFactory: DataSource.Factory =
+                    if (activeMediaCacheKey?.startsWith("telegram:") == true) {
+                        TelegramTdlibDataSource.Factory()
+                    } else {
+                        DefaultDataSource.Factory(context, httpDataSourceFactory)
+                    }
+                // Drive and Telegram share one Media3 SimpleCache and its 1 GiB LRU
+                // limit. Telegram bytes arrive from TDLib in small ranges on demand.
                 return if (activeMediaCacheKey != null) {
                     CacheDataSource.Factory()
                         .setCache(DriveMediaCache.get(context))
@@ -955,10 +960,12 @@ class CS3IPlayer(
         lastUrl = url
         lastTitle = title
         val canonicalCacheIdentity = MediaCacheIdentity.forUrl(url)
-        // Drive links can differ while pointing to the same file, so use the
-        // canonical Drive key. Other HTTP(S) media falls back to its request URI.
+        val telegramCacheIdentity = TelegramTdlibDataSource.cacheIdentity(url)
+        // Drive URLs and Telegram message IDs use stable identities. Other HTTP(S)
+        // media retains the existing URL-keyed cache behavior.
         lastMediaCacheKey = canonicalCacheIdentity?.takeIf { it.startsWith("drive:") }
-        activeMediaCacheKey = canonicalCacheIdentity
+            ?: telegramCacheIdentity
+        activeMediaCacheKey = canonicalCacheIdentity ?: telegramCacheIdentity
         repeatPointA = null
         repeatPointB = null
         _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
