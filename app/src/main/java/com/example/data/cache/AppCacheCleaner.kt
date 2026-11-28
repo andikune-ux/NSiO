@@ -30,6 +30,7 @@ object AppCacheCleaner {
 
         val database = AppDatabase.getInstance(app)
         val importedDir = File(app.filesDir, "telegram/imported")
+        val legacyTdlibFilesDir = File(app.filesDir, "telegram/tdlib/files")
         val before = database.mediaDao().getAllMediaList()
 
         // Convert known legacy Telegram file references to stable TDLib stream URLs
@@ -39,6 +40,7 @@ object AppCacheCleaner {
             before.forEach { item ->
                 val telegramMediaDirectories = listOf(
                     importedDir,
+                    legacyTdlibFilesDir,
                     File(app.filesDir, "telegram/thumbnails"),
                     File(app.cacheDir, "telegram/thumbnails")
                 )
@@ -58,6 +60,13 @@ object AppCacheCleaner {
         val after = database.mediaDao().getAllMediaList()
         val importedProtected = after.mapNotNull { fileInside(it.url, importedDir)?.canonicalPath }.toSet()
         val importedCleared = deleteUnreferencedFiles(importedDir, importedProtected)
+        // Old TDLib file paths may still be referenced by media rows that lack
+        // enough Telegram identity to be converted to a stream URL. Preserve those
+        // exact files; never recursively erase a source that the database still uses.
+        val legacyTdlibProtected = after.mapNotNull {
+            fileInside(it.url, legacyTdlibFilesDir)?.canonicalPath
+        }.toSet()
+        val legacyTdlibFilesCleared = deleteUnreferencedFiles(legacyTdlibFilesDir, legacyTdlibProtected)
 
         // Remove old copied thumbnails/profile photos only when no remaining media row
         // points to them. Playlist thumbnail references were cleared transactionally above.
@@ -76,11 +85,8 @@ object AppCacheCleaner {
 
         // The old TDLib files path and this obsolete app cache are disposable.
         // The persistent TDLib database at filesDir/telegram/tdlib/database is untouched.
-        val legacyDirectories = listOf(
-            File(app.filesDir, "telegram/tdlib/files"),
-            File(app.cacheDir, "telegram_media_cache")
-        )
-        val legacyCachesCleared = legacyDirectories.all(::deleteDirectory)
+        val legacyCachesCleared = legacyTdlibFilesCleared &&
+            deleteDirectory(File(app.cacheDir, "telegram_media_cache"))
         com.example.data.telegram.TelegramClientManager.invalidateCachedPhotoPaths()
 
         // New TDLib media files live under cacheDir. TDLib performs its own eviction
