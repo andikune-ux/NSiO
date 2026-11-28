@@ -141,9 +141,9 @@ internal class TelegramTdlibDataSource : DataSource {
     companion object {
         private const val CHUNK_BYTES = 512 * 1024
         fun cacheIdentity(rawUrl: String): String? {
-            val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return null
-            if (uri.scheme != "telegram" || uri.host != "media") return null
-            val parts = uri.pathSegments
+            val uri = runCatching { java.net.URI(rawUrl) }.getOrNull() ?: return null
+            if (!uri.scheme.equals("telegram", ignoreCase = true) || uri.host != "media") return null
+            val parts = uri.rawPath.orEmpty().split('/').filter(String::isNotBlank)
             if (parts.size != 3 || parts[2].substringBefore('.').toIntOrNull() == null) return null
             return "telegram:${parts[0]}:${parts[1]}:${parts[2].substringBefore('.')}"
         }
