@@ -362,7 +362,13 @@ fun SettingsScreen(
                                 }
                                 if (telegramCredentialMessage == null) {
                                     telegramCredentialsSaved = true
-                                    Toast.makeText(context, "Kredensial Telegram tersimpan untuk profil ini.", Toast.LENGTH_SHORT).show()
+                                    val profileId = activeProfile?.id.orEmpty()
+                                    runCatching {
+                                        com.example.data.telegram.TelegramClientManager.retryInitialization(context, profileId)
+                                    }.onFailure { error ->
+                                        telegramCredentialMessage = error.localizedMessage
+                                    }
+                                    Toast.makeText(context, "Kredensial Telegram tersimpan. Memeriksa koneksi akun…", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             enabled = telegramApiId.isNotBlank() && telegramApiHash.length == 32,
