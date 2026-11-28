@@ -451,8 +451,20 @@ object TelegramClientManager {
      */
     fun getFileBlocking(fileId: Int): TdApi.File = sendBlocking(TdApi.GetFile(fileId))
 
-    fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File =
-        sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+    fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
+        // After moving TDLib's files directory or clearing cache, its persistent file
+        // database can still report an old completed path. Remove only that stale local
+        // copy so TDLib recreates it under the new cacheDir on this range request.
+        val current = getFileBlocking(fileId)
+        val localPath = current.local.path
+        if (current.local.isDownloadingCompleted && localPath.isNotBlank()) {
+            val localFile = File(localPath)
+            val stale = !localFile.isFile ||
+                (current.size > 0L && localFile.length() < current.size)
+            if (stale) sendBlocking(TdApi.DeleteFile(fileId))
+        }
+        return sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+    }
 
     private fun sendBlocking(request: TdApi.Function<TdApi.File>): TdApi.File {
         val activeClient = client ?: throw IllegalStateException("Telegram belum terhubung.")
