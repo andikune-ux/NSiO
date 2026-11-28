@@ -10,6 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -114,12 +117,53 @@ fun ProfileScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+            restoreScope.launch {
+                val savedAvatar = withContext(Dispatchers.IO) {
+                    var destination: File? = null
+                    try {
+                        val mimeType = context.contentResolver.getType(uri)
+                        require(mimeType == null || mimeType.startsWith("image/")) {
+                            "File yang dipilih bukan gambar."
+                        }
+                        val avatarDirectory = File(context.filesDir, "profile_avatars")
+                        check(avatarDirectory.exists() || avatarDirectory.mkdirs()) {
+                            "Folder foto profil tidak dapat dibuat."
+                        }
+                        destination = File(avatarDirectory, "${UUID.randomUUID()}.img")
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: throw IllegalStateException("Foto tidak dapat dibaca dari galeri.")
+                        var totalBytes = 0L
+                        input.use { source ->
+                            FileOutputStream(destination).use { output ->
+                                val buffer = ByteArray(8 * 1024)
+                                while (true) {
+                                    val count = source.read(buffer)
+                                    if (count < 0) break
+                                    totalBytes += count
+                                    require(totalBytes <= 20L * 1024L * 1024L) {
+                                        "Ukuran foto profil maksimal 20 MB."
+                                    }
+                                    output.write(buffer, 0, count)
+                                }
+                                output.fd.sync()
+                            }
+                        }
+                        check(destination.length() > 0L) { "File foto kosong." }
+                        destination
+                    } catch (error: Exception) {
+                        destination?.delete()
+                        throw error
+                    }
+                }
+                if (savedAvatar != null) {
+                    editingProfileAvatar = Uri.fromFile(savedAvatar).toString()
+                    viewModel.showStatus("Foto profil berhasil disimpan ke penyimpanan permanen NSiO.")
+                }
+            }.invokeOnCompletion { error ->
+                if (error != null) {
+                    viewModel.showStatus("Gagal menyimpan foto profil: ${error.cause?.localizedMessage ?: error.localizedMessage ?: "kesalahan tidak diketahui"}")
+                }
             }
-            editingProfileAvatar = uri.toString()
         }
     }
     val restorePicker = rememberLauncherForActivityResult(
