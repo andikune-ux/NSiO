@@ -13,7 +13,9 @@ import java.io.File
 object AppCacheCleaner {
     fun clear(context: Context): Boolean {
         val app = context.applicationContext
-        val driveCleared = DriveMediaCache.clear(app)
+        val driveCleared = DriveMediaCache.clear(app) {
+            com.example.data.telegram.TelegramLegacyCacheMigration.clearPreviouslyVerifiedCopies(app)
+        }
         // If any Media3 reader is active, leave every media-cache directory untouched.
         if (!driveCleared) return false
         val telegramDirectory = File(app.cacheDir, "telegram_media_cache")
