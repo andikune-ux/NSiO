@@ -276,8 +276,10 @@ fun SettingsScreen(
             LaunchedEffect(telegramCredentialStore, activeProfile?.id) {
                 val profileId = activeProfile?.id
                 if (profileId != null) {
-                    com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId)
-                    if (com.example.data.telegram.TelegramClientManager.isProfileOwner(context, profileId)) {
+                    val owner = com.example.data.telegram.TelegramClientManager.ownerProfileId(context)
+                    val mayLoadLegacy = owner.isNullOrBlank() && telegramCredentialStore.load() != null
+                    if (owner == profileId || (mayLoadLegacy &&
+                            com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId))) {
                         val saved = telegramCredentialStore.load()
                         if (saved != null) {
                             telegramApiId = saved.apiId
