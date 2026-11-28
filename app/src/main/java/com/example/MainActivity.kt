@@ -49,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.rememberScrollState
@@ -82,6 +83,7 @@ import com.example.ui.screens.ProfileLoginScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.update.AppUpdateManager
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -104,6 +106,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
+            val cacheResetScope = rememberCoroutineScope()
+            var cacheResetRunning by remember { mutableStateOf(false) }
             var secretMessage by remember { mutableStateOf<String?>(null) }
             var showCacheResetConfirm by remember { mutableStateOf(false) }
             var showShortcutUpdatePopup by remember { mutableStateOf(false) }
@@ -317,11 +321,24 @@ class MainActivity : ComponentActivity() {
                     title = { Text("Bersihkan cache NSiO?") },
                     text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
                     confirmButton = {
-                        Button(onClick = {
-                            val success = AppCacheCleaner.clear(context)
-                            showCacheResetConfirm = false
-                            secretMessage = if (success) "Cache media Drive dan Telegram berhasil dibersihkan. Profil, playlist, akun, dan pengaturan tetap tersimpan." else "Sebagian cache media gagal dibersihkan karena sedang digunakan. Data akun tetap aman."
-                        }) { Text("Bersihkan") }
+                        Button(
+                            enabled = !cacheResetRunning,
+                            onClick = {
+                                if (!cacheResetRunning) {
+                                    cacheResetRunning = true
+                                    cacheResetScope.launch {
+                                        val success = runCatching { AppCacheCleaner.clear(context) }.getOrDefault(false)
+                                        showCacheResetConfirm = false
+                                        secretMessage = if (success) {
+                                            "Cache media berhasil dibersihkan. Profil, PIN, akun, riwayat, dan pengaturan tetap tersimpan."
+                                        } else {
+                                            "Sebagian cache gagal dibersihkan atau masih digunakan. Data penting tetap dipertahankan."
+                                        }
+                                        cacheResetRunning = false
+                                    }
+                                }
+                            }
+                        ) { Text(if (cacheResetRunning) "Memproses..." else "Bersihkan") }
                     },
                     dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
                 )
