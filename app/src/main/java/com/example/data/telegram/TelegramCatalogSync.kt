@@ -85,14 +85,24 @@ object TelegramCatalogSync {
                                                 url = streamUrl,
                                                 extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}"
                                             )
-                                            // Commit the database reference first. Keep the old file if the
-                                            // update fails or another media row still references it.
+                                            // Commit the new stream reference before touching the legacy file.
                                             database.mediaDao().updateMedia(migrated)
                                             current = migrated
-                                            // Keep the old full file for now. Repointing the database is not
-                                            // proof that the new TDLib stream has played or populated the
-                                            // Media3 cache. A later verified cleanup step must remove it.
-                                            Log.i(TAG, "Migrasi video Telegram lama ke streaming: $id")
+                                            // Remove the old app-private copy only after confirming that the
+                                            // Telegram cloud file still exists, its size matches, a byte-range
+                                            // request succeeds, and no other media row still points to it.
+                                            val removedLegacy = removeLegacyImportedFileIfSafe(
+                                                context = context,
+                                                database = database,
+                                                oldUrl = previous.url,
+                                                mediaId = id,
+                                                fileId = media.fileId
+                                            )
+                                            Log.i(
+                                                TAG,
+                                                if (removedLegacy) "Video Telegram lama dipindahkan ke streaming/cache: $id"
+                                                else "Video Telegram lama dipertahankan karena verifikasi belum aman: $id"
+                                            )
                                         }
                                         if (current.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
                                             val thumbnail = downloadTelegramThumbnail(context, id, media.thumbnailFileId)
@@ -154,6 +164,39 @@ object TelegramCatalogSync {
         return addedTotal
     }
 
+
+    private suspend fun removeLegacyImportedFileIfSafe(
+        context: Context,
+        database: AppDatabase,
+        oldUrl: String,
+        mediaId: String,
+        fileId: Int
+    ): Boolean {
+        val legacyFile = legacyImportedFile(context, oldUrl) ?: return false
+        if (database.mediaDao().countOtherReferencesToUrl(oldUrl, mediaId) > 0) return false
+
+        return try {
+            val remote = TelegramClientManager.getFileBlocking(fileId)
+            if (remote.size <= 0L || remote.size != legacyFile.length()) return false
+
+            // A one-byte synchronous range probe verifies that TDLib can still retrieve
+            // the original cloud media without downloading the complete video.
+            val probe = TelegramClientManager.downloadFileRangeBlocking(fileId, 0L, 1L)
+            val local = probe.local
+            val downloadedPath = File(local.path)
+            val rangeAvailable = downloadedPath.isFile &&
+                downloadedPath.length() > 0L &&
+                (local.isDownloadingCompleted || local.downloadedPrefixSize > 0L)
+            if (!rangeAvailable) return false
+
+            val deleted = legacyFile.delete()
+            TelegramClientManager.deleteDownloadedFile(fileId)
+            deleted
+        } catch (error: Exception) {
+            Log.w(TAG, "Verifikasi migrasi video Telegram gagal; file lama dipertahankan: $mediaId", error)
+            false
+        }
+    }
 
     private fun legacyImportedFile(context: Context, rawUrl: String): File? {
         val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return null
