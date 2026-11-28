@@ -21,6 +21,10 @@ object AppCacheCleaner {
         // Hold a maintenance lease so a new player/preload cannot start between
         // the active-reader check and the cache eviction.
         if (!DriveMediaCache.beginMaintenance()) return@withContext false
+        if (!com.example.data.telegram.TelegramClientManager.beginCacheCleanup()) {
+            DriveMediaCache.endMaintenance()
+            return@withContext false
+        }
         try {
             if (!DriveMediaCache.clear(app)) return@withContext false
 
@@ -86,6 +90,7 @@ object AppCacheCleaner {
 
         importedCleared && imageCachesCleared && legacyCachesCleared && tdlibCacheCleared
         } finally {
+            com.example.data.telegram.TelegramClientManager.endCacheCleanup()
             DriveMediaCache.endMaintenance()
         }
     }
