@@ -340,7 +340,7 @@ class CS3IPlayer(
                                 val path = dataSpec.uri.encodedPath.orEmpty().ifBlank { "/" }
                                 when {
                                     activeKey == null -> dataSpec.key ?: dataSpec.uri.toString()
-                                    activeKey.startsWith("media:") -> activeKey + ":" + path
+                                    activeKey.startsWith("media:") || activeKey.startsWith("url:") -> activeKey + ":" + path
                                     dataSpec.key != null -> dataSpec.key!!
                                     else -> activeKey
                                 }
