@@ -2,6 +2,8 @@ package com.example.data.cache
 
 import android.content.Context
 import android.net.Uri
+import com.example.data.local.AppDatabase
+import com.example.data.model.MediaItem
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
@@ -10,6 +12,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ApplicationProvider
 import com.example.player.DriveMediaCache
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,6 +46,39 @@ class AppCacheCleanerTest {
         assertFalse(legacyCache.exists())
         assertTrue(database.exists())
         assertTrue(telegramSession.exists())
+    }
+
+    @Test
+    fun clearMigratesKnownTelegramLegacyRowsAndKeepsTdlibDatabase() = runBlocking {
+        val imported = File(context.filesDir, "telegram/imported").apply { mkdirs() }
+        val legacyVideo = File(imported, "legacy.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        val database = AppDatabase.getInstance(context)
+        database.mediaDao().insertMedia(
+            MediaItem(
+                id = "cache-cleaner-telegram-row",
+                profileId = "cache-cleaner-profile",
+                title = "Legacy Telegram",
+                url = Uri.fromFile(legacyVideo).toString(),
+                sourceType = "TELEGRAM",
+                extraInfo = "chatId=-100123&messageId=456&fileId=789&mimeType=video/mp4"
+            )
+        )
+        val tdlibDatabase = File(context.filesDir, "telegram/tdlib/database/sentinel.db").apply {
+            parentFile?.mkdirs()
+            writeText("keep")
+        }
+        val oldTdlibMedia = File(context.filesDir, "telegram/tdlib/files/old-video.bin").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(9, 8, 7))
+        }
+
+        assertTrue(AppCacheCleaner.clear(context))
+
+        val migrated = database.mediaDao().getAllMediaList().first { it.id == "cache-cleaner-telegram-row" }
+        assertEquals("telegram://media/-100123/456/789.mp4", migrated.url)
+        assertFalse(legacyVideo.exists())
+        assertTrue(tdlibDatabase.exists())
+        assertFalse(oldTdlibMedia.exists())
     }
 
     @Test
