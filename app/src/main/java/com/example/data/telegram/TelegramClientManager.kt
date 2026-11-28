@@ -457,9 +457,9 @@ object TelegramClientManager {
         // copy so TDLib recreates it under the new cacheDir on this range request.
         val current = getFileBlocking(fileId)
         val localPath = current.local.path
-        if (current.local.isDownloadingCompleted && localPath.isNotBlank()) {
-            val localFile = File(localPath)
-            val stale = !localFile.isFile ||
+        if (current.local.isDownloadingCompleted) {
+            val localFile = localPath.takeIf { it.isNotBlank() }?.let(::File)
+            val stale = localFile?.isFile != true ||
                 (current.size > 0L && localFile.length() < current.size)
             if (stale) sendBlockingOk(TdApi.DeleteFile(fileId))
         }
