@@ -39,6 +39,21 @@ class MediaCacheIdentityTest {
     }
 
     @Test
+    fun telegramMessageUsesStableChatMessageAndFileIdentity() {
+        assertEquals(
+            "telegram:-100123:456:789",
+            TelegramTdlibDataSource.cacheIdentity("telegram://media/-100123/456/789.mp4")
+        )
+    }
+
+    @Test
+    fun telegramDifferentFilesNeverShareCacheIdentity() {
+        val first = TelegramTdlibDataSource.cacheIdentity("telegram://media/-100123/456/789.mp4")
+        val second = TelegramTdlibDataSource.cacheIdentity("telegram://media/-100123/456/790.mp4")
+        assertNotEquals(first, second)
+    }
+
+    @Test
     fun localAndInvalidUrlsAreNotCached() {
         assertNull(MediaCacheIdentity.forUrl("content://media/external/video/1"))
         assertNull(MediaCacheIdentity.forUrl("not a url"))
