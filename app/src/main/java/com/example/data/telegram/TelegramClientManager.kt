@@ -56,7 +56,7 @@ object TelegramClientManager {
         val media: List<TelegramMedia> = emptyList()
     )
 
-    private const val MAX_TELEGRAM_BACKUP_ZIP_BYTES = 36 * 1024 * 1024
+    private const val MAX_TELEGRAM_BACKUP_ZIP_BYTES = 28 * 1024 * 1024
     private const val MAX_TELEGRAM_BACKUP_EXPANDED_BYTES = 128L * 1024L * 1024L
     private val mutableState = MutableStateFlow(State())
     val state: StateFlow<State> = mutableState.asStateFlow()
