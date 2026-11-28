@@ -18,8 +18,11 @@ object AppCacheCleaner {
     suspend fun clear(context: Context): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
 
-        // Refuse the whole operation while Media3 has an active reader.
-        if (!DriveMediaCache.clear(app)) return@withContext false
+        // Hold a maintenance lease so a new player/preload cannot start between
+        // the active-reader check and the cache eviction.
+        if (!DriveMediaCache.beginMaintenance()) return@withContext false
+        try {
+            if (!DriveMediaCache.clear(app)) return@withContext false
 
         val database = AppDatabase.getInstance(app)
         val importedDir = File(app.filesDir, "telegram/imported")
@@ -82,6 +85,9 @@ object AppCacheCleaner {
             com.example.data.telegram.TelegramClientManager.clearDisposableStorage(app)
 
         importedCleared && imageCachesCleared && legacyCachesCleared && tdlibCacheCleared
+        } finally {
+            DriveMediaCache.endMaintenance()
+        }
     }
 
     private fun telegramStreamUrl(item: MediaItem): String? {
