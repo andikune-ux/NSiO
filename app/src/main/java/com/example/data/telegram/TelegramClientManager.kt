@@ -290,10 +290,12 @@ object TelegramClientManager {
             is TdApi.MessageVideo -> content.video?.video?.let {
                 TelegramMedia(chatId, message.id, content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" }, content.caption?.text.orEmpty(), message.date * 1000L, content.video.thumbnail?.file?.id ?: 0)
             }
-            is TdApi.MessagePhoto -> content.photo?.sizes?.maxByOrNull { it.width.toLong() * it.height }?.let { largest ->
-                val smallest = content.photo.sizes.minByOrNull { it.width.toLong() * it.height }
-                TelegramMedia(chatId, message.id, "Foto Telegram", largest.photo.id, true, "image/jpeg",
-                    content.caption?.text.orEmpty(), message.date * 1000L, smallest?.photo?.id ?: 0)
+            is TdApi.MessagePhoto -> content.photo?.let { photo ->
+                photo.sizes.maxByOrNull { it.width.toLong() * it.height }?.let { largest ->
+                    val smallest = photo.sizes.minByOrNull { it.width.toLong() * it.height }
+                    TelegramMedia(chatId, message.id, "Foto Telegram", largest.photo.id, true, "image/jpeg",
+                        content.caption?.text.orEmpty(), message.date * 1000L, smallest?.photo?.id ?: 0)
+                }
             }
             is TdApi.MessageDocument -> content.document?.let { document ->
                 val mime = document.mimeType.orEmpty()
