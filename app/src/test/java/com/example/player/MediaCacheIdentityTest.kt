@@ -27,6 +27,32 @@ class MediaCacheIdentityTest {
     }
 
     @Test
+    fun stableMediaIdentitySurvivesResolvedUrlRefresh() {
+        val first = MediaCacheIdentity.forPlayback(
+            "https://cdn-one.example/video/temporary-token-a.mp4",
+            "CLOUDSTREAM:movie-42"
+        )
+        val refreshed = MediaCacheIdentity.forPlayback(
+            "https://cdn-two.example/video/temporary-token-b.mp4",
+            "CLOUDSTREAM:movie-42"
+        )
+        assertEquals("media:CLOUDSTREAM:movie-42", first)
+        assertEquals(first, refreshed)
+    }
+
+    @Test
+    fun sourceNativeDriveAndTelegramIdentitiesTakePriorityOverCatalogIds() {
+        assertEquals(
+            "drive:file-123",
+            MediaCacheIdentity.forPlayback("https://drive.google.com/file/d/file-123/view", "DRIVE:item-1")
+        )
+        assertEquals(
+            "telegram:-100123:456:789",
+            MediaCacheIdentity.forPlayback("telegram://media/-100123/456/789.mp4", "TELEGRAM:item-2")
+        )
+    }
+
+    @Test
     fun genericUrlsNormalizeHostAndDefaultPortButKeepMeaningfulQuery() {
         assertEquals(
             MediaCacheIdentity.forUrl("HTTPS://CDN.EXAMPLE:443/video.mp4#player"),
