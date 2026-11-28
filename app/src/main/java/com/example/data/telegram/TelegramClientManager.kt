@@ -67,7 +67,6 @@ object TelegramClientManager {
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
     private val thumbnailDownloadsInFlight = ConcurrentHashMap.newKeySet<Int>()
-    private val fileUpdateMonitor = Object()
     private val latestFileUpdates = ConcurrentHashMap<Int, TdApi.File>()
     private val cacheCleanupLock = Any()
     private val activeDownloadCallbacks = java.util.concurrent.atomic.AtomicInteger(0)
@@ -234,7 +233,6 @@ object TelegramClientManager {
             is TdApi.UpdateFile -> {
                 val file = update.file
                 latestFileUpdates[file.id] = file
-                synchronized(fileUpdateMonitor) { fileUpdateMonitor.notifyAll() }
                 val local = file.local
                 if (local.isDownloadingCompleted && local.path.isNotBlank()) {
                     completeDownload(file.id, local.path)
@@ -637,6 +635,7 @@ object TelegramClientManager {
             if (stale) sendBlockingOk(TdApi.DeleteFile(fileId))
         }
 
+        latestFileUpdates.remove(fileId)
         val requested = sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
         return awaitFileRange(fileId, offset, limit, requested)
     }
@@ -663,12 +662,11 @@ object TelegramClientManager {
             if (System.nanoTime() >= deadline) {
                 throw java.io.IOException("Telegram belum menyediakan data pada byte $offset setelah 45 detik.")
             }
-            synchronized(fileUpdateMonitor) {
-                val remaining = deadline - System.nanoTime()
-                if (remaining > 0L) {
-                    val millis = TimeUnit.NANOSECONDS.toMillis(remaining).coerceAtLeast(1L)
-                    fileUpdateMonitor.wait(minOf(millis, 500L))
-                }
+            try {
+                Thread.sleep(100L)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw java.io.IOException("Pembacaan video Telegram dibatalkan.", interrupted)
             }
         }
     }
