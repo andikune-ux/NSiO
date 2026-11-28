@@ -22,7 +22,21 @@ internal object DriveMediaCache {
     @Volatile
     private var instance: SimpleCache? = null
     private var activeReaders: Int = 0
+    private var maintenanceInProgress: Boolean = false
 
+    @Synchronized
+    internal fun beginMaintenance(): Boolean {
+        if (maintenanceInProgress || activeReaders > 0) return false
+        maintenanceInProgress = true
+        return true
+    }
+
+    @Synchronized
+    internal fun endMaintenance() {
+        maintenanceInProgress = false
+    }
+
+    @Synchronized
     internal fun track(
         dataSource: androidx.media3.datasource.DataSource
     ): androidx.media3.datasource.DataSource = ActiveReadDataSource(dataSource)
@@ -33,7 +47,11 @@ internal object DriveMediaCache {
     }
 
     @Synchronized
-    internal fun acquireRead() { activeReaders++ }
+    internal fun acquireRead(): Boolean {
+        if (maintenanceInProgress) return false
+        activeReaders++
+        return true
+    }
 
     @Synchronized
     internal fun releaseRead() { activeReaders = (activeReaders - 1).coerceAtLeast(0) }
@@ -79,7 +97,9 @@ private class ActiveReadDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        DriveMediaCacheLease.acquire()
+        if (!DriveMediaCacheLease.acquire()) {
+            throw java.io.IOException("Cache media sedang dibersihkan. Coba putar kembali sebentar lagi.")
+        }
         leaseHeld = true
         return try {
             delegate.open(dataSpec)
@@ -115,6 +135,6 @@ private class ActiveReadDataSource(
 
 /** Narrow bridge keeps lease accounting private to the cache owner. */
 private object DriveMediaCacheLease {
-    fun acquire() = DriveMediaCache.acquireRead()
+    fun acquire(): Boolean = DriveMediaCache.acquireRead()
     fun release() = DriveMediaCache.releaseRead()
 }
