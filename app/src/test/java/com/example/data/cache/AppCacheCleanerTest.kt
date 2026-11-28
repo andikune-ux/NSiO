@@ -40,12 +40,25 @@ class AppCacheCleanerTest {
             parentFile?.mkdirs()
             writeText("keep")
         }
+        val profileAvatar = File(context.filesDir, "profile_avatars/keep.png").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(7, 7, 7))
+        }
+        val installedPlugin = File(context.filesDir, "Cloudstream3/plugins/keep.cs3").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(8, 8, 8))
+        }
+        val localPreferences = context.getSharedPreferences("nsio_tiktod_local", Context.MODE_PRIVATE)
+        localPreferences.edit().putString("last_video:profile-1", "video-keep").commit()
 
         assertTrue(AppCacheCleaner.clear(context))
         // SimpleCache may keep its database directory open after removing all spans.
         assertFalse(legacyCache.exists())
         assertTrue(database.exists())
         assertTrue(telegramSession.exists())
+        assertTrue(profileAvatar.exists())
+        assertTrue(installedPlugin.exists())
+        assertEquals("video-keep", localPreferences.getString("last_video:profile-1", null))
     }
 
     @Test
