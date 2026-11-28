@@ -1657,7 +1657,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                                 item.url,
                                                                 item.title.ifBlank { "Pratinjau video" },
                                                                 0L,
-                                                                mediaCacheKey = "${item.profileId}:${item.id}"
+                                                                mediaCacheKey = "${item.sourceType}:${item.id}"
                                                             )
                                                         }
                                                     }
@@ -2027,7 +2027,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                 assignmentPreviewPlayer.exoPlayer?.volume = 0f
                                                 assignmentPreviewPlayer.play(item.url,
                                                     item.title.ifBlank { "Pratinjau video" }, 0L,
-                                                    mediaCacheKey = "${item.profileId}:${item.id}")
+                                                    mediaCacheKey = "${item.sourceType}:${item.id}")
                                             },
                                             modifier = Modifier.fillMaxWidth(),
                                             contentPadding = PaddingValues(vertical = 2.dp),
@@ -2187,7 +2187,7 @@ fun TikTodScreen(viewModel: MainViewModel, onClose: () -> Unit) {
                                                     assignmentPreviewPlayer.exoPlayer?.volume = 0f
                                                     assignmentPreviewPlayer.play(item.url,
                                                         item.title.ifBlank { "Pratinjau video" }, 0L,
-                                                        mediaCacheKey = "${item.profileId}:${item.id}")
+                                                        mediaCacheKey = "${item.sourceType}:${item.id}")
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 contentPadding = PaddingValues(vertical = 1.dp),
