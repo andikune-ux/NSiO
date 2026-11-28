@@ -28,6 +28,7 @@ import com.example.data.model.SourcePlaylist
 import com.example.data.model.TelegramSourceLinkPolicy
 import com.example.data.telegram.TelegramClientManager
 import com.example.data.telegram.TelegramCatalogSync
+import com.example.data.telegram.telegramPlaybackMimeType
 import kotlin.coroutines.resume
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
@@ -2521,7 +2522,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 headers.remove("chatId")
                 headers.remove("messageId")
                 headers.remove("fileId")
-                val mimeType = resolveTelegramPlaybackMimeType(declaredMimeType, item.url)
+                val mimeType = telegramPlaybackMimeType(declaredMimeType, item.url)
                 player.playWithMimeType(
                     url = normalizePlaybackUrl(item.url),
                     title = item.title,
