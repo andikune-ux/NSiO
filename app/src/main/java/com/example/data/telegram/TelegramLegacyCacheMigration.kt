@@ -12,6 +12,7 @@ import java.io.File
 internal object TelegramLegacyCacheMigration {
     private const val TAG = "NSiO.TelegramMigration"
     private const val PREFS = "telegram_legacy_cache_migration"
+    private fun verifiedKey(cacheKey: String): String = cacheKey + "#playback_verified"
 
     fun remember(context: Context, cacheKey: String, legacyFile: File) {
         if (!cacheKey.startsWith("telegram:")) return
@@ -45,14 +46,18 @@ internal object TelegramLegacyCacheMigration {
             )
         ) return false
 
+        if (actualPlaybackReadSucceeded && cachedBytesVerified) {
+            preferences.edit().putBoolean(verifiedKey(cacheKey), true).apply()
+        }
+
         return try {
             if (!legacy.isFile || legacy.parentFile != imported || legacy.length() <= 0L) {
-                preferences.edit().remove(cacheKey).apply()
+                preferences.edit().remove(cacheKey).remove(verifiedKey(cacheKey)).apply()
                 return false
             }
             val deleted = legacy.delete()
             if (deleted) {
-                preferences.edit().remove(cacheKey).apply()
+                preferences.edit().remove(cacheKey).remove(verifiedKey(cacheKey)).apply()
                 Log.i(TAG, "Salinan Telegram lama dihapus setelah data streaming terverifikasi di cache: $cacheKey")
             }
             deleted
@@ -60,5 +65,31 @@ internal object TelegramLegacyCacheMigration {
             Log.w(TAG, "Salinan Telegram lama tetap dipertahankan; verifikasi cache/penghapusan gagal: $cacheKey", error)
             false
         }
+    }
+    /**
+     * Removes only legacy imports whose playback read and committed cache spans
+     * were previously verified. Unplayed imports remain as the only safe copy.
+     */
+    fun clearPreviouslyVerifiedCopies(context: Context): Int {
+        runCatching { DriveMediaCache.get(context.applicationContext) }.onFailure {
+            Log.w(TAG, "Cache Media3 tidak dapat dibuka untuk verifikasi migrasi Telegram", it)
+            return 0
+        }
+        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val entries = preferences.all.filter { (key, value) -> key.startsWith("telegram:") && value is String }
+        var deletedCount = 0
+        for ((cacheKey, rawPath) in entries) {
+            if (!preferences.getBoolean(verifiedKey(cacheKey), false)) continue
+            if (!DriveMediaCache.hasCachedData(cacheKey)) continue
+            val legacy = runCatching { File(rawPath as String).canonicalFile }.getOrNull() ?: continue
+            val imported = runCatching { File(context.filesDir, "telegram/imported").canonicalFile }.getOrNull() ?: continue
+            if (!legacy.isFile || legacy.parentFile != imported || legacy.length() <= 0L) continue
+            if (runCatching { legacy.delete() }.getOrDefault(false)) {
+                preferences.edit().remove(cacheKey).remove(verifiedKey(cacheKey)).apply()
+                deletedCount++
+                Log.i(TAG, "Salinan Telegram lama terverifikasi dibersihkan: $cacheKey")
+            }
+        }
+        return deletedCount
     }
 }
