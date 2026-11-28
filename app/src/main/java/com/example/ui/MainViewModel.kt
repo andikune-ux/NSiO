@@ -2574,7 +2574,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     val thumbnailFile = runCatching {
                         val uri = Uri.parse(current.thumbnailUrl)
-                        if (uri.scheme == "file") uri.path?.let(::java.io.File) else null
+                        if (uri.scheme == "file") uri.path?.let { java.io.File(it) } else null
                     }.getOrNull()
                     val thumbnailMissing = current.thumbnailUrl.isBlank() ||
                         (thumbnailFile != null && !thumbnailFile.isFile)
@@ -2592,7 +2592,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 if (continuation.isActive) continuation.resume(path)
                             }
                         }
-                        val source = downloaded?.let(::java.io.File)
+                        val source = downloaded?.let { java.io.File(it) }
                         if (source?.isFile == true && source.length() > 0L) {
                             val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails")
                                 .apply { mkdirs() }
