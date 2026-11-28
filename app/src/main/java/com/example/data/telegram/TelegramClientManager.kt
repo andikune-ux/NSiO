@@ -923,7 +923,11 @@ object TelegramClientManager {
                 } catch (error: Exception) {
                     databaseRoot.deleteRecursively()
                     previous.renameTo(databaseRoot)
-                    previousCredentials?.let { runCatching { credentialStore.importPortableData(it) } }
+                    if (previousCredentials != null) {
+                        runCatching { credentialStore.importPortableData(previousCredentials) }
+                    } else {
+                        credentialStore.clearAll()
+                    }
                     val bindingEditor = profileBindingPreferences(context).edit()
                     if (previousOwner.isNullOrBlank()) bindingEditor.remove("owner_profile_id")
                     else bindingEditor.putString("owner_profile_id", previousOwner)
