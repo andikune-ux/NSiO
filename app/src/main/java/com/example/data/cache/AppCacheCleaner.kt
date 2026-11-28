@@ -141,6 +141,12 @@ object AppCacheCleaner {
             }
         }
         if (directory.exists() && directory.list()?.isEmpty() == true && !directory.delete()) success = false
+        val root = runCatching { directory.canonicalPath + File.separator }.getOrNull()
+        if (root != null && protectedPaths.any { it.startsWith(root) && File(it).exists() }) {
+            // Keep the unresolved source file rather than breaking its database row,
+            // but report that cache cleanup was partial.
+            success = false
+        }
         return success
     }
 
