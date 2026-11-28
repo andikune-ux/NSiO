@@ -19,6 +19,22 @@ internal object DriveMediaCache {
     @Volatile
     private var instance: SimpleCache? = null
 
+    /**
+     * Evict cached media entries without deleting the cache database directory
+     * while Media3 may still hold an active SimpleCache instance.
+     */
+    fun clear(context: Context): Boolean = synchronized(this) {
+        val activeCache = instance
+        if (activeCache != null) {
+            runCatching {
+                activeCache.keys.toList().forEach { key -> activeCache.removeResource(key) }
+            }.isSuccess
+        } else {
+            val directory = File(context.applicationContext.cacheDir, CACHE_DIRECTORY)
+            !directory.exists() || directory.deleteRecursively()
+        }
+    }
+
     fun get(context: Context): Cache {
         return instance ?: synchronized(this) {
             instance ?: SimpleCache(
