@@ -74,6 +74,7 @@ object AppCacheCleaner {
             File(app.cacheDir, "telegram_media_cache")
         )
         val legacyCachesCleared = legacyDirectories.all(::deleteDirectory)
+        com.example.data.telegram.TelegramClientManager.invalidateCachedPhotoPaths()
 
         // New TDLib media files live under cacheDir. TDLib performs its own eviction
         // so its live file database is not raced by recursive filesystem removal.
