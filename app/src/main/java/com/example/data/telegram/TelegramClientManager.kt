@@ -777,6 +777,7 @@ object TelegramClientManager {
         val wasConnected = activeProfileId == profileId && client != null
         if (wasConnected) {
             val closingClient = client
+            mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = "Menutup sesi Telegram untuk backup…")
             val closeResult = CompletableDeferred<Unit>()
             closingClient?.send(TdApi.Close()) { closeResult.complete(Unit) }
             val acknowledged = withTimeoutOrNull(15_000L) { closeResult.await(); true } ?: false
