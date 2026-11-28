@@ -173,7 +173,10 @@ class CatalogRefreshWorker(
         // Telegram uses the same periodic catalog lifecycle; its last successful
         // Room cache is never cleared when the account or a source is unavailable.
         try {
-            refreshed += TelegramCatalogSync.run(applicationContext, database)
+            val telegramOwner = com.example.data.telegram.TelegramClientManager.ownerProfileId(applicationContext)
+            if (!telegramOwner.isNullOrBlank()) {
+                refreshed += TelegramCatalogSync.run(applicationContext, database, telegramOwner)
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
