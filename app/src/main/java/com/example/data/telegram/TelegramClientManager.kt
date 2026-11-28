@@ -162,7 +162,7 @@ object TelegramClientManager {
             }
             is TdApi.AuthorizationStateClosed -> {
                 client = null
-                mutableState.value = State(message = "Sesi Telegram ditutup.")
+                mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Sesi Telegram ditutup.")
             }
             else -> mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = auth.javaClass.simpleName)
         }
@@ -780,6 +780,6 @@ object TelegramClientManager {
             }
         })
         client = null
-        mutableState.value = State(message = "Sesi Telegram sedang diakhiri.")
+        mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Sesi Telegram sedang diakhiri.")
     }
 }
