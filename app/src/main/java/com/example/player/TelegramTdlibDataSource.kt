@@ -120,6 +120,8 @@ internal class TelegramTdlibDataSource : DataSource {
 
     override fun getUri(): Uri? = currentUri
 
+    override fun getResponseHeaders(): Map<String, List<String>> = emptyMap()
+
     override fun close() {
         if (fileId > 0) TelegramClientManager.deleteDownloadedFile(fileId)
         currentUri = null
