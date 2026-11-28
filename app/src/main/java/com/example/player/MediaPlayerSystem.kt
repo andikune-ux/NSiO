@@ -825,11 +825,13 @@ class CS3IPlayer(
         val canonicalCacheKey = MediaCacheIdentity.forUrl(url) ?: return
         drivePreloadJob?.cancel()
         drivePreloadJob = coroutineScope.launch(Dispatchers.IO) {
-            val source = CacheDataSource.Factory()
-                .setCache(DriveMediaCache.get(context))
-                .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                .createDataSource()
+            val source = DriveMediaCache.track(
+                CacheDataSource.Factory()
+                    .setCache(DriveMediaCache.get(context))
+                    .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
+                    .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                    .createDataSource()
+            )
             try {
                 val request = androidx.media3.datasource.DataSpec.Builder()
                     .setUri(Uri.parse(normalizePlaybackUrl(url.trim())))
