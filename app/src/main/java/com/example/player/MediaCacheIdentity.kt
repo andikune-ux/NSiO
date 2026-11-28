@@ -35,6 +35,7 @@ internal object MediaCacheIdentity {
         return urlIdentity
     }
 
+    @OptIn(UnstableApi::class)
     fun forCacheRequest(activeCacheKey: String?, explicitCacheKey: String?, encodedPath: String): String? {
         val activeKey = activeCacheKey ?: return explicitCacheKey
         val path = encodedPath.ifBlank { "/" }
