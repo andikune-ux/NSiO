@@ -834,7 +834,7 @@ class CS3IPlayer(
         drivePreloadJob = coroutineScope.launch(Dispatchers.IO) {
             // CacheWriter requires the concrete CacheDataSource. Hold the same
             // active-reader lease explicitly for the full preload lifecycle.
-            DriveMediaCache.acquireRead()
+            if (!DriveMediaCache.acquireRead()) return@launch
             val source = CacheDataSource.Factory()
                 .setCache(DriveMediaCache.get(context))
                 .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
