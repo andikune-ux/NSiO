@@ -107,6 +107,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    val activeProfile by viewModel.activeProfile.collectAsState()
     val devMode by viewModel.devMode.collectAsState()
     val authState by viewModel.authState.collectAsState()
     val isSyncing by viewModel.isCloudSyncing.collectAsState()
@@ -272,12 +273,22 @@ fun SettingsScreen(
             var telegramLocationFilter by remember { mutableStateOf("Semua") }
             var showTelegramLogoutDialog by remember { mutableStateOf(false) }
             val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
-            LaunchedEffect(telegramCredentialStore) {
-                val saved = telegramCredentialStore.load()
-                if (saved != null) {
-                    telegramApiId = saved.apiId
-                    telegramApiHash = saved.apiHash
-                    telegramCredentialsSaved = true
+            LaunchedEffect(telegramCredentialStore, activeProfile?.id) {
+                val profileId = activeProfile?.id
+                if (profileId != null) {
+                    com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId)
+                    if (com.example.data.telegram.TelegramClientManager.isProfileOwner(context, profileId)) {
+                        val saved = telegramCredentialStore.load()
+                        if (saved != null) {
+                            telegramApiId = saved.apiId
+                            telegramApiHash = saved.apiHash
+                            telegramCredentialsSaved = true
+                        }
+                    } else {
+                        telegramApiId = ""
+                        telegramApiHash = ""
+                        telegramCredentialsSaved = false
+                    }
                 }
             }
             SettingsGlassCard(
@@ -329,12 +340,18 @@ fun SettingsScreen(
                     ) {
                         Button(
                             onClick = {
-                                telegramCredentialMessage = runCatching {
-                                    telegramCredentialStore.save(telegramApiId.trim(), telegramApiHash.trim())
-                                }.exceptionOrNull()?.localizedMessage
+                                val profileId = activeProfile?.id
+                                telegramCredentialMessage = when {
+                                    profileId.isNullOrBlank() -> "Pilih profil terlebih dahulu."
+                                    !com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId) ->
+                                        "Integrasi Telegram sudah terikat pada profil lain."
+                                    else -> runCatching {
+                                        telegramCredentialStore.save(telegramApiId.trim(), telegramApiHash.trim())
+                                    }.exceptionOrNull()?.localizedMessage
+                                }
                                 if (telegramCredentialMessage == null) {
                                     telegramCredentialsSaved = true
-                                    Toast.makeText(context, "Kredensial Telegram tersimpan.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Kredensial Telegram tersimpan untuk profil ini.", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             enabled = telegramApiId.isNotBlank() && telegramApiHash.length == 32,
@@ -345,11 +362,12 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 telegramCredentialStore.clear()
+                                activeProfile?.id?.let { com.example.data.telegram.TelegramClientManager.releaseProfile(context, it) }
                                 telegramApiId = ""
                                 telegramApiHash = ""
                                 telegramCredentialsSaved = false
                                 telegramCredentialMessage = null
-                                Toast.makeText(context, "Kredensial Telegram dihapus.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Integrasi Telegram dilepas dari profil ini.", Toast.LENGTH_SHORT).show()
                             },
                             enabled = telegramCredentialsSaved || telegramApiId.isNotBlank() || telegramApiHash.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
@@ -371,7 +389,7 @@ fun SettingsScreen(
                         com.example.data.telegram.TelegramClientManager.AuthStage.ERROR -> {
                             Button(
                                 onClick = {
-                                    runCatching { com.example.data.telegram.TelegramClientManager.initialize(context) }
+                                    runCatching { com.example.data.telegram.TelegramClientManager.initialize(context, activeProfile?.id.orEmpty()) }
                                         .onFailure { telegramCredentialMessage = it.localizedMessage }
                                 },
                                 enabled = telegramCredentialsSaved,
