@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,13 +87,16 @@ import coil.compose.AsyncImage
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.firebase.AuthState
+import com.example.data.cache.AppCacheCleaner
 import com.example.ui.MainViewModel
 import com.example.ui.components.liquidGlass
 import com.example.ui.components.tvFocusable
 import com.example.ui.theme.AccentRed
 import com.example.update.AppUpdateManager
 import com.example.embedded.ui.EmbeddedModuleCenter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 @Composable
@@ -109,6 +113,9 @@ fun SettingsScreen(
     val sourcePlaylists by viewModel.sourcePlaylists.collectAsState()
 
     var showServerPinDialog by remember { mutableStateOf(false) }
+    var showCacheClearDialog by remember { mutableStateOf(false) }
+    var cacheClearRunning by remember { mutableStateOf(false) }
+    var cacheClearMessage by remember { mutableStateOf<String?>(null) }
     val updateScope = rememberCoroutineScope()
     var updateRelease by remember { mutableStateOf<AppUpdateManager.Release?>(null) }
     var updateChecking by remember { mutableStateOf(false) }
@@ -962,6 +969,32 @@ fun SettingsScreen(
             }
         }
 
+        // Safe media-cache cleanup; persistent account and source data are excluded.
+        item {
+            SettingsGlassCard(
+                icon = Icons.Default.Delete,
+                title = "Pembersihan Cache",
+                subtitle = "Hapus cache video Drive dan Telegram untuk mengosongkan ruang."
+            ) {
+                Text(
+                    cacheClearMessage ?: "Profil, akun Google, link Drive, playlist, sesi Telegram, dan pengaturan tidak ikut dihapus.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = { showCacheClearDialog = true },
+                    enabled = !cacheClearRunning,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (cacheClearRunning) "Membersihkan cache..." else "Hapus cache aman", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+
         // 7. App updates
         item {
             SettingsGlassCard(
@@ -1264,6 +1297,42 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showCacheClearDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!cacheClearRunning) showCacheClearDialog = false },
+            title = { Text("Hapus cache media?") },
+            text = {
+                Text("Yang dihapus hanya cache video Google Drive dan media Telegram. Profil, akun, link sumber, playlist, sesi Telegram, unduhan APK, dan pengaturan tetap disimpan.")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !cacheClearRunning,
+                    onClick = {
+                        updateScope.launch {
+                            cacheClearRunning = true
+                            val success = withContext(Dispatchers.IO) {
+                                AppCacheCleaner.clear(context)
+                            }
+                            cacheClearRunning = false
+                            showCacheClearDialog = false
+                            cacheClearMessage = if (success) {
+                                "Cache media Drive dan Telegram berhasil dibersihkan."
+                            } else {
+                                "Sebagian cache gagal dibersihkan karena sedang digunakan. Data akun tetap aman."
+                            }
+                        }
+                    }
+                ) { Text(if (cacheClearRunning) "Memproses..." else "Hapus cache") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !cacheClearRunning,
+                    onClick = { showCacheClearDialog = false }
+                ) { Text("Batal") }
+            }
+        )
     }
 
     if (showServerPinDialog) {
