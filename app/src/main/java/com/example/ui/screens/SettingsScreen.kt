@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -267,6 +268,9 @@ fun SettingsScreen(
             var selectedTelegramChatId by remember { mutableStateOf<Long?>(null) }
             var selectedTelegramChatIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
             var telegramChatSearch by remember { mutableStateOf("") }
+            var telegramKindFilter by remember { mutableStateOf("Semua") }
+            var telegramLocationFilter by remember { mutableStateOf("Semua") }
+            var showTelegramLogoutDialog by remember { mutableStateOf(false) }
             val telegramState by com.example.data.telegram.TelegramClientManager.state.collectAsState()
             LaunchedEffect(telegramCredentialStore) {
                 val saved = telegramCredentialStore.load()
@@ -432,77 +436,86 @@ fun SettingsScreen(
                                 singleLine = true,
                                 label = { Material3Text("Cari channel atau grup") }
                             )
-                            val visibleTelegramChats = telegramState.chats.filter {
-                                it.title.contains(telegramChatSearch.trim(), ignoreCase = true) ||
-                                    it.kind.contains(telegramChatSearch.trim(), ignoreCase = true)
-                            }
-                            val mainTelegramChats = visibleTelegramChats.filterNot { it.isArchived }
-                            val archivedTelegramChats = visibleTelegramChats.filter { it.isArchived }
-                            listOf(
-                                "Chat utama" to mainTelegramChats,
-                                "Arsip Telegram" to archivedTelegramChats
-                            ).forEach { (sectionTitle, sectionChats) ->
-                                if (sectionChats.isNotEmpty()) {
-                                    Text("$sectionTitle (${sectionChats.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    sectionChats.forEach { chat ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .clickable {
-                                                    selectedTelegramChatId = chat.id
-                                                    com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id)
-                                                }
-                                                .padding(horizontal = 5.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val telegramAvatar = sourcePlaylists
-                                                .firstOrNull { it.url == "telegram://chat/${chat.id}" }
-                                                ?.thumbnailUrl
-                                                ?.takeIf { it.isNotBlank() }
-                                                ?: chat.photoPath.takeIf { it.isNotBlank() }
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(38.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (telegramAvatar != null) {
-                                                    AsyncImage(
-                                                        model = telegramAvatar,
-                                                        contentDescription = "Foto profil ${chat.title}",
-                                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                                    )
-                                                } else {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Language,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(19.dp)
-                                                    )
-                                                }
-                                            }
-                                            Checkbox(
-                                                checked = chat.id in selectedTelegramChatIds,
-                                                onCheckedChange = { checked ->
-                                                    selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id
-                                                        else selectedTelegramChatIds - chat.id
-                                                }
-                                            )
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                                Text(chat.kind, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                            if (selectedTelegramChatId == chat.id) {
-                                                Text("Media dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
-                                            } else if (chat.unreadCount > 0) Text(chat.unreadCount.toString(), fontSize = 10.sp)
-                                        }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf("Semua", "Grup", "Channel", "Bot").forEach { kind ->
+                                    TextButton(onClick = { telegramKindFilter = kind }, modifier = Modifier.weight(1f)) {
+                                        Text(kind, fontSize = 10.sp,
+                                            fontWeight = if (telegramKindFilter == kind) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (telegramKindFilter == kind) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
-                            if (visibleTelegramChats.isEmpty()) {
-                                Text("Tidak ada channel/grup yang cocok dengan pencarian.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("Semua", "Utama", "Arsip").forEach { location ->
+                                    TextButton(onClick = { telegramLocationFilter = location }, modifier = Modifier.weight(1f)) {
+                                        Text(location, fontSize = 10.sp,
+                                            fontWeight = if (telegramLocationFilter == location) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (telegramLocationFilter == location) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            val visibleTelegramChats = telegramState.chats.filter { chat ->
+                                val matchesSearch = chat.title.contains(telegramChatSearch.trim(), ignoreCase = true) ||
+                                    chat.kind.contains(telegramChatSearch.trim(), ignoreCase = true)
+                                val matchesKind = telegramKindFilter == "Semua" || chat.kind.equals(telegramKindFilter, ignoreCase = true)
+                                val matchesLocation = telegramLocationFilter == "Semua" ||
+                                    (telegramLocationFilter == "Arsip" && chat.isArchived) ||
+                                    (telegramLocationFilter == "Utama" && !chat.isArchived)
+                                matchesSearch && matchesKind && matchesLocation
+                            }
+                            Text("${visibleTelegramChats.size} dari ${telegramState.chats.size} sumber ditampilkan",
+                                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (visibleTelegramChats.isNotEmpty()) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 390.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    val mainTelegramChats = visibleTelegramChats.filterNot { it.isArchived }
+                                    val archivedTelegramChats = visibleTelegramChats.filter { it.isArchived }
+                                    if (mainTelegramChats.isNotEmpty()) {
+                                        item(key = "telegram_main_header") {
+                                            Text("Utama (${mainTelegramChats.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 5.dp, bottom = 2.dp))
+                                        }
+                                        items(mainTelegramChats, key = { it.id }) { chat ->
+                                            TelegramSourceRow(
+                                                chat = chat,
+                                                avatar = sourcePlaylists.firstOrNull { it.url == "telegram://chat/${chat.id}" }
+                                                    ?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: chat.photoPath.takeIf { it.isNotBlank() },
+                                                selected = chat.id in selectedTelegramChatIds,
+                                                active = selectedTelegramChatId == chat.id,
+                                                onSelect = { checked -> selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id else selectedTelegramChatIds - chat.id },
+                                                onOpen = { selectedTelegramChatId = chat.id; com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id) }
+                                            )
+                                        }
+                                    }
+                                    if (archivedTelegramChats.isNotEmpty()) {
+                                        item(key = "telegram_archive_header") {
+                                            Text("Arsip Telegram (${archivedTelegramChats.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 7.dp, bottom = 2.dp))
+                                        }
+                                        items(archivedTelegramChats, key = { it.id }) { chat ->
+                                            TelegramSourceRow(
+                                                chat = chat,
+                                                avatar = sourcePlaylists.firstOrNull { it.url == "telegram://chat/${chat.id}" }
+                                                    ?.thumbnailUrl?.takeIf { it.isNotBlank() } ?: chat.photoPath.takeIf { it.isNotBlank() },
+                                                selected = chat.id in selectedTelegramChatIds,
+                                                active = selectedTelegramChatId == chat.id,
+                                                onSelect = { checked -> selectedTelegramChatIds = if (checked) selectedTelegramChatIds + chat.id else selectedTelegramChatIds - chat.id },
+                                                onOpen = { selectedTelegramChatId = chat.id; com.example.data.telegram.TelegramClientManager.loadRecentMedia(chat.id) }
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text("Tidak ada sumber yang cocok dengan pencarian atau filter.", fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Button(
                                 onClick = {
@@ -543,8 +556,57 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-                            TextButton(onClick = { com.example.data.telegram.TelegramClientManager.logout() }) {
-                                Text("Keluar dari Telegram", color = MaterialTheme.colorScheme.error)
+                            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f))
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("Zona Akun", fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Keluar dari Telegram", fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.error)
+                                        Text("Akhiri sesi akun di perangkat ini.", fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    TextButton(onClick = { showTelegramLogoutDialog = true },
+                                        modifier = Modifier.testTag("telegram_logout_button")) {
+                                        Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(15.dp),
+                                            tint = MaterialTheme.colorScheme.error)
+                                        Spacer(Modifier.width(5.dp))
+                                        Text("Keluar", color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                            if (showTelegramLogoutDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showTelegramLogoutDialog = false },
+                                    title = { Material3Text("Keluar dari Telegram?") },
+                                    text = {
+                                        Material3Text("Sesi Telegram di perangkat ini akan diakhiri. Daftar sumber yang tersimpan dan playlist NSiO tidak akan dihapus. Untuk menggunakan Telegram lagi, Anda perlu menghubungkan akun kembali.")
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            showTelegramLogoutDialog = false
+                                            com.example.data.telegram.TelegramClientManager.logout()
+                                        }, modifier = Modifier.testTag("telegram_logout_confirm")) {
+                                            Material3Text("Keluar", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showTelegramLogoutDialog = false }) {
+                                            Material3Text("Batal")
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
