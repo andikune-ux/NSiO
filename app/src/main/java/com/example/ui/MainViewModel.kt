@@ -1093,6 +1093,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val targetDir = java.io.File(getApplication<Application>().cacheDir, "telegram/profiles").apply { mkdirs() }
                         val targetFile = java.io.File(targetDir, "$chatId.$extension")
                         sourceFile.copyTo(targetFile, overwrite = true)
+                        TelegramClientManager.state.value.chats.firstOrNull { it.id == chatId }
+                            ?.photoFileId?.let(TelegramClientManager::deleteDownloadedFile)
                         playlist = playlist.copy(thumbnailUrl = Uri.fromFile(targetFile).toString(), updatedAt = System.currentTimeMillis())
                         sourcePlaylistDao.update(playlist)
                     }
