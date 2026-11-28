@@ -108,8 +108,10 @@ internal class TelegramTdlibDataSource : DataSource {
             return
         }
         chunk = ByteArray(count)
+        // TDLib writes sparse range data at its absolute file offsets (pwrite).
+        // downloadedPrefixSize is relative to downloadOffset, but the file seek is absolute.
         RandomAccessFile(path, "r").use { input ->
-            input.seek(relativeOffset)
+            input.seek(position)
             input.readFully(chunk)
         }
         chunkPosition = 0
