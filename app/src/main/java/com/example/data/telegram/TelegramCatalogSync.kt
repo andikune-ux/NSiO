@@ -84,20 +84,9 @@ object TelegramCatalogSync {
                                             // Commit the new stream reference before touching the legacy file.
                                             database.mediaDao().updateMedia(migrated)
                                             current = migrated
-                                            // Register a rollback copy only if no other row references it.
-                                            // Actual deletion is deferred to the tracked CacheDataSource close,
-                                            // after Media3 confirms that a cache span was committed.
-                                            val legacyCopy = legacyImportedFile(context, previous.url)
-                                            if (legacyCopy != null &&
-                                                database.mediaDao().countOtherReferencesToUrl(previous.url, id) == 0
-                                            ) {
-                                                TelegramLegacyCacheMigration.remember(
-                                                    context,
-                                                    "telegram:${media.chatId}:${media.messageId}:${media.fileId}",
-                                                    legacyCopy
-                                                )
-                                            }
-                                            Log.i(TAG, "Referensi video Telegram dimigrasikan ke streaming; salinan lama menunggu verifikasi cache: $id")
+                                            // The old local copy is now disposable. The explicit cache
+                                            // cleanup migrates any remaining database references before deletion.
+                                            Log.i(TAG, "Referensi video Telegram dimigrasikan ke streaming: $id")
                                         }
                                         val currentThumbnailUri = Uri.parse(current.thumbnailUrl)
                                         val currentThumbnailMissing = current.thumbnailUrl.isBlank() ||
