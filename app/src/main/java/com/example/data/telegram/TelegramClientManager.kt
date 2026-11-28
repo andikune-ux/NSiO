@@ -504,21 +504,14 @@ object TelegramClientManager {
     }
 
     /**
-     * The integration catalog is intentionally limited to groups, channels, and bots
-     * that contain at least one accessible photo/video. Regular private conversations
-     * are never scanned or added.
+     * The automatic integration catalog contains only groups and channels.
+     * Private chats (including bots) are intentionally excluded and their histories
+     * are never scanned. Manually supplied public Telegram links remain supported.
      */
     private fun upsertChat(chat: TdApi.Chat) {
         when (val type = chat.type) {
             is TdApi.ChatTypeSupergroup -> enqueueMediaCheck(chat, if (type.isChannel) "Channel" else "Grup")
             is TdApi.ChatTypeBasicGroup -> enqueueMediaCheck(chat, "Grup")
-            is TdApi.ChatTypePrivate -> {
-                // TDLib represents bot conversations as private chats too; resolve the user
-                // first so ordinary person-to-person conversations are excluded without history access.
-                client?.send(TdApi.GetUser(type.userId)) { result ->
-                    if (result is TdApi.User && result.type is TdApi.UserTypeBot) enqueueMediaCheck(chat, "Bot")
-                }
-            }
             else -> Unit
         }
     }
