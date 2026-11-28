@@ -1192,7 +1192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     id = mediaId, profileId = profileId,
                     title = media.caption.takeIf { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.take(120)
                         ?: media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
-                    url = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}", thumbnailUrl = "",
+                    url = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.${if (media.isPhoto) "jpg" else if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"}", thumbnailUrl = "",
                     type = if (media.isPhoto) "PHOTO" else "VIDEO",
                     sourceType = "TELEGRAM", category = "Telegram",
                     playlistId = playlist.id, sourceUrl = cleanSourceUrl,
