@@ -69,7 +69,8 @@ object TelegramCatalogSync {
                                 try {
                                     if (previous != null) continue
                                     // Persist only Telegram metadata. Full media is fetched on first playback.
-                                    val deferredUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}"
+                                    val extension = if (media.isPhoto) "jpg" else if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"
+                                    val deferredUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
                                     val imported = MediaItem(
                                         id = id,
                                         profileId = profile.id,
