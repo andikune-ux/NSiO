@@ -336,7 +336,8 @@ class CS3IPlayer(
                             .setCache(DriveMediaCache.get(context))
                             .setUpstreamDataSourceFactory(upstreamFactory)
                             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                            .createDataSource()
+                            .createDataSource(),
+                        context
                     )
                 } else upstreamFactory.createDataSource()
             }
@@ -830,7 +831,8 @@ class CS3IPlayer(
                     .setCache(DriveMediaCache.get(context))
                     .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
                     .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                    .createDataSource()
+                    .createDataSource(),
+                context
             )
             try {
                 val request = androidx.media3.datasource.DataSpec.Builder()
