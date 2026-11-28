@@ -772,7 +772,7 @@ object TelegramClientManager {
      * place this object inside the PIN-encrypted profile backup before writing it to disk.
      */
     suspend fun exportProfileBackup(context: Context, profileId: String): JSONObject? {
-        require(isProfileOwner(context, profileId)) { "Telegram bukan milik profil aktif." }
+        if (!isProfileOwner(context, profileId)) return null
         val credentials = TelegramApiCredentialStore(context).exportPortableData() ?: return null
         val wasConnected = activeProfileId == profileId && client != null
         if (wasConnected) {
