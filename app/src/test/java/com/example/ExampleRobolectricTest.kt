@@ -60,7 +60,7 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `profile backup excludes other profiles media and settings`() = runBlocking {
+  fun `profile backup exports only matching profile media and settings`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val profile = Profile(id = "profile_a", name = "Profile A")
     val media = listOf(
@@ -71,7 +71,7 @@ class ExampleRobolectricTest {
     val result = BackupUtils.createProfileBackup(
       context = context,
       profile = profile,
-      settings = ProfileSettings(profileId = "profile_b", language = "EN"),
+      settings = ProfileSettings(profileId = "profile_a", language = "EN", themeMode = "LIGHT", displayMode = "HP", gridColumnsPhone = 3),
       mediaList = media,
       sourcePlaylists = listOf(SourcePlaylist(id = "playlist_a", profileId = "profile_a", name = "Favorit", url = "https://example.com/list")),
       profilePin = "",
@@ -87,7 +87,11 @@ class ExampleRobolectricTest {
     assertEquals(1, exportedMedia.length())
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
     assertEquals("Profile A", json.getString("sourceProfileName"))
-    assertTrue(!json.has("settings"))
+    val exportedSettings = json.getJSONObject("settings")
+    assertEquals("EN", exportedSettings.getString("language"))
+    assertEquals("LIGHT", exportedSettings.getString("themeMode"))
+    assertEquals("HP", exportedSettings.getString("displayMode"))
+    assertEquals(3, exportedSettings.getInt("gridColumnsPhone"))
     // Profile backups now carry identity metadata so the same profile can restore
     // its own name/avatar. Restore code must ignore this identity for a different ID.
     val exportedProfile = json.getJSONObject("profile")
