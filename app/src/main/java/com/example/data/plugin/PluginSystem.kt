@@ -800,7 +800,7 @@ class PluginManager(private val context: Context) {
         }
         val builtIns = _repositories.value.filter { it.isBuiltIn }
         val currentCustom = _repositories.value.filterNot { it.isBuiltIn }
-        val mergedCustom = (currentCustom + restoredRepositories).distinctBy { it.sourceUrl.trim().lowercase() }
+        val mergedCustom = (restoredRepositories + currentCustom).distinctBy { it.sourceUrl.trim().lowercase() }
         _repositories.value = mergedCustom + builtIns
         saveRepositories()
 
