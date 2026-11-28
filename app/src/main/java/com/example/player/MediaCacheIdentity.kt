@@ -37,6 +37,7 @@ internal object MediaCacheIdentity {
         val activeKey = activeCacheKey ?: return explicitCacheKey
         val path = encodedPath.ifBlank { "/" }
         return when {
+            activeKey.startsWith("media:") && explicitCacheKey != null -> explicitCacheKey
             activeKey.startsWith("media:") || activeKey.startsWith("url:") -> activeKey + ":" + path
             explicitCacheKey != null -> explicitCacheKey
             else -> activeKey
