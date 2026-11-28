@@ -59,6 +59,27 @@ class MediaCacheIdentityTest {
     }
 
     @Test
+    fun adaptiveSegmentsUseStableMediaPrefixAndDistinctPaths() {
+        val first = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-001.ts?token=one")
+        val second = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-002.ts?token=two")
+        assertEquals("media:CLOUDSTREAM:movie-42:/segment-001.ts?token=one", first)
+        assertEquals("media:CLOUDSTREAM:movie-42:/segment-002.ts?token=two", second)
+        assertNotEquals(first, second)
+    }
+
+    @Test
+    fun sourceNativeCacheKeysRemainUnmodified() {
+        assertEquals(
+            "drive:file-123",
+            MediaCacheIdentity.forCacheRequest("drive:file-123", "drive:file-123", "/video.mp4")
+        )
+        assertEquals(
+            "telegram:-100123:456:789",
+            MediaCacheIdentity.forCacheRequest("telegram:-100123:456:789", "telegram:-100123:456:789", "/789.mp4")
+        )
+    }
+
+    @Test
     fun genericUrlsNormalizeHostAndDefaultPortButKeepMeaningfulQuery() {
         assertEquals(
             MediaCacheIdentity.forUrl("HTTPS://CDN.EXAMPLE:443/video.mp4#player"),
