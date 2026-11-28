@@ -786,21 +786,26 @@ object TelegramClientManager {
         }
 
         val databaseRoot = File(context.filesDir, "telegram/tdlib/database")
-        val zipBytes = ByteArrayOutputStream().use { output ->
-            ZipOutputStream(output).use { zip ->
-                if (databaseRoot.isDirectory) {
-                    databaseRoot.walkTopDown().filter { it.isFile }.forEach { file ->
-                        val relative = file.relativeTo(databaseRoot).invariantSeparatorsPath
-                        zip.putNextEntry(ZipEntry(relative))
-                        file.inputStream().buffered().use { it.copyTo(zip) }
-                        zip.closeEntry()
-                        require(output.size() <= MAX_TELEGRAM_BACKUP_ZIP_BYTES) {
-                            "Database Telegram terlalu besar untuk dimasukkan ke backup profil."
+        val zipBytes = try {
+            ByteArrayOutputStream().use { output ->
+                ZipOutputStream(output).use { zip ->
+                    if (databaseRoot.isDirectory) {
+                        databaseRoot.walkTopDown().filter { it.isFile }.forEach { file ->
+                            val relative = file.relativeTo(databaseRoot).invariantSeparatorsPath
+                            zip.putNextEntry(ZipEntry(relative))
+                            file.inputStream().buffered().use { it.copyTo(zip) }
+                            zip.closeEntry()
+                            require(output.size() <= MAX_TELEGRAM_BACKUP_ZIP_BYTES) {
+                                "Database Telegram terlalu besar untuk dimasukkan ke backup profil."
+                            }
                         }
                     }
                 }
+                output.toByteArray()
             }
-            output.toByteArray()
+        } catch (error: Exception) {
+            if (wasConnected) runCatching { initialize(context, profileId) }
+            throw error
         }
         if (wasConnected) initialize(context, profileId)
         val catalog = catalogPreferences(context).getString("items", "[]") ?: "[]"
@@ -809,8 +814,6 @@ object TelegramClientManager {
             .put("databaseZipBase64", Base64.encodeToString(zipBytes, Base64.NO_WRAP))
             .put("catalog", catalog)
     }
-
-    /** Restore the encrypted Telegram database and re-wrap its key on this installation. */
 
     /** Restore the encrypted Telegram database and re-wrap its key on this installation. */
     suspend fun restoreProfileBackup(context: Context, profileId: String, payload: JSONObject): String =
@@ -934,6 +937,7 @@ object TelegramClientManager {
                 "Kredensial, kunci database, sesi TDLib, dan katalog Telegram berhasil dipulihkan."
             } catch (error: Exception) {
                 staging.deleteRecursively()
+                if (isProfileOwner(context, profileId)) runCatching { initialize(context, profileId) }
                 throw error
             }
         }
