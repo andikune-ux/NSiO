@@ -512,7 +512,10 @@ object TelegramClientManager {
             val directory = File(context.applicationContext.cacheDir, "telegram/tdlib/files")
             return !directory.exists() || runCatching { directory.deleteRecursively() }.getOrDefault(false)
         }
-        if (mutableState.value.stage != AuthStage.READY) return false
+        if (mutableState.value.stage != AuthStage.READY) {
+            val directory = File(context.applicationContext.cacheDir, "telegram/tdlib/files")
+            return !directory.exists() || directory.list().isNullOrEmpty()
+        }
 
         val request = TdApi.OptimizeStorage().apply {
             // Zero limits and no immunity window ask TDLib to remove all eligible
