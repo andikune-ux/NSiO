@@ -11,8 +11,8 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import java.io.File
 
 /**
- * Device-local Media3 cache shared by Drive and Telegram playback.
- * Telegram is fetched in byte ranges; both sources share the same 1 GiB LRU budget.
+ * Device-local Media3 cache shared by all remote playback sources.
+ * Telegram is fetched in byte ranges; all sources share the same 1 GiB LRU budget.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal object DriveMediaCache {
