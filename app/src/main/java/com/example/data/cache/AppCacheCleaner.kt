@@ -14,6 +14,8 @@ object AppCacheCleaner {
     fun clear(context: Context): Boolean {
         val app = context.applicationContext
         val driveCleared = DriveMediaCache.clear(app)
+        // If any Media3 reader is active, leave every media-cache directory untouched.
+        if (!driveCleared) return false
         val telegramDirectory = File(app.cacheDir, "telegram_media_cache")
         val telegramCleared = !telegramDirectory.exists() || runCatching {
             telegramDirectory.deleteRecursively()
