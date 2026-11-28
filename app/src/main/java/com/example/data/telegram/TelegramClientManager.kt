@@ -461,9 +461,27 @@ object TelegramClientManager {
             val localFile = File(localPath)
             val stale = !localFile.isFile ||
                 (current.size > 0L && localFile.length() < current.size)
-            if (stale) sendBlocking(TdApi.DeleteFile(fileId))
+            if (stale) sendBlockingOk(TdApi.DeleteFile(fileId))
         }
         return sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+    }
+
+    private fun sendBlockingOk(request: TdApi.Function<TdApi.Ok>): TdApi.Ok {
+        val activeClient = client ?: throw IllegalStateException("Telegram belum terhubung.")
+        val latch = CountDownLatch(1)
+        val response = AtomicReference<TdApi.Object?>()
+        activeClient.send(request) { result ->
+            response.set(result)
+            latch.countDown()
+        }
+        if (!latch.await(120, TimeUnit.SECONDS)) {
+            throw java.io.IOException("Telegram terlalu lama menghapus salinan file lokal.")
+        }
+        return when (val result = response.get()) {
+            is TdApi.Ok -> result
+            is TdApi.Error -> throw java.io.IOException("Telegram: ${result.message}")
+            else -> throw java.io.IOException("Respons penghapusan file Telegram tidak valid.")
+        }
     }
 
     private fun sendBlocking(request: TdApi.Function<TdApi.File>): TdApi.File {
