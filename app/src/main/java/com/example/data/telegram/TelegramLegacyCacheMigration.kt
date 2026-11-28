@@ -26,17 +26,26 @@ internal object TelegramLegacyCacheMigration {
             .apply()
     }
 
-    fun cleanupIfCached(context: Context, cacheKey: String?) : Boolean {
+    fun cleanupIfCached(context: Context, cacheKey: String?, actualPlaybackReadSucceeded: Boolean): Boolean {
         if (cacheKey.isNullOrBlank() || !cacheKey.startsWith("telegram:")) return false
         val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val path = preferences.getString(cacheKey, null) ?: return false
         // Cache spans are checked only after the actual CacheDataSource has closed,
         // so CacheDataSink has had an opportunity to commit its written fragment.
-        if (!DriveMediaCache.hasCachedData(cacheKey)) return false
+        val cachedBytesVerified = DriveMediaCache.hasCachedData(cacheKey)
+        val legacy = runCatching { File(path).canonicalFile }.getOrNull() ?: return false
+        val imported = runCatching { File(context.filesDir, "telegram/imported").canonicalFile }.getOrNull()
+            ?: return false
+        val canonicalLegacyFile = legacy.isFile && legacy.parentFile == imported && legacy.length() > 0L
+        if (!TelegramLegacyMigrationPolicy.mayDeleteLegacyCopy(
+                actualPlaybackReadSucceeded = actualPlaybackReadSucceeded,
+                cachedBytesVerified = cachedBytesVerified,
+                legacyPathIsCanonical = canonicalLegacyFile,
+                hasOtherDatabaseReferences = false
+            )
+        ) return false
 
         return try {
-            val legacy = File(path).canonicalFile
-            val imported = File(context.filesDir, "telegram/imported").canonicalFile
             if (!legacy.isFile || legacy.parentFile != imported || legacy.length() <= 0L) {
                 preferences.edit().remove(cacheKey).apply()
                 return false
