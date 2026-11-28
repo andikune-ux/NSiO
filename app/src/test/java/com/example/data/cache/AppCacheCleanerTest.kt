@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ApplicationProvider
 import com.example.player.DriveMediaCache
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,7 +26,7 @@ class AppCacheCleanerTest {
         get() = ApplicationProvider.getApplicationContext()
 
     @Test
-    fun clearRemovesOnlyDisposableCacheAndPreservesAppData() {
+    fun clearRemovesOnlyDisposableCacheAndPreservesAppData() = runBlocking {
         val mediaCache = File(context.cacheDir, "nsio_drive_media_cache").apply { mkdirs() }
         File(mediaCache, "segment.bin").writeBytes(byteArrayOf(1, 2, 3))
         val legacyCache = File(context.cacheDir, "telegram_media_cache").apply { mkdirs() }
@@ -45,7 +46,7 @@ class AppCacheCleanerTest {
     }
 
     @Test
-    fun clearRefusesToRunWhilePlaybackDataSourceIsOpen() {
+    fun clearRefusesToRunWhilePlaybackDataSourceIsOpen() = runBlocking {
         val mediaCache = File(context.cacheDir, "nsio_drive_media_cache").apply { mkdirs() }
         val sentinel = File(mediaCache, "segment.bin").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         val tracked = DriveMediaCache.track(NoOpDataSource(), context)
