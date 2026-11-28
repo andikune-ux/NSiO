@@ -2,6 +2,10 @@ package com.example.data.backup
 
 import android.util.Base64
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -19,14 +23,19 @@ internal object ProfileBackupCrypto {
         require(pin.matches(Regex("\\d{4}"))) { "PIN profil tidak valid. Backup dibatalkan." }
         val salt = ByteArray(16).also(random::nextBytes)
         val nonce = ByteArray(12).also(random::nextBytes)
+        val compressed = ByteArrayOutputStream().use { output ->
+            GZIPOutputStream(output).use { it.write(plainJson.toByteArray(Charsets.UTF_8)) }
+            output.toByteArray()
+        }
         val key = deriveKey(pin, salt)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, nonce))
-        val ciphertext = cipher.doFinal(plainJson.toByteArray(Charsets.UTF_8))
+        val ciphertext = cipher.doFinal(compressed)
         return JSONObject().apply {
             put("backupType", "PROFILE_BACKUP_ENCRYPTED")
             put("encryption", "PBKDF2-HMAC-SHA256+A256GCM")
-            put("formatVersion", 1)
+            put("compression", "GZIP")
+            put("formatVersion", 2)
             put("iterations", ITERATIONS)
             put("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
             put("nonce", Base64.encodeToString(nonce, Base64.NO_WRAP))
@@ -39,7 +48,11 @@ internal object ProfileBackupCrypto {
 
     fun decrypt(envelope: JSONObject, pin: String): String {
         require(pin.matches(Regex("\\d{4}"))) { "Masukkan PIN profil sumber yang terdiri dari 4 digit." }
-        require(envelope.optInt("formatVersion") == 1) { "Format enkripsi backup belum didukung." }
+        val formatVersion = envelope.optInt("formatVersion")
+        require(formatVersion in 1..2) { "Format enkripsi backup belum didukung." }
+        if (formatVersion == 2) {
+            require(envelope.optString("compression") == "GZIP") { "Metode kompresi backup tidak didukung." }
+        }
         val iterations = envelope.optInt("iterations", -1)
         require(iterations in 100_000..2_000_000) { "Parameter enkripsi backup tidak valid." }
         val salt = Base64.decode(envelope.getString("salt"), Base64.NO_WRAP)
@@ -52,7 +65,11 @@ internal object ProfileBackupCrypto {
             val key = deriveKey(pin, salt, iterations)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, nonce))
-            String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+            val plaintext = cipher.doFinal(ciphertext)
+            val decoded = if (formatVersion == 2) {
+                GZIPInputStream(ByteArrayInputStream(plaintext)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            } else String(plaintext, Charsets.UTF_8)
+            decoded
         } catch (_: Exception) {
             throw IllegalArgumentException("PIN salah atau file backup rusak. Data profil tidak diubah.")
         }
