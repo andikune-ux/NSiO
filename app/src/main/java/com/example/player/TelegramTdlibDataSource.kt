@@ -142,6 +142,7 @@ internal class TelegramTdlibDataSource : DataSource {
 
     companion object {
         private const val CHUNK_BYTES = 512 * 1024
+        @UnstableApi
         fun cacheIdentity(rawUrl: String): String? {
             val uri = runCatching { java.net.URI(rawUrl) }.getOrNull() ?: return null
             if (!uri.scheme.equals("telegram", ignoreCase = true) || uri.host != "media") return null
