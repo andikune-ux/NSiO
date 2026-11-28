@@ -945,7 +945,7 @@ object TelegramClientManager {
                 "Kredensial, kunci database, sesi TDLib, dan katalog Telegram berhasil dipulihkan."
             } catch (error: Exception) {
                 staging.deleteRecursively()
-                if (isProfileOwner(context, profileId)) runCatching { initialize(context, profileId) }
+                ownerProfileId(context)?.let { owner -> runCatching { initialize(context, owner) } }
                 throw error
             }
         }
