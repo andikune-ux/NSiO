@@ -19,7 +19,7 @@ import java.io.File
 
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class AppCacheCleanerTest {
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
