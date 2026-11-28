@@ -74,6 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val downloads = downloadManager.downloads
     val player = PlayerRuntime.get(application)
     private var cloudStreamVerifierJob: Job? = null
+    private val telegramMetadataRecoveryInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     init {
         scheduleLegacyTelegramStorageCleanup(application)
@@ -1257,7 +1258,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sourceType = "TELEGRAM", category = "Telegram",
                     playlistId = playlist.id, sourceUrl = cleanSourceUrl,
                     createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}",
+                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}&thumbnailFileId=${media.thumbnailFileId}",
                     caption = media.caption
                 )
                 mediaDao.insertMedia(item)
@@ -2533,61 +2534,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * No chat-history scan or video download is performed here.
      */
     fun ensureTelegramMediaMetadata(item: MediaItem) {
-        if (!item.sourceType.equals("TELEGRAM", true)) return
-        val fields = item.extraInfo.split('&').mapNotNull { part ->
+        if (!item.sourceType.equals("TELEGRAM", true) || !telegramMetadataRecoveryInFlight.add(item.id)) return
+        val initialFields = item.extraInfo.split('&').mapNotNull { part ->
             val separator = part.indexOf('=')
             if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
         }.toMap()
-        val chatId = fields["chatId"]?.toLongOrNull() ?: return
-        val messageId = fields["messageId"]?.toLongOrNull() ?: return
-        val titleNeedsRecovery = item.title.isBlank() ||
-            item.title.equals("Video Telegram", true) ||
-            item.title.equals("Foto Telegram", true)
-        val thumbnailFile = runCatching {
-            val uri = Uri.parse(item.thumbnailUrl)
-            if (uri.scheme == "file") uri.path?.let(::java.io.File) else null
-        }.getOrNull()
-        val thumbnailMissing = item.thumbnailUrl.isBlank() ||
-            (thumbnailFile != null && !thumbnailFile.isFile)
-        if (!titleNeedsRecovery && !thumbnailMissing) return
+        val chatId = initialFields["chatId"]?.toLongOrNull()
+        val messageId = initialFields["messageId"]?.toLongOrNull()
+        if (chatId == null || messageId == null) {
+            telegramMetadataRecoveryInFlight.remove(item.id)
+            return
+        }
 
         TelegramClientManager.refreshMediaMessage(chatId, messageId) { media ->
-            if (media == null) return@refreshMediaMessage
+            if (media == null) {
+                telegramMetadataRecoveryInFlight.remove(item.id)
+                return@refreshMediaMessage
+            }
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                var updated = item
-                if (titleNeedsRecovery) {
-                    val recoveredTitle = media.caption.lineSequence().firstOrNull()
-                        ?.trim()?.takeIf { it.isNotBlank() }
-                        ?: media.title.takeIf { it.isNotBlank() }
-                    if (!recoveredTitle.isNullOrBlank()) updated = updated.copy(title = recoveredTitle.take(120))
-                }
+                try {
+                    // Re-read the row before writing so a concurrent user rename or
+                    // other metadata edit is never overwritten by this recovery pass.
+                    val current = mediaDao.getMediaListForProfile(item.profileId)
+                        .firstOrNull { it.id == item.id } ?: item
+                    val fields = current.extraInfo.split('&').mapNotNull { part ->
+                        val separator = part.indexOf('=')
+                        if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
+                    }.toMap()
+                    var updated = current
+                    val titleNeedsRecovery = current.title.isBlank() ||
+                        current.title.equals("Video Telegram", true) ||
+                        current.title.equals("Foto Telegram", true)
+                    if (titleNeedsRecovery) {
+                        val recoveredTitle = media.caption.lineSequence().firstOrNull()
+                            ?.trim()?.takeIf { it.isNotBlank() }
+                            ?: media.title.takeIf { it.isNotBlank() }
+                        if (!recoveredTitle.isNullOrBlank()) updated = updated.copy(title = recoveredTitle.take(120))
+                    }
 
-                val thumbnailId = fields["thumbnailFileId"]?.toIntOrNull()
-                    ?.takeIf { it > 0 } ?: media.thumbnailFileId
-                val extra = item.extraInfo.split('&').filter { it.substringBefore('=') != "thumbnailFileId" }
-                    .plus(if (thumbnailId > 0) listOf("thumbnailFileId=$thumbnailId") else emptyList())
-                    .joinToString("&")
-                if (extra != updated.extraInfo) updated = updated.copy(extraInfo = extra)
+                    val thumbnailFile = runCatching {
+                        val uri = Uri.parse(current.thumbnailUrl)
+                        if (uri.scheme == "file") uri.path?.let(::java.io.File) else null
+                    }.getOrNull()
+                    val thumbnailMissing = current.thumbnailUrl.isBlank() ||
+                        (thumbnailFile != null && !thumbnailFile.isFile)
+                    val thumbnailId = fields["thumbnailFileId"]?.toIntOrNull()
+                        ?.takeIf { it > 0 } ?: media.thumbnailFileId
+                    val extra = current.extraInfo.split('&')
+                        .filter { it.substringBefore('=') != "thumbnailFileId" }
+                        .plus(if (thumbnailId > 0) listOf("thumbnailFileId=$thumbnailId") else emptyList())
+                        .joinToString("&")
+                    if (extra != updated.extraInfo) updated = updated.copy(extraInfo = extra)
 
-                if (thumbnailMissing && thumbnailId > 0) {
-                    val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
-                        TelegramClientManager.downloadThumbnail(thumbnailId) { path ->
-                            if (continuation.isActive) continuation.resume(path)
+                    if (thumbnailMissing && thumbnailId > 0) {
+                        val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                            TelegramClientManager.downloadThumbnail(thumbnailId) { path ->
+                                if (continuation.isActive) continuation.resume(path)
+                            }
+                        }
+                        val source = downloaded?.let(::java.io.File)
+                        if (source?.isFile == true && source.length() > 0L) {
+                            val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails")
+                                .apply { mkdirs() }
+                            val target = java.io.File(directory, "${current.id}.jpg")
+                            runCatching {
+                                source.copyTo(target, overwrite = true)
+                                TelegramClientManager.deleteDownloadedFile(thumbnailId)
+                                updated = updated.copy(thumbnailUrl = Uri.fromFile(target).toString())
+                            }
                         }
                     }
-                    val source = downloaded?.let(::java.io.File)
-                    if (source?.isFile == true && source.length() > 0L) {
-                        val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails")
-                            .apply { mkdirs() }
-                        val target = java.io.File(directory, "${item.id}.jpg")
-                        runCatching {
-                            source.copyTo(target, overwrite = true)
-                            TelegramClientManager.deleteDownloadedFile(thumbnailId)
-                            updated = updated.copy(thumbnailUrl = Uri.fromFile(target).toString())
-                        }
-                    }
+                    if (updated != current) runCatching { mediaDao.updateMedia(updated) }
+                } finally {
+                    telegramMetadataRecoveryInFlight.remove(item.id)
                 }
-                if (updated != item) runCatching { mediaDao.updateMedia(updated) }
             }
         }
     }
