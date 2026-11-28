@@ -49,6 +49,8 @@ object TelegramClientManager {
     val state: StateFlow<State> = mutableState.asStateFlow()
     @Volatile private var client: Client? = null
     @Volatile private var appContext: Context? = null
+    @Volatile private var activeProfileId: String = ""
+    @Volatile private var clientGeneration: Long = 0L
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
     private val cacheCleanupLock = Any()
@@ -68,10 +70,74 @@ object TelegramClientManager {
         synchronized(cacheCleanupLock) { cacheCleanupInProgress = false }
     }
 
+    private fun profileBindingPreferences(context: Context) =
+        context.applicationContext.getSharedPreferences("nsio_telegram_profile_binding", Context.MODE_PRIVATE)
+
+    fun ownerProfileId(context: Context): String? =
+        profileBindingPreferences(context).getString("owner_profile_id", null)?.takeIf(String::isNotBlank)
+
+    fun isProfileOwner(context: Context, profileId: String): Boolean =
+        profileId.isNotBlank() && ownerProfileId(context) == profileId
+
+    fun claimProfile(context: Context, profileId: String): Boolean {
+        if (profileId.isBlank()) return false
+        val preferences = profileBindingPreferences(context)
+        val owner = preferences.getString("owner_profile_id", null)
+        if (owner.isNullOrBlank()) {
+            // Claim the existing legacy Telegram session for the profile that first configures it.
+            return preferences.edit().putString("owner_profile_id", profileId).commit()
+        }
+        return owner == profileId
+    }
+
     @Synchronized
-    fun initialize(context: Context) {
+    fun selectProfile(context: Context, profileId: String) {
+        if (profileId.isBlank()) return
+        if (ownerProfileId(context) == profileId) {
+            initialize(context, profileId)
+            return
+        }
+        if (activeProfileId != profileId || client != null) {
+            clientGeneration++
+            client?.let { runCatching { it.send(TdApi.Close()) } }
+            client = null
+            activeProfileId = profileId
+        }
+        mutableState.value = State(message = "Telegram tidak terhubung pada profil ini.")
+    }
+
+    @Synchronized
+    fun releaseProfile(context: Context, profileId: String) {
+        if (!isProfileOwner(context, profileId)) return
+        clientGeneration++
+        client?.let { runCatching { it.send(TdApi.Close()) } }
+        client = null
+        activeProfileId = ""
+        profileBindingPreferences(context).edit().remove("owner_profile_id").commit()
+        catalogPreferences(context).edit().clear().commit()
+        mutableState.value = State(message = "Integrasi Telegram dilepas dari profil.")
+    }
+
+    @Synchronized
+    fun initialize(context: Context, profileId: String) {
         val app = context.applicationContext
         appContext = app
+        if (!claimProfile(app, profileId)) {
+            if (activeProfileId != profileId || client != null) {
+                clientGeneration++
+                client?.let { runCatching { it.send(TdApi.Close()) } }
+                client = null
+                activeProfileId = profileId
+            }
+            mutableState.value = State(message = "Integrasi Telegram terikat pada profil lain.")
+            return
+        }
+        if (activeProfileId != profileId) {
+            clientGeneration++
+            client?.let { runCatching { it.send(TdApi.Close()) } }
+            client = null
+            activeProfileId = profileId
+        }
         restoreCatalog(app)
         if (client != null) return
         val credentials = TelegramApiCredentialStore(app).load()
@@ -95,10 +161,17 @@ object TelegramClientManager {
         pendingDatabaseDirectory = databaseRoot.absolutePath
         pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
-        client = Client.create({ update -> handleUpdate(update) }, { error ->
-            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
+        val generation = clientGeneration
+        client = Client.create({ update ->
+            if (generation == clientGeneration) handleUpdate(update)
         }, { error ->
-            mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
+            if (generation == clientGeneration) {
+                mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
+            }
+        }, { error ->
+            if (generation == clientGeneration) {
+                mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
+            }
         })
     }
 
