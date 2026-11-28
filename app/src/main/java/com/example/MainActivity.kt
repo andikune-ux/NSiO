@@ -532,6 +532,54 @@ private fun MainApplicationContent(viewModel: MainViewModel, isPipMode: Boolean)
 
 private fun formatMb(bytes: Long): String = String.format(java.util.Locale.US, "%.2f MB", bytes / (1024.0 * 1024.0))
 
+private data class StorageEntry(
+    val name: String,
+    val bytes: Long,
+    val files: Int,
+    val directories: List<StorageEntry> = emptyList(),
+    val largeFiles: List<Pair<String, Long>> = emptyList()
+)
+
+private fun inspectStorageDirectory(directory: File, depth: Int = 0, maxDepth: Int = 5): StorageEntry {
+    val children = runCatching { directory.listFiles()?.toList().orEmpty() }.getOrDefault(emptyList())
+    var totalBytes = 0L
+    var totalFiles = 0
+    val subdirectories = mutableListOf<StorageEntry>()
+    val files = mutableListOf<Pair<String, Long>>()
+    children.forEach { child ->
+        if (child.isDirectory) {
+            val entry = inspectStorageDirectory(child, depth + 1, maxDepth)
+            totalBytes += entry.bytes
+            totalFiles += entry.files
+            if (depth < maxDepth) subdirectories += entry
+        } else if (child.isFile) {
+            val size = runCatching { child.length() }.getOrDefault(0L)
+            totalBytes += size
+            totalFiles++
+            files += child.name to size
+        }
+    }
+    return StorageEntry(
+        name = directory.name.ifBlank { directory.absolutePath },
+        bytes = totalBytes,
+        files = totalFiles,
+        directories = subdirectories.sortedByDescending { it.bytes },
+        largeFiles = files.sortedByDescending { it.second }.take(8)
+    )
+}
+
+private fun appendStorageTree(output: StringBuilder, directory: File, indent: String = "", depth: Int = 0, maxDepth: Int = 5) {
+    val entry = inspectStorageDirectory(directory, depth, maxDepth)
+    output.appendLine("$indent• ${entry.name}/ — ${formatMb(entry.bytes)}, ${entry.files} file")
+    if (depth >= maxDepth) return
+    entry.directories.forEach { child ->
+        appendStorageTree(output, File(directory, child.name), "$indent  ", depth + 1, maxDepth)
+    }
+    entry.largeFiles.forEach { (name, size) ->
+        output.appendLine("$indent  - $name — ${formatMb(size)}")
+    }
+}
+
 private fun directoryBytes(directory: File?): Long {
     if (directory == null || !directory.exists()) return 0L
     return runCatching { directory.walkTopDown().filter { it.isFile }.sumOf { it.length() } }.getOrDefault(0L)
@@ -559,6 +607,15 @@ private fun appStorageDiagnostics(context: android.content.Context): String {
         appendLine("• Preferensi: ${formatMb(preferencesBytes)}")
         appendLine("• File eksternal aplikasi: ${formatMb(externalFiles)}")
         appendLine("• Cache eksternal: ${formatMb(externalCache)}")
+        appendLine()
+        appendLine("RINCIAN FILE INTERNAL (terbesar lebih dulu)")
+        appendStorageTree(this, context.filesDir)
+        appendLine()
+        appendLine("RINCIAN FILE TANPA BACKUP")
+        appendStorageTree(this, context.noBackupFilesDir)
+        appendLine()
+        appendLine("RINCIAN FILE EKSTERNAL APLIKASI")
+        context.getExternalFilesDir(null)?.let { appendStorageTree(this, it) } ?: appendLine("• Tidak tersedia")
         appendLine()
         appendLine("PARTISI DATA PERANGKAT")
         appendLine("Total: ${formatMb(stat.totalBytes)}")
