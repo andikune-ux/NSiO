@@ -187,7 +187,7 @@ object TelegramCatalogSync {
         } ?: return null
         val source = File(downloaded)
         if (!source.isFile || source.length() <= 0L) return null
-        val directory = File(context.filesDir, "telegram/thumbnails").apply { mkdirs() }
+        val directory = File(context.cacheDir, "telegram/thumbnails").apply { mkdirs() }
         val target = File(directory, "$mediaId.jpg")
         return runCatching {
             if (!target.isFile || target.length() != source.length()) source.copyTo(target, overwrite = true)
