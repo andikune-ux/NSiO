@@ -1181,18 +1181,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     success = true
                     return@launch
                 }
-                val downloadedPath = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
-                    TelegramClientManager.downloadMedia(media) { path ->
-                        if (continuation.isActive) continuation.resume(path)
-                    }
-                } ?: throw IllegalStateException("Telegram gagal mengunduh media.")
-                val sourceFile = java.io.File(downloadedPath)
-                if (!sourceFile.isFile || sourceFile.length() <= 0L) throw IllegalStateException("File media Telegram kosong atau tidak ditemukan.")
-                val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: if (media.isPhoto) "jpg" else "mp4"
-                val targetDir = java.io.File(getApplication<Application>().filesDir, "telegram/imported").apply { mkdirs() }
-                val targetFile = java.io.File(targetDir, "$mediaId.$extension")
-                sourceFile.copyTo(targetFile, overwrite = true)
-                val localUri = Uri.fromFile(targetFile).toString()
                 val cleanSourceUrl = sourceUrl.trim()
                 val playlist = ensureSourcePlaylist(
                     cleanSourceUrl,
@@ -1202,13 +1190,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val item = MediaItem(
                     id = mediaId, profileId = profileId,
-                    title = media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
-                    url = localUri, thumbnailUrl = if (media.isPhoto) localUri else "",
+                    title = media.caption.takeIf { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.take(120)
+                        ?: media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
+                    url = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}", thumbnailUrl = "",
                     type = if (media.isPhoto) "PHOTO" else "VIDEO",
                     sourceType = "TELEGRAM", category = "Telegram",
                     playlistId = playlist.id, sourceUrl = cleanSourceUrl,
                     createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
+                    extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}",
                     caption = media.caption
                 )
                 mediaDao.insertMedia(item)
@@ -2475,7 +2464,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startPlaybackProgressPersistence(item)
     }
 
+    private suspend fun resolveDeferredTelegramMedia(item: MediaItem): MediaItem? {
+        val parts = runCatching { java.net.URI(item.url).path.orEmpty().split('/').filter(String::isNotBlank) }.getOrDefault(emptyList())
+        if (parts.size != 3) return null
+        val chatId = parts[0].toLongOrNull() ?: return null
+        val messageId = parts[1].toLongOrNull() ?: return null
+        val fileId = parts[2].toIntOrNull() ?: return null
+        val extension = when {
+            item.type.equals("PHOTO", true) -> "jpg"
+            item.extraInfo.contains("webm", true) -> "webm"
+            item.extraInfo.contains("matroska", true) -> "mkv"
+            else -> "mp4"
+        }
+        val cacheKey = "${item.profileId}_${item.id}"
+        val context = getApplication<Application>()
+        val cached = TelegramDeferredMediaCache.get(context, cacheKey, extension)
+        val playableFile = cached ?: run {
+            _playbackPreparationMessage.value = "Mengunduh media Telegram saat diputar…"
+            val fields = item.extraInfo.split('&').mapNotNull { part ->
+                val separator = part.indexOf('=')
+                if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
+            }.toMap()
+            val media = TelegramClientManager.TelegramMedia(
+                chatId = chatId,
+                messageId = messageId,
+                title = item.title,
+                fileId = fileId,
+                isPhoto = item.type.equals("PHOTO", true),
+                mimeType = fields["mimeType"] ?: if (item.type.equals("PHOTO", true)) "image/jpeg" else "video/mp4",
+                caption = item.caption,
+                createdAt = item.createdAt
+            )
+            val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                TelegramClientManager.downloadMedia(media) { path ->
+                    if (continuation.isActive) continuation.resume(path)
+                }
+            } ?: return null
+            TelegramDeferredMediaCache.store(context, cacheKey, extension, java.io.File(downloaded)) ?: return null
+        }
+        return item.copy(url = Uri.fromFile(playableFile).toString())
+    }
+
     fun playMedia(item: MediaItem) {
+        if (item.sourceType.equals("TELEGRAM", true) && item.url.startsWith("telegram://media/")) {
+            syncPlaybackQueue(item)
+            _currentlyPlaying.value = item
+            _playbackPreparationMessage.value = "Menyiapkan media Telegram…"
+            viewModelScope.launch {
+                val playable = runCatching { resolveDeferredTelegramMedia(item) }.getOrNull()
+                if (_currentlyPlaying.value?.id != item.id) return@launch
+                if (playable == null) {
+                    _playbackPreparationMessage.value = null
+                    showStatus("Media Telegram gagal diunduh. Periksa koneksi dan akses postingan.")
+                } else {
+                    _playbackPreparationMessage.value = null
+                    playMedia(playable)
+                }
+            }
+            return
+        }
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
             player.clearError()
@@ -2503,7 +2550,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val source = java.net.URI(item.sourceUrl)
                     if (!headers.containsKey("Origin") && !source.host.isNullOrBlank()) {
-                        headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":${source.port}" else ""}"
+                        headers["Origin"] = "${source.scheme}://${source.host}${if (source.port > 0) ":\${source.port}" else ""}"
                     }
                 }
             }
