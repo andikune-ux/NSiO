@@ -62,6 +62,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.ui.MainViewModel
+import com.example.data.cache.AppCacheCleaner
 import com.example.ui.components.AmbientFluidBackground
 import com.example.ui.components.LocalAppLanguage
 import com.example.ui.components.LocalDevModeTextSelection
@@ -305,10 +306,9 @@ class MainActivity : ComponentActivity() {
                     text = { Text("File sementara aplikasi akan dihapus. Media, playlist, profil, dan pengaturan tidak dihapus.") },
                     confirmButton = {
                         Button(onClick = {
-                            val dirs = listOfNotNull(context.cacheDir, context.externalCacheDir)
-                            val success = dirs.map { dir -> runCatching { dir.deleteRecursively() }.getOrDefault(false) }.all { it }
+                            val success = AppCacheCleaner.clear(context)
                             showCacheResetConfirm = false
-                            secretMessage = if (success) "Cache sementara berhasil dibersihkan. Data media, playlist, profil, dan pengaturan tidak disentuh." else "Pembersihan cache tidak sepenuhnya berhasil. Sebagian file mungkin sedang digunakan."
+                            secretMessage = if (success) "Cache media Drive dan Telegram berhasil dibersihkan. Profil, playlist, akun, dan pengaturan tetap tersimpan." else "Sebagian cache media gagal dibersihkan karena sedang digunakan. Data akun tetap aman."
                         }) { Text("Bersihkan") }
                     },
                     dismissButton = { Button(onClick = { showCacheResetConfirm = false }) { Text("Batal") } }
