@@ -1589,3 +1589,55 @@ private fun SettingsGlassCard(
         }
     }
 }
+
+@Composable
+private fun TelegramSourceRow(
+    chat: com.example.data.telegram.TelegramClientManager.TelegramChat,
+    avatar: String?,
+    selected: Boolean,
+    active: Boolean,
+    onSelect: (Boolean) -> Unit,
+    onOpen: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.07f) else Color.Transparent)
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 5.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(34.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!avatar.isNullOrBlank()) {
+                AsyncImage(
+                    model = avatar,
+                    contentDescription = "Foto profil ${chat.title}",
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Default.Language, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
+            }
+        }
+        Checkbox(
+            checked = selected,
+            onCheckedChange = onSelect,
+            modifier = Modifier.size(42.dp)
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(chat.title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(chat.kind, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (active) {
+            Text("Dipilih", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary)
+        } else if (chat.unreadCount > 0) {
+            Text(chat.unreadCount.toString(), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
