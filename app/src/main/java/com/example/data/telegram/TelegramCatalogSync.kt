@@ -1,6 +1,7 @@
 package com.example.data.telegram
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.data.model.MediaItem
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 
 /**
  * Background reconciliation for saved Telegram channel/group playlists.
@@ -67,17 +69,28 @@ object TelegramCatalogSync {
                                 val id = "telegram:${profile.id}:${media.chatId}:${media.messageId}"
                                 val previous = existing[id]
                                 try {
-                                    if (previous != null) continue
+                                    if (previous != null) {
+                                        if (previous.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
+                                            val thumbnail = downloadTelegramThumbnail(context, id, media.thumbnailFileId)
+                                            if (!thumbnail.isNullOrBlank()) {
+                                                database.mediaDao().updateThumbnailUrl(id, thumbnail)
+                                                existing[id] = previous.copy(thumbnailUrl = thumbnail)
+                                            }
+                                        }
+                                        continue
+                                    }
                                     // Persist only Telegram metadata. Full media is fetched on first playback.
                                     val extension = if (media.isPhoto) "jpg" else if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"
                                     val deferredUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
+                                    val thumbnail = if (media.thumbnailFileId > 0)
+                                        downloadTelegramThumbnail(context, id, media.thumbnailFileId).orEmpty() else ""
                                     val imported = MediaItem(
                                         id = id,
                                         profileId = profile.id,
                                         title = media.caption.takeIf { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.take(120)
                                             ?: media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
-                                        url = deferredUrl,
-                                        thumbnailUrl = "",
+                                        url = if (media.isPhoto) thumbnail else deferredUrl,
+                                        thumbnailUrl = thumbnail,
                                         type = if (media.isPhoto) "PHOTO" else "VIDEO",
                                         sourceType = "TELEGRAM",
                                         category = "Telegram",
@@ -116,5 +129,26 @@ object TelegramCatalogSync {
         return addedTotal
     }
 
+
+    private suspend fun downloadTelegramThumbnail(
+        context: Context,
+        mediaId: String,
+        fileId: Int
+    ): String? {
+        val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+            TelegramClientManager.downloadThumbnail(fileId) { path ->
+                if (continuation.isActive) continuation.resumeWith(Result.success(path))
+            }
+        } ?: return null
+        val source = File(downloaded)
+        if (!source.isFile || source.length() <= 0L) return null
+        val directory = File(context.filesDir, "telegram/thumbnails").apply { mkdirs() }
+        val target = File(directory, "$mediaId.jpg")
+        return runCatching {
+            if (!target.isFile || target.length() != source.length()) source.copyTo(target, overwrite = true)
+            TelegramClientManager.deleteDownloadedFile(fileId)
+            Uri.fromFile(target).toString()
+        }.getOrNull()
+    }
 
 }
