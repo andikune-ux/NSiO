@@ -968,13 +968,11 @@ class CS3IPlayer(
         }
         lastUrl = url
         lastTitle = title
-        val canonicalCacheIdentity = MediaCacheIdentity.forUrl(url)
-        val telegramCacheIdentity = TelegramTdlibDataSource.cacheIdentity(url)
-        // Drive URLs and Telegram message IDs use stable identities. Other HTTP(S)
-        // media retains the existing URL-keyed cache behavior.
-        lastMediaCacheKey = canonicalCacheIdentity?.takeIf { it.startsWith("drive:") }
-            ?: telegramCacheIdentity
-        activeMediaCacheKey = canonicalCacheIdentity ?: telegramCacheIdentity
+        val playbackCacheIdentity = MediaCacheIdentity.forPlayback(url, mediaCacheKey)
+        // Keep the same identity for CacheDataSource and ExoMediaItem custom keys.
+        // This allows refreshed CloudStream/CDN URLs to reuse prior cached byte ranges.
+        lastMediaCacheKey = playbackCacheIdentity
+        activeMediaCacheKey = playbackCacheIdentity
         repeatPointA = null
         repeatPointB = null
         _playerState.value = _playerState.value.copy(repeatA = null, repeatB = null)
