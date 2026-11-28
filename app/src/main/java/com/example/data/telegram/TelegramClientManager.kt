@@ -178,7 +178,16 @@ object TelegramClientManager {
         }
         restoreCatalog(app)
         if (client != null) return
-        val credentials = TelegramApiCredentialStore(app).load()
+        val credentialStore = TelegramApiCredentialStore(app)
+        val credentials = try {
+            credentialStore.loadOrThrow()
+        } catch (error: Exception) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = error.localizedMessage ?: "Kredensial Telegram tidak dapat dibuka. Data sesi tidak dihapus."
+            )
+            return
+        }
         if (credentials == null) {
             mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Masukkan API ID dan API Hash di Pengaturan Telegram.")
             return
@@ -192,8 +201,9 @@ object TelegramClientManager {
         // The stable 256-bit database key is wrapped by Android Keystore.
         val databaseRoot = File(app.filesDir, "telegram/tdlib/database").apply { mkdirs() }
         val mediaCacheRoot = File(app.cacheDir, "telegram/tdlib/files").apply { mkdirs() }
+        val hasExistingDatabase = databaseRoot.listFiles()?.any { it.isFile || it.isDirectory } == true
         val databaseKey = try {
-            TelegramApiCredentialStore(app).loadOrCreateDatabaseEncryptionKey()
+            credentialStore.loadOrCreateDatabaseEncryptionKey(allowCreate = !hasExistingDatabase)
         } catch (error: Exception) {
             // Never replace an unreadable database key automatically: doing so would
             // make the existing encrypted TDLib session permanently inaccessible.
@@ -209,6 +219,7 @@ object TelegramClientManager {
         pendingDatabaseDirectory = databaseRoot.absolutePath
         pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
+        pendingHadExistingDatabase = hasExistingDatabase
         val generation = clientGeneration
         try {
             client = Client.create({ update ->
@@ -242,6 +253,7 @@ object TelegramClientManager {
     private var pendingDatabaseDirectory: String = ""
     private var pendingFilesDirectory: String = ""
     private var pendingDatabaseKey: ByteArray = byteArrayOf()
+    @Volatile private var pendingHadExistingDatabase: Boolean = false
 
     private fun handleUpdate(update: TdApi.Object) {
         when (update) {
@@ -288,8 +300,14 @@ object TelegramClientManager {
                 }
                 send(parameters)
             }
-            is TdApi.AuthorizationStateWaitPhoneNumber ->
-                mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_PHONE, message = "Masukkan nomor telepon Telegram dengan kode negara.")
+            is TdApi.AuthorizationStateWaitPhoneNumber -> {
+                val message = if (pendingHadExistingDatabase) {
+                    "TDLib menemukan database sesi lama tetapi meminta login ulang. Database dan kunci tidak dihapus; kemungkinan sesi tidak terbaca atau sudah tidak berlaku. Perlu pemeriksaan log perangkat sebelum login ulang."
+                } else {
+                    "Belum ada sesi Telegram pada database ini. Masukkan nomor telepon dengan kode negara."
+                }
+                mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_PHONE, message = message)
+            }
             is TdApi.AuthorizationStateWaitCode ->
                 mutableState.value = mutableState.value.copy(stage = AuthStage.WAITING_CODE, message = "Masukkan kode verifikasi yang dikirim Telegram.")
             is TdApi.AuthorizationStateWaitPassword ->
