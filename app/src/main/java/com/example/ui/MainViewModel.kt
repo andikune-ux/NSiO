@@ -1167,8 +1167,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startTelegramPlaylistRefresh(onlyPlaylistId: String?, announceResult: Boolean) {
         val profileId = _activeProfile.value?.id
-        if (profileId == null || TelegramClientManager.state.value.stage != TelegramClientManager.AuthStage.READY) {
-            if (announceResult) showStatus("Hubungkan akun Telegram terlebih dahulu untuk memperbarui sumber.")
+        val telegramState = TelegramClientManager.state.value
+        if (profileId == null) {
+            if (announceResult) showStatus("Profil aktif tidak ditemukan. Pilih profil pemilik integrasi Telegram.")
+            return
+        }
+        if (telegramState.stage != TelegramClientManager.AuthStage.READY) {
+            if (announceResult) {
+                val detail = telegramState.message.takeIf { it.isNotBlank() }
+                    ?: "Status koneksi belum siap."
+                showStatus("Sumber Telegram tersimpan, tetapi belum dapat diperbarui. Status ${telegramState.stage}: $detail Buka Pengaturan Telegram untuk memulihkan koneksi.")
+            }
             return
         }
         if (telegramSyncJob?.isActive == true) {
