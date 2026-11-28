@@ -124,7 +124,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         mimeType = mimeType,
                         externalSubtitles = fresh.subtitles,
                         videoInterceptor = fresh.videoInterceptor,
-                        pluginStreams = freshStreams
+                        pluginStreams = freshStreams,
+                        mediaCacheKey = item.sourceType + ":" + item.id
                     )
                     true
                 }.getOrDefault(false)
@@ -2302,7 +2303,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     mimeType = mimeType,
                     externalSubtitles = externalSubtitles,
                     videoInterceptor = videoInterceptor,
-                    pluginStreams = availablePluginStreams
+                    pluginStreams = availablePluginStreams,
+                    mediaCacheKey = item.sourceType + ":" + item.id
                 )
                 cloudStreamVerifierJob?.cancel()
                 cloudStreamVerifierJob = if (!extractorData.isNullOrBlank()) {
@@ -2379,7 +2381,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     mimeType = mimeType,
                     externalSubtitles = stream.subtitles,
                     videoInterceptor = stream.videoInterceptor,
-                    pluginStreams = streams
+                    pluginStreams = streams,
+                    mediaCacheKey = item.sourceType + ":" + item.id
                 )
                 startPlaybackProgressPersistence(item)
                 "Memutar ${item.title} melalui ${entry.name}."
@@ -2479,7 +2482,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             title = item.title,
             startPositionMs = item.progressMs,
             requestHeaders = headers,
-            mimeType = mimeType
+            mimeType = mimeType,
+            mediaCacheKey = item.sourceType + ":" + item.id
         )
         startPlaybackProgressPersistence(item)
     }
@@ -2529,10 +2533,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     startPositionMs = item.progressMs,
                     requestHeaders = headers,
                     mimeType = mimeType,
-                    mediaCacheKey = "${item.profileId}:${item.id}"
+                    mediaCacheKey = "${item.sourceType}:${item.id}"
                 )
             } else {
-                player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers, "${item.profileId}:${item.id}")
+                player.play(normalizePlaybackUrl(item.url), item.title, item.progressMs, headers, "${item.sourceType}:${item.id}")
             }
             startPlaybackProgressPersistence(item)
         } else {
