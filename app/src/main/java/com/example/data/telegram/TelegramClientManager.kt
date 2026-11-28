@@ -459,7 +459,7 @@ object TelegramClientManager {
         val localPath = current.local.path
         if (current.local.isDownloadingCompleted) {
             val localFile = localPath.takeIf { it.isNotBlank() }?.let(::File)
-            val stale = localFile?.isFile != true ||
+            val stale = localFile == null || !localFile.isFile ||
                 (current.size > 0L && localFile.length() < current.size)
             if (stale) sendBlockingOk(TdApi.DeleteFile(fileId))
         }
