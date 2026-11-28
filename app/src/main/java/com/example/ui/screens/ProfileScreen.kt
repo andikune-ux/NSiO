@@ -130,12 +130,13 @@ fun ProfileScreen(
                             check(avatarDirectory.exists() || avatarDirectory.mkdirs()) {
                                 "Folder foto profil tidak dapat dibuat."
                             }
-                            destination = File(avatarDirectory, "${UUID.randomUUID()}.img")
+                            val outputFile = File(avatarDirectory, "${UUID.randomUUID()}.img")
+                            destination = outputFile
                             val input = context.contentResolver.openInputStream(uri)
                                 ?: throw IllegalStateException("Foto tidak dapat dibaca dari galeri.")
                             var totalBytes = 0L
                             input.use { source ->
-                                FileOutputStream(destination).use { output ->
+                                FileOutputStream(outputFile).use { output ->
                                     val buffer = ByteArray(8 * 1024)
                                     while (true) {
                                         val count = source.read(buffer)
@@ -149,8 +150,8 @@ fun ProfileScreen(
                                     output.fd.sync()
                                 }
                             }
-                            check(destination.length() > 0L) { "File foto kosong." }
-                            destination
+                            check(outputFile.length() > 0L) { "File foto kosong." }
+                            outputFile
                         } catch (error: Exception) {
                             destination?.delete()
                             throw error
