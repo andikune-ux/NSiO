@@ -139,6 +139,8 @@ object BackupUtils {
                             put("id", playlist.id); put("name", playlist.name); put("url", playlist.url)
                             put("sourceType", playlist.sourceType); put("createdAt", playlist.createdAt)
                             put("updatedAt", playlist.updatedAt)
+                            put("itemCount", playlist.itemCount)
+                            put("thumbnailUrl", playlist.thumbnailUrl)
                         })
                     }
                 })
@@ -151,6 +153,7 @@ object BackupUtils {
                         if (mediaKey in ownedAssignmentKeys && avatarId.isNotBlank()) put(mediaKey, avatarId)
                     }
                 })
+                put("tikTodPreferences", TikTodLocalStore(context).exportProfilePreferences(profile.id))
             }
             val fileContent = if (profile.isPinEnabled) {
                 ProfileBackupCrypto.encrypt(payload.toString(), profilePin)
@@ -436,14 +439,17 @@ object BackupUtils {
                         val name = source.optString("name").trim()
                         val url = source.optString("url").trim()
                         if (sourceId.isBlank() || name.isBlank() || url.isBlank()) continue
-                        val existing = existingPlaylists.firstOrNull { it.name.trim().equals(name, true) }
+                        val existing = existingPlaylists.firstOrNull {
+                            it.url.trim().equals(url, true) || it.id == sourceId
+                        }
                         val target = existing ?: SourcePlaylist(
                             id = UUID.randomUUID().toString(),
                             profileId = currentProfileId,
                             name = name,
                             url = url,
                             sourceType = source.optString("sourceType", "LINK"),
-                            itemCount = 0
+                            itemCount = source.optInt("itemCount", 0).coerceAtLeast(0),
+                            thumbnailUrl = source.optString("thumbnailUrl", "")
                         ).also {
                             playlistDao.insert(it)
                             existingPlaylists.add(it)
@@ -453,6 +459,7 @@ object BackupUtils {
 
                     val sourceAssignments = root.optJSONObject("avatarAssignments") ?: JSONObject()
                     val importedAssignments = mutableMapOf<String, String>()
+                    val mediaIdMapping = mutableMapOf<String, String>()
                     val mediaArray = root.getJSONArray("mediaItems")
                     var importedCount = 0
                     var skippedCount = 0
@@ -478,15 +485,19 @@ object BackupUtils {
                             lastWatchedAt = m.optLong("lastWatchedAt", 0L).coerceAtLeast(0L),
                             isFavorite = m.optBoolean("isFavorite", false),
                             createdAt = System.currentTimeMillis(),
-                            extraInfo = m.optString("extraInfo", "")
+                            extraInfo = m.optString("extraInfo", ""),
+                            caption = m.optString("caption", "")
                         )
                         val identity = canonicalMediaIdentity(item)
-                        if (identity in existingKeys) {
+                        val existingMatch = existingKeys[identity]
+                        if (existingMatch != null) {
+                            mediaIdMapping[sourceId] = existingMatch.id
                             skippedCount++
                             continue
                         }
                         mediaDao.insertMedia(item)
                         existingKeys[identity] = item
+                        mediaIdMapping[sourceId] = item.id
                         val sourceAvatar = sourceAssignments.optString(sourceId).takeIf(String::isNotBlank)
                             ?: sourceAssignments.optString(sourceIdentity).takeIf(String::isNotBlank)
                         if (sourceAvatar != null) importedAssignments[TikTodFeedPolicy.assignmentKey(item)] = sourceAvatar
@@ -497,6 +508,9 @@ object BackupUtils {
                     val tikTodStore = TikTodLocalStore(context)
                     importedAssignments.forEach { (mediaKey, avatarId) ->
                         tikTodStore.assignVideos(currentProfileId, listOf(mediaKey), avatarId)
+                    }
+                    root.optJSONObject("tikTodPreferences")?.let {
+                        tikTodStore.importProfilePreferences(currentProfileId, it, mediaIdMapping)
                     }
                     existingPlaylists.forEach { playlist ->
                         playlistDao.updateCount(playlist.id, mediaDao.countForPlaylist(playlist.id))
