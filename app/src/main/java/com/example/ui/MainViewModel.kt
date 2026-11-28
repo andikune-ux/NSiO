@@ -1180,6 +1180,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val added = TelegramCatalogSync.run(
                     getApplication<Application>(),
                     database,
+                    profileId,
                     onlyPlaylistId
                 )
                 if (added > 0 && authManager.currentUser != null) {
