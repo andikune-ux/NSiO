@@ -89,12 +89,9 @@ object TelegramCatalogSync {
                                             // update fails or another media row still references it.
                                             database.mediaDao().updateMedia(migrated)
                                             current = migrated
-                                            val legacyFile = legacyImportedFile(context, previous.url)
-                                            if (legacyFile != null &&
-                                                database.mediaDao().countOtherReferencesToUrl(previous.url, previous.id) == 0
-                                            ) {
-                                                runCatching { legacyFile.delete() }
-                                            }
+                                            // Keep the old full file for now. Repointing the database is not
+                                            // proof that the new TDLib stream has played or populated the
+                                            // Media3 cache. A later verified cleanup step must remove it.
                                             Log.i(TAG, "Migrasi video Telegram lama ke streaming: $id")
                                         }
                                         if (current.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
