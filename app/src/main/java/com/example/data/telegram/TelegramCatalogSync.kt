@@ -23,11 +23,23 @@ object TelegramCatalogSync {
     private const val TAG = "NSiO.TelegramSync"
     private val syncMutex = Mutex()
 
-    suspend fun run(context: Context, database: AppDatabase, onlyPlaylistId: String? = null): Int =
-        syncMutex.withLock { runLocked(context, database, onlyPlaylistId) }
+    suspend fun run(
+        context: Context,
+        database: AppDatabase,
+        profileId: String,
+        onlyPlaylistId: String? = null
+    ): Int {
+        if (profileId.isBlank() || !TelegramClientManager.isProfileOwner(context, profileId)) return 0
+        return syncMutex.withLock { runLocked(context, database, profileId, onlyPlaylistId) }
+    }
 
-    private suspend fun runLocked(context: Context, database: AppDatabase, onlyPlaylistId: String?): Int {
-        TelegramClientManager.initialize(context.applicationContext)
+    private suspend fun runLocked(
+        context: Context,
+        database: AppDatabase,
+        profileId: String,
+        onlyPlaylistId: String?
+    ): Int {
+        TelegramClientManager.initialize(context.applicationContext, profileId)
         val ready = withTimeoutOrNull(20_000L) {
             TelegramClientManager.state.first {
                 it.stage == TelegramClientManager.AuthStage.READY ||
@@ -41,8 +53,8 @@ object TelegramCatalogSync {
         if (!ready) return 0
 
         var addedTotal = 0
-        val profiles = database.profileDao().getAllProfilesList()
-        for (profile in profiles) {
+        val profile = database.profileDao().getProfileById(profileId) ?: return 0
+        for (profile in listOf(profile)) {
             val playlists = database.sourcePlaylistDao().getForProfile(profile.id)
                 .filter { it.sourceType.startsWith("TELEGRAM", ignoreCase = true) }
                 .filter { onlyPlaylistId == null || it.id == onlyPlaylistId }
