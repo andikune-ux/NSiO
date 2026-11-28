@@ -72,41 +72,28 @@ object TelegramCatalogSync {
                                 val id = "telegram:${profile.id}:${media.chatId}:${media.messageId}"
                                 val previous = existing[id]
                                 try {
-                                    if (previous != null) {
-                                        if (!media.isPhoto && !isThumbnailUsable(previous.thumbnailUrl)) {
-                                            val repaired = repairVideoThumbnail(context, id, previous, media)
-                                            if (!repaired.isNullOrBlank()) {
-                                                database.mediaDao().updateThumbnailUrl(id, repaired)
-                                                existing[id] = previous.copy(thumbnailUrl = repaired)
-                                            }
-                                        }
-                                        continue
+                                    if (previous != null) continue
+                                    // Persist only Telegram metadata. Full media is fetched on first playback.
+                                    val extension = if (media.isPhoto) "jpg" else when {
+                                        media.mimeType.contains("webm", true) -> "webm"
+                                        media.mimeType.contains("matroska", true) -> "mkv"
+                                        else -> "mp4"
                                     }
-                                    val downloaded = downloadTelegramMedia(media) ?: continue
-                                    val source = File(downloaded)
-                                    if (!source.isFile || source.length() <= 0L) continue
-                                    val extension = source.extension.takeIf { it.isNotBlank() }
-                                        ?: if (media.isPhoto) "jpg" else "mp4"
-                                    val directory = File(context.filesDir, "telegram/imported").apply { mkdirs() }
-                                    val target = File(directory, "$id.$extension")
-                                    if (!target.exists() || target.length() != source.length()) {
-                                        source.copyTo(target, overwrite = true)
-                                    }
-                                    val thumbnail = if (media.isPhoto) Uri.fromFile(target).toString()
-                                        else createVideoThumbnail(context, id, target)
+                                    val deferredUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}"
                                     val imported = MediaItem(
                                         id = id,
                                         profileId = profile.id,
-                                        title = media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
-                                        url = Uri.fromFile(target).toString(),
-                                        thumbnailUrl = thumbnail,
+                                        title = media.caption.takeIf { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.take(120)
+                                            ?: media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
+                                        url = deferredUrl,
+                                        thumbnailUrl = "",
                                         type = if (media.isPhoto) "PHOTO" else "VIDEO",
                                         sourceType = "TELEGRAM",
                                         category = "Telegram",
                                         playlistId = playlist.id,
                                         sourceUrl = playlist.url,
                                         createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                                        extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}",
+                                        extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}",
                                         caption = media.caption
                                     )
                                     database.mediaDao().insertMedia(imported)
