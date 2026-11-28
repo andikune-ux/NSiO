@@ -7,7 +7,8 @@ import java.io.File
 /**
  * Clears only disposable media caches. Profile/database/preferences, Drive
  * playlist URLs, Firebase authentication, Telegram credentials and TDLib data
- * are deliberately outside these paths.
+ * are deliberately outside these paths. The shared Media3 cache includes Drive,
+ * Telegram, CloudStream/plugin streams, and other HTTP(S) video sources.
  */
 object AppCacheCleaner {
     fun clear(context: Context): Boolean {
