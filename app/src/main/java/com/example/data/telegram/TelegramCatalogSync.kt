@@ -91,7 +91,7 @@ object TelegramCatalogSync {
                                             val streamUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
                                             val migrated = previous.copy(
                                                 url = streamUrl,
-                                                extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}"
+                                                extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}&thumbnailFileId=${media.thumbnailFileId}"
                                             )
                                             // Commit the new stream reference before touching the legacy file.
                                             database.mediaDao().updateMedia(migrated)
@@ -132,7 +132,7 @@ object TelegramCatalogSync {
                                         playlistId = playlist.id,
                                         sourceUrl = playlist.url,
                                         createdAt = media.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
-                                        extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}",
+                                        extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}&thumbnailFileId=${media.thumbnailFileId}",
                                         caption = media.caption
                                     )
                                     database.mediaDao().insertMedia(imported)
