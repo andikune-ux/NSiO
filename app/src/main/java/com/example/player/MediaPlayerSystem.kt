@@ -335,6 +335,16 @@ class CS3IPlayer(
                         CacheDataSource.Factory()
                             .setCache(DriveMediaCache.get(context))
                             .setUpstreamDataSourceFactory(upstreamFactory)
+                            .setCacheKeyFactory { dataSpec ->
+                                val activeKey = activeMediaCacheKey
+                                val path = dataSpec.uri.encodedPath.orEmpty().ifBlank { "/" }
+                                when {
+                                    activeKey == null -> dataSpec.key ?: dataSpec.uri.toString()
+                                    activeKey.startsWith("media:") -> activeKey + ":" + path
+                                    dataSpec.key != null -> dataSpec.key!!
+                                    else -> activeKey
+                                }
+                            }
                             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
                             .createDataSource(),
                         context
