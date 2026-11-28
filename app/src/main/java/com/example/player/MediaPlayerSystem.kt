@@ -331,11 +331,13 @@ class CS3IPlayer(
                 // Drive and Telegram share one Media3 SimpleCache and its 1 GiB LRU
                 // limit. Telegram bytes arrive from TDLib in small ranges on demand.
                 return if (activeMediaCacheKey != null) {
-                    CacheDataSource.Factory()
-                        .setCache(DriveMediaCache.get(context))
-                        .setUpstreamDataSourceFactory(upstreamFactory)
-                        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                        .createDataSource()
+                    DriveMediaCache.track(
+                        CacheDataSource.Factory()
+                            .setCache(DriveMediaCache.get(context))
+                            .setUpstreamDataSourceFactory(upstreamFactory)
+                            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                            .createDataSource()
+                    )
                 } else upstreamFactory.createDataSource()
             }
         }
