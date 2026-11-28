@@ -14,7 +14,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35])
 class TelegramLegacyCacheMigrationTest {
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
