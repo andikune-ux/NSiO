@@ -2447,7 +2447,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             mimeType = mimeType,
             externalSubtitles = stream.subtitles,
             videoInterceptor = stream.videoInterceptor,
-            pluginStreams = listOf(stream)
+            pluginStreams = listOf(stream),
+            mediaCacheKey = item.sourceType + ":" + item.id
         )
     }
 
