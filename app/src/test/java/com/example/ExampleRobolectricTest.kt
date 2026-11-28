@@ -177,6 +177,9 @@ class ExampleRobolectricTest {
     assertEquals("CLOUDSTREAM_PLUGIN:provider-a", profilePreferences.getString("homeFilter"))
     assertEquals("TITLE", profilePreferences.getString("homeSort"))
     assertEquals("provider-b", profilePreferences.getJSONArray("cloudStreamPluginOrder").getString(1))
+    val cloudStreamBackup = json.getJSONObject("cloudStreamBackup")
+    assertTrue(cloudStreamBackup.has("repositories"))
+    assertTrue(cloudStreamBackup.has("installedPlugins"))
     assertEquals("Favorit", json.getJSONArray("sourcePlaylists").getJSONObject(0).getString("name"))
     assertTrue(backupFile.name.contains("profile_a"))
   }
