@@ -88,11 +88,20 @@ object TelegramCatalogSync {
                                             // Commit the new stream reference before touching the legacy file.
                                             database.mediaDao().updateMedia(migrated)
                                             current = migrated
-                                            // Keep the legacy file as a rollback copy. A cloud metadata/range
-                                            // probe is not proof that Media3 successfully read and committed
-                                            // bytes to SimpleCache. Deletion is intentionally deferred until a
-                                            // playback path can verify an actual cached span.
-                                            Log.i(TAG, "Referensi video Telegram dimigrasikan ke streaming; file lama dipertahankan sampai cache terverifikasi: $id")
+                                            // Register a rollback copy only if no other row references it.
+                                            // Actual deletion is deferred to the tracked CacheDataSource close,
+                                            // after Media3 confirms that a cache span was committed.
+                                            val legacyCopy = legacyImportedFile(context, previous.url)
+                                            if (legacyCopy != null &&
+                                                database.mediaDao().countOtherReferencesToUrl(previous.url, id) == 0
+                                            ) {
+                                                TelegramLegacyCacheMigration.remember(
+                                                    context,
+                                                    "telegram:${media.chatId}:${media.messageId}:${media.fileId}",
+                                                    legacyCopy
+                                                )
+                                            }
+                                            Log.i(TAG, "Referensi video Telegram dimigrasikan ke streaming; salinan lama menunggu verifikasi cache: $id")
                                         }
                                         if (current.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
                                             val thumbnail = downloadTelegramThumbnail(context, id, media.thumbnailFileId)
