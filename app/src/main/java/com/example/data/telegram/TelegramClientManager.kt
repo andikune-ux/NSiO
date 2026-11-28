@@ -192,7 +192,17 @@ object TelegramClientManager {
         // The stable 256-bit database key is wrapped by Android Keystore.
         val databaseRoot = File(app.filesDir, "telegram/tdlib/database").apply { mkdirs() }
         val mediaCacheRoot = File(app.cacheDir, "telegram/tdlib/files").apply { mkdirs() }
-        val databaseKey = TelegramApiCredentialStore(app).loadOrCreateDatabaseEncryptionKey()
+        val databaseKey = try {
+            TelegramApiCredentialStore(app).loadOrCreateDatabaseEncryptionKey()
+        } catch (error: Exception) {
+            // Never replace an unreadable database key automatically: doing so would
+            // make the existing encrypted TDLib session permanently inaccessible.
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "Kunci database Telegram tidak dapat dibuka: ${error.localizedMessage ?: error.javaClass.simpleName}. Data sesi tidak dihapus."
+            )
+            return
+        }
         // TDLib sends AuthorizationStateWaitTdlibParameters after Client.create.
         pendingApiId = apiId
         pendingApiHash = credentials.apiHash
@@ -200,17 +210,31 @@ object TelegramClientManager {
         pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
         val generation = clientGeneration
-        client = Client.create({ update ->
-            if (generation == clientGeneration) handleUpdate(update)
-        }, { error ->
-            if (generation == clientGeneration) {
-                mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
-            }
-        }, { error ->
-            if (generation == clientGeneration) {
-                mutableState.value = mutableState.value.copy(message = error.message ?: "Kesalahan TDLib.")
-            }
-        })
+        try {
+            client = Client.create({ update ->
+                if (generation == clientGeneration) handleUpdate(update)
+            }, { error ->
+                if (generation == clientGeneration) {
+                    mutableState.value = mutableState.value.copy(
+                        stage = AuthStage.ERROR,
+                        message = error.message ?: "Kesalahan inisialisasi TDLib."
+                    )
+                }
+            }, { error ->
+                if (generation == clientGeneration) {
+                    mutableState.value = mutableState.value.copy(
+                        stage = AuthStage.ERROR,
+                        message = error.message ?: "Kesalahan TDLib."
+                    )
+                }
+            })
+        } catch (error: Exception) {
+            client = null
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib gagal dimulai: ${error.localizedMessage ?: error.javaClass.simpleName}. Data sesi tidak dihapus."
+            )
+        }
     }
 
     private var pendingApiId: Int = 0
@@ -1137,7 +1161,9 @@ object TelegramClientManager {
         }
         activeClient.send(function, { result ->
             if (result is TdApi.Error) {
+                val initializationFailed = function is TdApi.SetTdlibParameters
                 mutableState.value = mutableState.value.copy(
+                    stage = if (initializationFailed) AuthStage.ERROR else mutableState.value.stage,
                     message = "Telegram (${result.code}): ${result.message}"
                 )
             }
