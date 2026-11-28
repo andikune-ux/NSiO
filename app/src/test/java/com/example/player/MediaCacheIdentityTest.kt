@@ -68,6 +68,18 @@ class MediaCacheIdentityTest {
     }
 
     @Test
+    fun progressiveMediaUsesOneStableKeyAcrossResolvedPathChanges() {
+        assertEquals(
+            "media:CLOUDSTREAM:movie-42",
+            MediaCacheIdentity.forCacheRequest(
+                "media:CLOUDSTREAM:movie-42",
+                "media:CLOUDSTREAM:movie-42",
+                "/new-cdn/path/changed.mp4"
+            )
+        )
+    }
+
+    @Test
     fun sourceNativeCacheKeysRemainUnmodified() {
         assertEquals(
             "drive:file-123",
