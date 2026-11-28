@@ -41,6 +41,12 @@ class MediaCacheIdentityTest {
     }
 
     @Test
+    fun permanentLocalFilesNeverEnterStreamingCache() {
+        assertNull(MediaCacheIdentity.forPlayback("file:///data/user/0/nsio/files/download.mp4", "FILE:download-1"))
+        assertNull(MediaCacheIdentity.forPlayback("content://media/external/video/1", "FILE:download-1"))
+    }
+
+    @Test
     fun sourceNativeDriveAndTelegramIdentitiesTakePriorityOverCatalogIds() {
         assertEquals(
             "drive:file-123",
