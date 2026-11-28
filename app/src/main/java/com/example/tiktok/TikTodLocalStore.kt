@@ -60,6 +60,48 @@ internal class TikTodLocalStore(context: Context) {
         }
     }
 
+    /** Export only feed preferences and discovery state belonging to one profile. */
+    fun exportProfilePreferences(profileId: String): JSONObject = JSONObject().apply {
+        put("selectedAvatar", selectedAvatar(profileId))
+        put("lastVideoId", lastVideoId(profileId).orEmpty())
+        put("knownVideos", JSONArray().apply {
+            stringSet("known_videos:$profileId").sorted().forEach(::put)
+        })
+        put("newVideos", JSONArray().apply {
+            stringSet("new_videos:$profileId").sorted().forEach(::put)
+        })
+    }
+
+    /** Restore feed state after source media IDs have been mapped to recipient IDs. */
+    fun importProfilePreferences(
+        profileId: String,
+        payload: JSONObject,
+        mediaIdMapping: Map<String, String>
+    ) {
+        payload.optString("selectedAvatar").takeIf(String::isNotBlank)?.let {
+            setSelectedAvatar(profileId, it)
+        }
+        fun mappedSet(name: String): Set<String> {
+            val array = payload.optJSONArray(name) ?: return emptySet()
+            return buildSet {
+                for (index in 0 until array.length()) {
+                    val sourceId = array.optString(index).takeIf(String::isNotBlank) ?: continue
+                    mediaIdMapping[sourceId]?.let(::add)
+                }
+            }
+        }
+        val knownKey = "known_videos:$profileId"
+        val newKey = "new_videos:$profileId"
+        val known = stringSet(knownKey) + mappedSet("knownVideos")
+        val pending = (stringSet(newKey) + mappedSet("newVideos")).intersect(known)
+        val editor = prefs.edit()
+            .putStringSet(knownKey, known)
+            .putStringSet(newKey, pending)
+        val sourceLast = payload.optString("lastVideoId")
+        mediaIdMapping[sourceLast]?.let { editor.putString("last_video:$profileId", it) }
+        editor.apply()
+    }
+
     /**
      * Tracks catalog membership separately from view counts. On first use, all
      * eligible items are considered new; later only newly discovered IDs are added.
