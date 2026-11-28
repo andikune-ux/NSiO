@@ -123,7 +123,9 @@ internal class TelegramTdlibDataSource : DataSource {
     override fun getResponseHeaders(): Map<String, List<String>> = emptyMap()
 
     override fun close() {
-        if (fileId > 0) TelegramClientManager.deleteDownloadedFile(fileId)
+        // Media3 may close/reopen upstreams between cache holes, seeks, and retries.
+        // Deleting the TDLib file here races other active DataSources for the same fileId.
+        // TDLib local-file cleanup is performed only by explicit completed-copy flows.
         currentUri = null
         fileId = 0
         position = 0L
