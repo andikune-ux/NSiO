@@ -70,13 +70,41 @@ object TelegramCatalogSync {
                                 val previous = existing[id]
                                 try {
                                     if (previous != null) {
-                                        if (previous.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
+                                        var current = previous
+                                        // Migrate legacy full-file Telegram entries to progressive playback.
+                                        // Only files inside telegram/imported are eligible; manual downloads
+                                        // and unrelated file:// media are never touched.
+                                        if (!media.isPhoto && isLegacyImportedVideo(context, previous.url)) {
+                                            val extension = when {
+                                                media.mimeType.contains("webm", true) -> "webm"
+                                                media.mimeType.contains("matroska", true) -> "mkv"
+                                                else -> "mp4"
+                                            }
+                                            val streamUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
+                                            val migrated = previous.copy(
+                                                url = streamUrl,
+                                                extraInfo = "chatId=${media.chatId}&messageId=${media.messageId}&fileId=${media.fileId}&mimeType=${media.mimeType}"
+                                            )
+                                            // Commit the database reference first. Keep the old file if the
+                                            // update fails or another media row still references it.
+                                            database.mediaDao().updateMedia(migrated)
+                                            current = migrated
+                                            val legacyFile = legacyImportedFile(context, previous.url)
+                                            if (legacyFile != null &&
+                                                database.mediaDao().countOtherReferencesToUrl(previous.url, previous.id) == 0
+                                            ) {
+                                                runCatching { legacyFile.delete() }
+                                            }
+                                            Log.i(TAG, "Migrasi video Telegram lama ke streaming: $id")
+                                        }
+                                        if (current.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
                                             val thumbnail = downloadTelegramThumbnail(context, id, media.thumbnailFileId)
                                             if (!thumbnail.isNullOrBlank()) {
                                                 database.mediaDao().updateThumbnailUrl(id, thumbnail)
-                                                existing[id] = previous.copy(thumbnailUrl = thumbnail)
+                                                current = current.copy(thumbnailUrl = thumbnail)
                                             }
                                         }
+                                        existing[id] = current
                                         continue
                                     }
                                     // Persist only Telegram metadata. Full media is fetched on first playback.
@@ -129,6 +157,21 @@ object TelegramCatalogSync {
         return addedTotal
     }
 
+
+    private fun legacyImportedFile(context: Context, rawUrl: String): File? {
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return null
+        if (uri.scheme != "file") return null
+        val file = uri.path?.let(::File) ?: return null
+        val importedDir = File(context.filesDir, "telegram/imported")
+        val canonicalFile = runCatching { file.canonicalFile }.getOrNull() ?: return null
+        val canonicalDir = runCatching { importedDir.canonicalFile }.getOrNull() ?: return null
+        return canonicalFile.takeIf {
+            it.isFile && it.parentFile == canonicalDir && it.length() > 0L
+        }
+    }
+
+    private fun isLegacyImportedVideo(context: Context, rawUrl: String): Boolean =
+        legacyImportedFile(context, rawUrl) != null
 
     private suspend fun downloadTelegramThumbnail(
         context: Context,
