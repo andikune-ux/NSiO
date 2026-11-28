@@ -67,6 +67,27 @@ class TelegramLegacyCacheMigrationTest {
         assertFalse(legacy.exists())
     }
 
+    @OptIn(UnstableApi::class)
+    @Test
+    fun cacheClearDoesNotDeleteLegacyCopyWithoutVerifiedPlayback() {
+        val imported = File(context.filesDir, "telegram/imported").apply { mkdirs() }
+        val legacy = File(imported, "not-yet-played.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        val cacheKey = "telegram:-100123:459:792"
+        val cache = DriveMediaCache.get(context)
+        val holeSpan = cache.startReadWrite(cacheKey, 0L, 4L)
+        try {
+            val cacheFile = cache.startFile(cacheKey, 0L, 4L)
+            FileOutputStream(cacheFile).use { it.write(byteArrayOf(5, 6, 7, 8)) }
+            cache.commitFile(cacheFile, 4L)
+        } finally {
+            cache.releaseHoleSpan(holeSpan)
+        }
+        TelegramLegacyCacheMigration.remember(context, cacheKey, legacy)
+
+        TelegramLegacyCacheMigration.clearPreviouslyVerifiedCopies(context)
+
+        assertTrue("Cache data alone must not authorize deleting an unverified legacy video", legacy.exists())
+    }
     @Test
     fun fileOutsideManagedImportedDirectoryIsNeverRegisteredForDeletion() {
         val outside = File(context.filesDir, "manual-downloads/keep.mp4").apply {
