@@ -283,6 +283,32 @@ object TelegramClientManager {
         }
     }
 
+    /**
+     * Retry a stalled/failed initialization without touching TDLib's database,
+     * encryption key, saved API credentials, or source playlists.
+     */
+    @Synchronized
+    fun retryInitialization(context: Context, profileId: String) {
+        if (profileId.isBlank()) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "Profil aktif tidak ditemukan. Pilih profil pemilik integrasi Telegram."
+            )
+            return
+        }
+        when (mutableState.value.stage) {
+            AuthStage.READY, AuthStage.WAITING_PHONE, AuthStage.WAITING_CODE, AuthStage.WAITING_PASSWORD -> return
+            else -> Unit
+        }
+        clearInitializationTimeout()
+        clientGeneration++
+        val previousClient = client
+        client = null
+        previousClient?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
+        activeProfileId = profileId
+        initialize(context, profileId)
+    }
+
     private var pendingApiId: Int = 0
     private var pendingApiHash: String = ""
     private var pendingDatabaseDirectory: String = ""
