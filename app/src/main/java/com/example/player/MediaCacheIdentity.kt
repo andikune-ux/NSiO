@@ -16,6 +16,19 @@ internal object MediaCacheIdentity {
         "lh3.googleusercontent.com"
     )
 
+    /**
+     * Prefer source-native identities (Drive file ID, Telegram message/file ID),
+     * then a stable catalog media ID, and only then the resolved URL. This lets
+     * CloudStream/CDN URL refreshes reuse the same cached byte ranges.
+     */
+    fun forPlayback(rawUrl: String, stableMediaKey: String?): String? {
+        val urlIdentity = forUrl(rawUrl)
+        urlIdentity?.takeIf { it.startsWith("drive:") }?.let { return it }
+        TelegramTdlibDataSource.cacheIdentity(rawUrl)?.let { return it }
+        stableMediaKey?.trim()?.takeIf { it.isNotEmpty() }?.let { return "media:" + it }
+        return urlIdentity
+    }
+
     fun forUrl(rawUrl: String): String? {
         if (rawUrl.isBlank()) return null
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
