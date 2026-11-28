@@ -49,11 +49,6 @@ object TelegramClientManager {
     @Volatile private var appContext: Context? = null
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
-    private val mediaEligibleChats = ConcurrentHashMap.newKeySet<Long>()
-    private val mediaCheckCompleted = ConcurrentHashMap.newKeySet<Long>()
-    private val mediaCheckPending = ConcurrentHashMap.newKeySet<Long>()
-    private val pendingMediaChecks = java.util.concurrent.ConcurrentLinkedQueue<Pair<TdApi.Chat, String>>()
-    private val mediaCheckWorkerActive = java.util.concurrent.atomic.AtomicBoolean(false)
 
     @Synchronized
     fun initialize(context: Context) {
@@ -100,7 +95,6 @@ object TelegramClientManager {
             is TdApi.UpdateChatTitle -> refreshChat(update.chatId)
             is TdApi.UpdateChatLastMessage -> {
                 // A previously empty group/channel may receive its first photo or video later.
-                mediaCheckCompleted.remove(update.chatId)
                 refreshChat(update.chatId)
             }
             // Keep the integration list synchronized when a chat moves between Main and Archive.
@@ -185,6 +179,10 @@ object TelegramClientManager {
         val activeClient = client ?: return
         if (chatsLoading) return
         chatsLoading = true
+        // Rebuild from actual Telegram dialog positions; discard stale entries from
+        // previously resolved public links or old catalog rules.
+        mutableState.value = mutableState.value.copy(chats = emptyList())
+        photoDownloadsInFlight.clear()
         val lists = listOf(
             TdApi.ChatListMain() to "utama",
             TdApi.ChatListArchive() to "arsip"
@@ -504,101 +502,33 @@ object TelegramClientManager {
     }
 
     /**
-     * The automatic integration catalog contains only groups and channels.
-     * Private chats (including bots) are intentionally excluded and their histories
-     * are never scanned. Manually supplied public Telegram links remain supported.
+     * Only chats with an actual Main/Archive dialog position may enter the automatic
+     * integration catalog. Resolving a public link is not enough to create a catalog row.
+     * Bot dialogs are included, but ordinary private conversations are not.
      */
     private fun upsertChat(chat: TdApi.Chat) {
+        val isMainOrArchiveDialog = chat.positions.any { position ->
+            position.list is TdApi.ChatListMain || position.list is TdApi.ChatListArchive
+        }
+        if (!isMainOrArchiveDialog) {
+            // A public link can resolve to a Chat object without being an account dialog.
+            mutableState.value = mutableState.value.copy(chats = mutableState.value.chats.filterNot { it.id == chat.id })
+            return
+        }
         when (val type = chat.type) {
-            is TdApi.ChatTypeSupergroup -> enqueueMediaCheck(chat, if (type.isChannel) "Channel" else "Grup")
-            is TdApi.ChatTypeBasicGroup -> enqueueMediaCheck(chat, "Grup")
-            else -> Unit
-        }
-    }
-
-    private fun enqueueMediaCheck(chat: TdApi.Chat, kind: String) {
-        if (chat.id in mediaEligibleChats) {
-            publishEligibleChat(chat, kind)
-            return
-        }
-        if (chat.id in mediaCheckCompleted || !mediaCheckPending.add(chat.id)) return
-        pendingMediaChecks.add(chat to kind)
-        processNextMediaCheck()
-    }
-
-    /** Run one history probe at a time to avoid flooding TDLib when an account has many dialogs. */
-    private fun processNextMediaCheck() {
-        if (!mediaCheckWorkerActive.compareAndSet(false, true)) return
-        val next = pendingMediaChecks.poll()
-        if (next == null) {
-            mediaCheckWorkerActive.set(false)
-            // Close the race where another chat was queued as the worker was stopping.
-            if (pendingMediaChecks.isNotEmpty()) processNextMediaCheck()
-            return
-        }
-        val (chat, kind) = next
-        findFirstPhotoOrVideo(chat.id) { found ->
-            mediaCheckPending.remove(chat.id)
-            mediaCheckCompleted.add(chat.id)
-            if (found) {
-                mediaEligibleChats.add(chat.id)
-                publishEligibleChat(chat, kind)
-            }
-            mediaCheckWorkerActive.set(false)
-            processNextMediaCheck()
-        }
-    }
-
-    /**
-     * Search newest-to-oldest until a supported photo/video is found or the accessible
-     * history is exhausted. Message text is never stored or exposed by this probe.
-     */
-    private fun findFirstPhotoOrVideo(chatId: Long, onFinished: (Boolean) -> Unit) {
-        val activeClient = client
-        if (activeClient == null) {
-            onFinished(false)
-            return
-        }
-        var cursorMessageId = 0L
-        var finished = false
-        fun finish(found: Boolean) {
-            if (finished) return
-            finished = true
-            onFinished(found)
-        }
-        fun loadPage() {
-            activeClient.send(
-                TdApi.GetChatHistory(chatId, cursorMessageId, if (cursorMessageId == 0L) 0 else -1, 100, false)
-            ) { result ->
-                when (result) {
-                    is TdApi.Messages -> {
-                        val messages = result.messages
-                        if (messages.isEmpty()) {
-                            finish(false)
-                            return@send
-                        }
-                        val found = messages.any { message ->
-                            val media = extractMedia(chatId, message)
-                            media != null && (media.isPhoto || media.mimeType.startsWith("video/", ignoreCase = true))
-                        }
-                        if (found) {
-                            finish(true)
-                        } else {
-                            val oldestId = messages.minOfOrNull { it.id } ?: 0L
-                            if (oldestId <= 0L || oldestId == cursorMessageId) {
-                                finish(false)
-                            } else {
-                                cursorMessageId = oldestId
-                                loadPage()
-                            }
-                        }
+            is TdApi.ChatTypeSupergroup -> publishEligibleChat(chat, if (type.isChannel) "Channel" else "Grup")
+            is TdApi.ChatTypeBasicGroup -> publishEligibleChat(chat, "Grup")
+            is TdApi.ChatTypePrivate -> {
+                // Only bot accounts are shown as private-source entries, and only when
+                // TDLib confirms that the bot is already present in the user's dialogs.
+                client?.send(TdApi.GetUser(type.userId)) { result ->
+                    if (result is TdApi.User && result.type is TdApi.UserTypeBot) {
+                        publishEligibleChat(chat, "Bot")
                     }
-                    is TdApi.Error -> finish(false)
-                    else -> finish(false)
                 }
             }
+            else -> Unit
         }
-        loadPage()
     }
 
     private fun publishEligibleChat(chat: TdApi.Chat, kind: String) {
