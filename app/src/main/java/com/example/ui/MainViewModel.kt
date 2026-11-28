@@ -2583,16 +2583,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun downloadMedia(item: MediaItem) {
         viewModelScope.launch {
             try {
-                if (item.sourceType.equals("TELEGRAM", true) && item.url.startsWith("telegram://media/")) {
-                    val parts = java.net.URI(item.url).path.orEmpty().split('/').filter(String::isNotBlank)
-                    val chatId = parts.getOrNull(0)?.toLongOrNull() ?: throw IllegalArgumentException("ID chat Telegram tidak valid.")
-                    val messageId = parts.getOrNull(1)?.toLongOrNull() ?: throw IllegalArgumentException("ID pesan Telegram tidak valid.")
-                    val fileId = parts.getOrNull(2)?.substringBefore('.')?.toIntOrNull()
-                        ?: throw IllegalArgumentException("ID file Telegram tidak valid.")
+                if (item.sourceType.equals("TELEGRAM", true)) {
                     val fields = item.extraInfo.split('&').mapNotNull { part ->
                         val separator = part.indexOf('=')
                         if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
                     }.toMap()
+                    val chatId = fields["chatId"]?.toLongOrNull() ?: throw IllegalArgumentException("ID chat Telegram tidak valid.")
+                    val messageId = fields["messageId"]?.toLongOrNull() ?: throw IllegalArgumentException("ID pesan Telegram tidak valid.")
+                    val fileId = fields["fileId"]?.toIntOrNull() ?: throw IllegalArgumentException("ID file Telegram tidak valid.")
                     val media = TelegramClientManager.TelegramMedia(
                         chatId = chatId,
                         messageId = messageId,
@@ -2608,7 +2606,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             if (continuation.isActive) continuation.resume(path)
                         }
                     } ?: throw IllegalStateException("Telegram gagal mengunduh file.")
-                    val extension = parts[2].substringAfter('.', "mp4")
+                    val extension = when {
+                        item.type.equals("PHOTO", true) -> "jpg"
+                        fields["mimeType"].orEmpty().contains("webm", true) -> "webm"
+                        fields["mimeType"].orEmpty().contains("matroska", true) -> "mkv"
+                        else -> "mp4"
+                    }
                     downloadManager.importCompletedDownload(item.id, item.title, java.io.File(downloaded), extension)
                     TelegramClientManager.deleteDownloadedFile(fileId)
                     showStatus("Unduhan '${item.title}' selesai dan tersimpan.")
