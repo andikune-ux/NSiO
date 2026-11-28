@@ -60,8 +60,8 @@ class MediaCacheIdentityTest {
 
     @Test
     fun adaptiveSegmentsUseStableMediaPrefixAndDistinctPaths() {
-        val first = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-001.ts?token=one")
-        val second = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-002.ts?token=two")
+        val first = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-001.ts")
+        val second = MediaCacheIdentity.forCacheRequest("media:CLOUDSTREAM:movie-42", null, "/segment-002.ts")
         assertEquals("media:CLOUDSTREAM:movie-42:/segment-001.ts?token=one", first)
         assertEquals("media:CLOUDSTREAM:movie-42:/segment-002.ts?token=two", second)
         assertNotEquals(first, second)
