@@ -46,6 +46,9 @@ interface MediaDao {
     @Query("UPDATE media_items SET thumbnailUrl = :thumbnailUrl WHERE id = :id")
     suspend fun updateThumbnailUrl(id: String, thumbnailUrl: String)
 
+    @Query("UPDATE media_items SET thumbnailUrl = '' WHERE thumbnailUrl LIKE 'file:%/telegram/%'")
+    suspend fun clearTelegramCachedThumbnails()
+
     @Query("UPDATE media_items SET progressMs = :progressMs, lastWatchedAt = CASE WHEN :progressMs > 0 THEN :watchedAt ELSE lastWatchedAt END WHERE id = :id")
     suspend fun updateProgress(id: String, progressMs: Long, watchedAt: Long = System.currentTimeMillis())
 
