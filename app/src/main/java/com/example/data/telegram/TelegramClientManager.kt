@@ -339,9 +339,7 @@ object TelegramClientManager {
 
     private fun handleAuthorizationState(auth: TdApi.AuthorizationState) {
         if (auth is TdApi.AuthorizationStateWaitTdlibParameters) {
-            armInitializationTimeout(clientGeneration, "mengirim parameter TDLib")
-        } else if (auth is TdApi.AuthorizationStateWaitEncryptionKey) {
-            armInitializationTimeout(clientGeneration, "memverifikasi kunci database TDLib")
+            armInitializationTimeout(clientGeneration, "mengirim parameter dan kunci database TDLib")
         } else {
             clearInitializationTimeout()
         }
@@ -366,11 +364,6 @@ object TelegramClientManager {
                     applicationVersion = "NSiO"
                 }
                 send(parameters)
-            }
-            is TdApi.AuthorizationStateWaitEncryptionKey -> {
-                // TDLib requires this explicit acknowledgement before it can restore
-                // the existing authorization session and advance to WaitPhoneNumber/Ready.
-                send(TdApi.CheckDatabaseEncryptionKey(pendingDatabaseKey))
             }
             is TdApi.AuthorizationStateWaitPhoneNumber -> {
                 val message = if (pendingHadExistingDatabase) {
@@ -1252,7 +1245,7 @@ object TelegramClientManager {
         }
         activeClient.send(function, { result ->
             if (result is TdApi.Error) {
-                val initializationFailed = function is TdApi.SetTdlibParameters || function is TdApi.CheckDatabaseEncryptionKey
+                val initializationFailed = function is TdApi.SetTdlibParameters
                 if (initializationFailed) clearInitializationTimeout()
                 mutableState.value = mutableState.value.copy(
                     stage = if (initializationFailed) AuthStage.ERROR else mutableState.value.stage,
