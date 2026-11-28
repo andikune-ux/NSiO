@@ -167,12 +167,13 @@ object BackupUtils {
                     }
                 })
                 put("cloudStreamBackup", PluginManager(context).exportBackupData())
-                val telegramBackup = TelegramClientManager.exportProfileBackup(context, profile.id)
-                if (telegramBackup != null) {
+                if (TelegramClientManager.isProfileOwner(context, profile.id)) {
                     require(profile.isPinEnabled) {
                         "Integrasi Telegram berisi kunci sesi. Aktifkan PIN profil sebelum membuat backup agar kredensial tidak tersimpan sebagai JSON terbuka."
                     }
-                    put("telegramBackup", telegramBackup)
+                    TelegramClientManager.exportProfileBackup(context, profile.id)?.let {
+                        put("telegramBackup", it)
+                    }
                 }
             }
             val fileContent = if (profile.isPinEnabled) {
