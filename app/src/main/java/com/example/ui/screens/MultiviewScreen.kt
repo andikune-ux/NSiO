@@ -257,7 +257,8 @@ fun MultiviewScreen(
             mimeType = source.mimeType,
             externalSubtitles = plugin?.subtitles.orEmpty(),
             videoInterceptor = plugin?.videoInterceptor,
-            pluginStreams = source.pluginStreams
+            pluginStreams = source.pluginStreams,
+            mediaCacheKey = source.mediaItem?.let { it.sourceType + ":" + it.id }
         )
         setAudioFocus(audioSlot)
     }
