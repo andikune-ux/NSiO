@@ -6,6 +6,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ApplicationProvider
 import com.example.player.DriveMediaCache
 import org.junit.Assert.assertFalse
@@ -15,6 +16,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 
+@OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 class AppCacheCleanerTest {
     private val context: Context
