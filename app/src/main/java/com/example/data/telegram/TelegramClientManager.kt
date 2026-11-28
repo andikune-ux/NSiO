@@ -942,7 +942,25 @@ object TelegramClientManager {
                 client = null
                 mutableState.value = State(message = "Data Telegram dipulihkan. Menyambungkan kembali…")
                 initialize(context, profileId)
-                "Kredensial, kunci database, sesi TDLib, dan katalog Telegram berhasil dipulihkan."
+                val restoredState = withTimeoutOrNull(20_000L) {
+                    mutableState.first {
+                        it.stage == AuthStage.READY ||
+                            it.stage == AuthStage.WAITING_PHONE ||
+                            it.stage == AuthStage.WAITING_CODE ||
+                            it.stage == AuthStage.WAITING_PASSWORD ||
+                            it.stage == AuthStage.ERROR
+                    }
+                }
+                when (restoredState?.stage) {
+                    AuthStage.READY ->
+                        "Sesi Telegram, kredensial, kunci database, dan katalog berhasil dipulihkan tanpa login ulang."
+                    AuthStage.WAITING_PHONE, AuthStage.WAITING_CODE, AuthStage.WAITING_PASSWORD ->
+                        "Database Telegram dipulihkan, tetapi Telegram meminta verifikasi karena sesi tidak lagi diterima."
+                    AuthStage.ERROR ->
+                        "Data Telegram dipulihkan, tetapi koneksi gagal: ${restoredState.message}"
+                    else ->
+                        "Data Telegram dipulihkan. Koneksi dilanjutkan di latar belakang."
+                }
             } catch (error: Exception) {
                 staging.deleteRecursively()
                 ownerProfileId(context)?.let { owner -> runCatching { initialize(context, owner) } }
