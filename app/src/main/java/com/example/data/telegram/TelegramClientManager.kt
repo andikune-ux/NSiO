@@ -2,6 +2,8 @@ package com.example.data.telegram
 
 import android.content.Context
 import android.os.Build
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.data.security.TelegramApiCredentialStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +72,7 @@ object TelegramClientManager {
     fun initialize(context: Context) {
         val app = context.applicationContext
         appContext = app
+        restoreCatalog(app)
         if (client != null) return
         val credentials = TelegramApiCredentialStore(app).load()
         if (credentials == null) {
@@ -196,9 +199,8 @@ object TelegramClientManager {
         val activeClient = client ?: return
         if (chatsLoading) return
         chatsLoading = true
-        // Rebuild from actual Telegram dialog positions; discard stale entries from
-        // previously resolved public links or old catalog rules.
-        mutableState.value = mutableState.value.copy(chats = emptyList())
+        // Keep the last known catalog visible while TDLib loads Main and Archive.
+        // A temporary empty/incomplete response must never erase the user's catalog.
         photoDownloadsInFlight.clear()
         val lists = listOf(
             TdApi.ChatListMain() to "utama",
@@ -631,8 +633,8 @@ object TelegramClientManager {
             position.list is TdApi.ChatListMain || position.list is TdApi.ChatListArchive
         }
         if (!isMainOrArchiveDialog) {
-            // A public link can resolve to a Chat object without being an account dialog.
-            mutableState.value = mutableState.value.copy(chats = mutableState.value.chats.filterNot { it.id == chat.id })
+            // SearchPublicChat/GetChat can resolve public sources that are not account
+            // dialogs. Ignore them, but never delete a known entry on incomplete metadata.
             return
         }
         when (val type = chat.type) {
@@ -651,6 +653,41 @@ object TelegramClientManager {
         }
     }
 
+    /** Persist known source containers independently of media counts. */
+    private fun catalogPreferences(context: Context) =
+        context.getSharedPreferences("telegram_source_catalog", Context.MODE_PRIVATE)
+
+    private fun restoreCatalog(context: Context) {
+        val stored = runCatching { catalogPreferences(context).getString("items", "[]") ?: "[]" }.getOrDefault("[]")
+        val restored = runCatching {
+            val array = JSONArray(stored)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val id = item.optLong("id", 0L)
+                    if (id == 0L) continue
+                    add(TelegramChat(id, item.optString("title"), item.optString("kind"), item.optInt("unreadCount"), item.optInt("photoFileId"), item.optBoolean("isArchived"), ""))
+                }
+            }
+        }.getOrDefault(emptyList())
+        if (restored.isNotEmpty()) {
+            val merged = (mutableState.value.chats + restored).distinctBy { it.id }.sortedBy { it.title.lowercase() }
+            mutableState.value = mutableState.value.copy(chats = merged)
+        }
+    }
+
+    private fun persistCatalog() {
+        val context = appContext ?: return
+        val array = JSONArray()
+        mutableState.value.chats.forEach { chat ->
+            array.put(JSONObject().apply {
+                put("id", chat.id); put("title", chat.title); put("kind", chat.kind)
+                put("unreadCount", chat.unreadCount); put("photoFileId", chat.photoFileId)
+                put("isArchived", chat.isArchived)
+            })
+        }
+        catalogPreferences(context).edit().putString("items", array.toString()).apply()
+    }
     private fun publishEligibleChat(chat: TdApi.Chat, kind: String) {
         val isArchived = chat.positions.any { it.list is TdApi.ChatListArchive }
         val photoFileId = chat.photo?.small?.id ?: 0
@@ -662,6 +699,7 @@ object TelegramClientManager {
         val updated = (mutableState.value.chats.filterNot { it.id == item.id } + item)
             .sortedBy { it.title.lowercase() }
         mutableState.value = mutableState.value.copy(chats = updated)
+        persistCatalog()
 
         // Load profile photos for the integration list even before a playlist is created.
         if (photoFileId > 0 && item.photoPath.isBlank() && photoDownloadsInFlight.add(chat.id)) {
