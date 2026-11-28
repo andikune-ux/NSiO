@@ -77,6 +77,7 @@ private class ActiveReadDataSource(
 ) : androidx.media3.datasource.DataSource {
     private var leaseHeld = false
     private var cacheKey: String? = null
+    private var bytesRead: Long = 0L
 
     override fun addTransferListener(transferListener: TransferListener) {
         delegate.addTransferListener(transferListener)
@@ -94,8 +95,11 @@ private class ActiveReadDataSource(
         }
     }
 
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-        delegate.read(buffer, offset, length)
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        val count = delegate.read(buffer, offset, length)
+        if (count > 0) bytesRead += count
+        return count
+    }
 
     override fun getUri(): Uri? = delegate.uri
 
@@ -106,9 +110,10 @@ private class ActiveReadDataSource(
             delegate.close()
             // CacheDataSink commits its current fragment during close. Only now
             // can a verified Telegram cache span authorize deleting the old copy.
-            TelegramLegacyCacheMigration.cleanupIfCached(context, cacheKey)
+            TelegramLegacyCacheMigration.cleanupIfCached(context, cacheKey, bytesRead > 0L)
         } finally {
             cacheKey = null
+            bytesRead = 0L
             releaseLease()
         }
     }
