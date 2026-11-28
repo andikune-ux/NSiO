@@ -491,6 +491,31 @@ object TelegramClientManager {
         }
     }
 
+    /**
+     * Ask TDLib to reclaim disposable local media files using its own storage policy.
+     *
+     * This deliberately does not touch TDLib's SQLite database, credentials, dialog
+     * history, or files copied into NSiO's user Downloads. TDLib retains metadata and
+     * can download media again when it is opened later.
+     */
+    fun optimizeDisposableStorage() {
+        val activeClient = client ?: return
+        if (mutableState.value.stage != AuthStage.READY) return
+        activeClient.send(TdApi.OptimizeStorage()) { result ->
+            when (result) {
+                is TdApi.StorageStatistics -> {
+                    android.util.Log.i("NSiO.Telegram", "TDLib storage optimization completed: $result")
+                }
+                is TdApi.Error -> {
+                    android.util.Log.w("NSiO.Telegram", "TDLib storage optimization failed: ${result.message}")
+                }
+                else -> {
+                    android.util.Log.w("NSiO.Telegram", "Unexpected TDLib storage optimization response: $result")
+                }
+            }
+        }
+    }
+
     /** Remove TDLib's downloaded local copy after it has been placed in NSiO's bounded cache. */
     fun deleteDownloadedFile(fileId: Int) {
         if (fileId <= 0) return
