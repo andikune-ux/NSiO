@@ -30,8 +30,13 @@ object AppCacheCleaner {
         // retain their source file and therefore never become broken references.
         database.withTransaction {
             before.forEach { item ->
-                val oldVideo = fileInside(item.url, importedDir)
-                val streamUrl = if (oldVideo != null) telegramStreamUrl(item) else null
+                val telegramMediaDirectories = listOf(
+                    importedDir,
+                    File(app.filesDir, "telegram/thumbnails"),
+                    File(app.cacheDir, "telegram/thumbnails")
+                )
+                val oldTelegramMedia = telegramMediaDirectories.any { pathInside(item.url, it) != null }
+                val streamUrl = if (oldTelegramMedia) telegramStreamUrl(item) else null
                 val thumbnail = if (isTelegramCacheUri(item.thumbnailUrl, app)) "" else item.thumbnailUrl
                 if ((streamUrl != null && streamUrl != item.url) || thumbnail != item.thumbnailUrl) {
                     database.mediaDao().updateMedia(
@@ -81,6 +86,10 @@ object AppCacheCleaner {
             "video/x-matroska" -> "mkv"
             "video/quicktime" -> "mov"
             "video/x-msvideo" -> "avi"
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
             else -> "mp4"
         }
         return "telegram://media/" + chatId + "/" + messageId + "/" + fileId + "." + extension
