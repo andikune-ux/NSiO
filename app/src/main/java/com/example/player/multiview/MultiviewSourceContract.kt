@@ -35,7 +35,8 @@ data class MultiviewResolvedSource(
     val sourceKind: MultiviewSourceKind,
     val isLive: Boolean = false,
     val cloudStream: CloudStreamStream? = null,
-    val pluginStreams: List<CloudStreamStream> = emptyList()
+    val pluginStreams: List<CloudStreamStream> = emptyList(),
+    val mediaItem: MediaItem? = null
 )
 
 sealed interface MultiviewResolveResult {
