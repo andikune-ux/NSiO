@@ -108,6 +108,16 @@ object BackupUtils {
                     put("avatarEmoji", profile.avatarEmoji.takeUnless { it.startsWith("content://") || it.startsWith("file://") }.orEmpty())
                     put("avatarImageBase64", avatarBytes?.let { Base64.encodeToString(it, Base64.NO_WRAP) }.orEmpty())
                 })
+                settings?.takeIf { it.profileId == profile.id }?.let { setting ->
+                    put("settings", JSONObject().apply {
+                        put("language", setting.language)
+                        put("themeMode", setting.themeMode)
+                        put("displayMode", setting.displayMode)
+                        put("gridColumns", setting.gridColumns)
+                        put("gridColumnsPhone", setting.gridColumnsPhone)
+                        put("gridColumnsTv", setting.gridColumnsTv)
+                    })
+                }
                 put("mediaItems", JSONArray().apply {
                     profileMedia.forEach { m ->
                         put(JSONObject().apply {
@@ -119,6 +129,7 @@ object BackupUtils {
                             put("durationMs", m.durationMs); put("progressMs", m.progressMs)
                             put("lastWatchedAt", m.lastWatchedAt); put("isFavorite", m.isFavorite)
                             put("createdAt", m.createdAt); put("extraInfo", m.extraInfo)
+                            put("caption", m.caption)
                         })
                     }
                 })
@@ -355,7 +366,8 @@ object BackupUtils {
                                 lastWatchedAt = m.optLong("lastWatchedAt", 0L),
                                 isFavorite = m.optBoolean("isFavorite", false),
                                 createdAt = m.optLong("createdAt", System.currentTimeMillis()),
-                                extraInfo = m.optString("extraInfo", "")
+                                extraInfo = m.optString("extraInfo", ""),
+                                caption = m.optString("caption", "")
                             )
                         )
                     }
@@ -393,6 +405,23 @@ object BackupUtils {
                                 avatarEmoji = restoredAvatar
                             ))
                         }
+                    }
+
+                    val recipientSettings = profileDao.getSettings(currentProfileId)
+                    val importedSettings = root.optJSONObject("settings")
+                    if (importedSettings != null) {
+                        profileDao.insertSettings(
+                            ProfileSettings(
+                                profileId = currentProfileId,
+                                language = importedSettings.optString("language", recipientSettings?.language ?: "ID"),
+                                themeMode = importedSettings.optString("themeMode", recipientSettings?.themeMode ?: "DARK"),
+                                displayMode = importedSettings.optString("displayMode", recipientSettings?.displayMode ?: "TV"),
+                                gridColumns = importedSettings.optInt("gridColumns", recipientSettings?.gridColumns ?: 4).coerceIn(1, 8),
+                                gridColumnsPhone = importedSettings.optInt("gridColumnsPhone", recipientSettings?.gridColumnsPhone ?: 2).coerceIn(1, 8),
+                                gridColumnsTv = importedSettings.optInt("gridColumnsTv", recipientSettings?.gridColumnsTv ?: 4).coerceIn(1, 8),
+                                serverPin = recipientSettings?.serverPin ?: PinVault.encrypt(context, ProfileSettings(profileId = currentProfileId).serverPin)
+                            )
+                        )
                     }
 
                     val existingItems = mediaDao.getMediaListForProfile(currentProfileId)
