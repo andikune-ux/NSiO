@@ -109,6 +109,33 @@ class AppCacheCleanerTest {
         assertFalse(newTdlibCache.exists())
     }
 
+
+    @Test
+    fun clearPreservesLegacyTdlibFileStillReferencedWithoutTelegramIdentity() = runBlocking {
+        val legacyDir = File(context.filesDir, "telegram/tdlib/files/videos").apply { mkdirs() }
+        val legacyVideo = File(legacyDir, "unresolved-video.bin").apply {
+            writeBytes(byteArrayOf(3, 1, 4, 1, 5))
+        }
+        val database = AppDatabase.getInstance(context)
+        database.mediaDao().insertMedia(
+            MediaItem(
+                id = "cache-cleaner-unresolved-telegram-row",
+                profileId = "cache-cleaner-profile",
+                title = "Telegram local reference without metadata",
+                url = Uri.fromFile(legacyVideo).toString(),
+                sourceType = "TELEGRAM",
+                extraInfo = ""
+            )
+        )
+
+        assertFalse(AppCacheCleaner.clear(context))
+
+        val preserved = database.mediaDao().getAllMediaList()
+            .first { it.id == "cache-cleaner-unresolved-telegram-row" }
+        assertEquals(Uri.fromFile(legacyVideo).toString(), preserved.url)
+        assertTrue(legacyVideo.exists())
+    }
+
     @Test
     fun clearRefusesToRunWhilePlaybackDataSourceIsOpen() = runBlocking {
         val mediaCache = File(context.cacheDir, "nsio_drive_media_cache").apply { mkdirs() }
