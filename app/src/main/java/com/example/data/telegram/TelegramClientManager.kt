@@ -66,6 +66,8 @@ object TelegramClientManager {
     @Volatile private var appContext: Context? = null
     @Volatile private var activeProfileId: String = ""
     @Volatile private var clientGeneration: Long = 0L
+    // Never create a second TDLib client until the previous client acknowledges Close().
+    @Volatile private var clientClosing: Boolean = false
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
     private val thumbnailDownloadsInFlight = ConcurrentHashMap.newKeySet<Int>()
@@ -86,16 +88,65 @@ object TelegramClientManager {
         initializationTimeout?.let(initializationHandler::removeCallbacks)
         val timeout = Runnable {
             if (generation != clientGeneration || mutableState.value.stage != AuthStage.INITIALIZING) return@Runnable
-            val stalledClient = client
-            client = null
-            stalledClient?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
             mutableState.value = mutableState.value.copy(
                 stage = AuthStage.ERROR,
-                message = "Inisialisasi Telegram melewati batas waktu pada tahap $phase. Database sesi dan kunci tetap dipertahankan. Coba Hubungkan Telegram kembali; jika berulang, kirim log NSiO."
+                message = "Inisialisasi Telegram melewati batas waktu pada tahap $phase. Database sesi dan kunci tetap dipertahankan. NSiO sedang menutup koneksi TDLib dengan aman sebelum percobaan ulang."
             )
+            closeClientForLifecycle {
+                mutableState.value = mutableState.value.copy(
+                    stage = AuthStage.ERROR,
+                    message = "Inisialisasi Telegram melewati batas waktu pada tahap $phase. Koneksi TDLib lama sudah ditutup; coba Hubungkan Telegram kembali."
+                )
+            }
         }
         initializationTimeout = timeout
         initializationHandler.postDelayed(timeout, 30_000L)
+    }
+
+    /**
+     * Close TDLib and wait for its Close() response before releasing the client reference.
+     * TDLib holds an exclusive lock on td.binlog; starting another client before this
+     * acknowledgement causes "file is already in use" and can strand initialization.
+     */
+    @Synchronized
+    private fun closeClientForLifecycle(onClosed: (() -> Unit)? = null) {
+        val closingClient = client
+        if (closingClient == null) {
+            if (!clientClosing) onClosed?.invoke()
+            return
+        }
+        if (clientClosing) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database sesi. NSiO belum akan membuka instance baru agar td.binlog tidak terkunci ganda."
+            )
+            return
+        }
+        clientClosing = true
+        clientGeneration++
+        try {
+            closingClient.send(TdApi.Close()) { result ->
+                synchronized(this) {
+                    if (result is TdApi.Ok) {
+                        if (client === closingClient) client = null
+                        clientClosing = false
+                        onClosed?.invoke()
+                    } else {
+                        // Keep the reference and the closing guard: opening another client
+                        // could collide with the still-held database lock.
+                        mutableState.value = mutableState.value.copy(
+                            stage = AuthStage.ERROR,
+                            message = "TDLib belum mengonfirmasi penutupan database sesi. Database dan kunci dipertahankan; jangan coba login ulang atau hapus data."
+                        )
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "Gagal meminta TDLib menutup database: ${error.localizedMessage ?: error.javaClass.simpleName}. Database dan kunci dipertahankan."
+            )
+        }
     }
 
     @Synchronized
@@ -191,23 +242,40 @@ object TelegramClientManager {
     fun initialize(context: Context, profileId: String) {
         val app = context.applicationContext
         appContext = app
+        if (clientClosing) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database sesi sebelumnya. Tunggu sampai penutupan selesai sebelum menghubungkan kembali."
+            )
+            return
+        }
         if (!claimProfile(app, profileId)) {
-            if (activeProfileId != profileId || client != null) {
-                clientGeneration++
-                client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
-                client = null
-                activeProfileId = profileId
+            if (activeProfileId != profileId && client != null) {
+                closeClientForLifecycle {
+                    activeProfileId = profileId
+                    mutableState.value = State(message = "Integrasi Telegram terikat pada profil lain.")
+                }
+                return
             }
             mutableState.value = State(message = "Integrasi Telegram terikat pada profil lain.")
             return
         }
-        if (activeProfileId != profileId) {
-            clientGeneration++
-            client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
-            client = null
-            activeProfileId = profileId
+        if (activeProfileId != profileId && client != null) {
+            closeClientForLifecycle {
+                activeProfileId = profileId
+                initialize(app, profileId)
+            }
+            return
         }
+        if (activeProfileId != profileId) activeProfileId = profileId
         restoreCatalog(app)
+        if (clientClosing) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database sesi. NSiO menahan inisialisasi baru untuk mencegah konflik kunci database."
+            )
+            return
+        }
         if (client != null) return
         val credentialStore = TelegramApiCredentialStore(app)
         val credentials = try {
@@ -300,10 +368,20 @@ object TelegramClientManager {
             else -> Unit
         }
         clearInitializationTimeout()
-        clientGeneration++
-        val previousClient = client
-        client = null
-        previousClient?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
+        if (clientClosing) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database sesi. Tunggu konfirmasi penutupan sebelum mencoba kembali."
+            )
+            return
+        }
+        if (client != null) {
+            closeClientForLifecycle {
+                activeProfileId = profileId
+                initialize(context, profileId)
+            }
+            return
+        }
         activeProfileId = profileId
         initialize(context, profileId)
     }
