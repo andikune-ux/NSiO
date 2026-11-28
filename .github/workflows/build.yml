@@ -215,7 +215,8 @@ jobs:
           APKSIGNER="$BUILD_TOOLS/apksigner"
           AAPT="$BUILD_TOOLS/aapt"
           echo "Using Android Build Tools: $BUILD_TOOLS"
-          echo "APK under verification: $APK"
+          echo "Debug APK under verification: $DEBUG_APK"
+          echo "Release APK under verification: $RELEASE_APK"
 
           KEY_CERT_SHA="$(keytool -exportcert -keystore debug.keystore -storepass android -alias androiddebugkey | sha256sum | awk '{print tolower($1)}')"
           for APK in "$DEBUG_APK" "$RELEASE_APK"; do
