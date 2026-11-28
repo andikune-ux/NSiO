@@ -826,14 +826,14 @@ class CS3IPlayer(
         val canonicalCacheKey = MediaCacheIdentity.forUrl(url) ?: return
         drivePreloadJob?.cancel()
         drivePreloadJob = coroutineScope.launch(Dispatchers.IO) {
-            val source = DriveMediaCache.track(
-                CacheDataSource.Factory()
-                    .setCache(DriveMediaCache.get(context))
-                    .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
-                    .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                    .createDataSource(),
-                context
-            )
+            // CacheWriter requires the concrete CacheDataSource. Hold the same
+            // active-reader lease explicitly for the full preload lifecycle.
+            DriveMediaCache.acquireRead()
+            val source = CacheDataSource.Factory()
+                .setCache(DriveMediaCache.get(context))
+                .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, createHttpDataSourceFactory(null)))
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                .createDataSource()
             try {
                 val request = androidx.media3.datasource.DataSpec.Builder()
                     .setUri(Uri.parse(normalizePlaybackUrl(url.trim())))
@@ -844,6 +844,9 @@ class CS3IPlayer(
                 runInterruptible { CacheWriter(source, request, ByteArray(128 * 1024), null).cache() }
             } catch (error: Exception) {
                 Log.d("NSiOPlayer", "Drive next-item preload stopped: ${error.message}")
+            } finally {
+                runCatching { source.close() }
+                DriveMediaCache.releaseRead()
             }
         }
     }
