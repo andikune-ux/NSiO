@@ -23,19 +23,32 @@ class TelegramApiCredentialStore(context: Context) {
 
     data class Credentials(val apiId: String, val apiHash: String)
 
-    fun load(): Credentials? {
+    fun load(): Credentials? = runCatching { loadOrThrow() }.getOrNull()
+
+    /**
+     * Unlike load(), this preserves the actual failure reason for the connection flow.
+     * Decryption must never create a replacement Keystore key: doing so would hide the
+     * loss of the original key and make the encrypted TDLib session impossible to open.
+     */
+    fun loadOrThrow(): Credentials? {
         val payload = preferences.getString(KEY_PAYLOAD, null) ?: return null
-        return runCatching {
+        return try {
             val decoded = Base64.decode(payload, Base64.NO_WRAP)
+            require(decoded.isNotEmpty()) { "Data kredensial Telegram kosong." }
             val ivSize = decoded[0].toInt() and 0xff
-            require(ivSize in 12..16 && decoded.size > ivSize + 1)
+            require(ivSize in 12..16 && decoded.size > ivSize + 1) { "Format kredensial Telegram rusak." }
             val iv = decoded.copyOfRange(1, 1 + ivSize)
             val ciphertext = decoded.copyOfRange(1 + ivSize, decoded.size)
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+            cipher.init(Cipher.DECRYPT_MODE, getExistingKey(), GCMParameterSpec(128, iv))
             val json = JSONObject(String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8))
             Credentials(json.getString("api_id"), json.getString("api_hash"))
-        }.getOrNull()
+        } catch (error: Exception) {
+            throw IllegalStateException(
+                "Kredensial Telegram tersimpan tetapi gagal dibuka. Kunci Android Keystore mungkin hilang/tidak cocok atau data terenkripsi rusak. Data tidak dihapus.",
+                error
+            )
+        }
     }
 
     fun save(apiId: String, apiHash: String) {
@@ -56,17 +69,28 @@ class TelegramApiCredentialStore(context: Context) {
      * Returns a stable 256-bit TDLib database key. The key itself is encrypted with
      * the same Android Keystore AES-GCM key as the API credentials.
      */
-    fun loadOrCreateDatabaseEncryptionKey(): ByteArray {
+    fun loadOrCreateDatabaseEncryptionKey(allowCreate: Boolean = true): ByteArray {
         val existing = preferences.getString(KEY_TDLIB_DATABASE_KEY, null)
         if (existing != null) {
-            val decoded = Base64.decode(existing, Base64.NO_WRAP)
-            val ivSize = decoded[0].toInt() and 0xff
-            require(ivSize in 12..16 && decoded.size > ivSize + 1)
-            val iv = decoded.copyOfRange(1, 1 + ivSize)
-            val ciphertext = decoded.copyOfRange(1 + ivSize, decoded.size)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-            return cipher.doFinal(ciphertext).also { require(it.size == 32) }
+            try {
+                val decoded = Base64.decode(existing, Base64.NO_WRAP)
+                require(decoded.isNotEmpty()) { "Data kunci database Telegram kosong." }
+                val ivSize = decoded[0].toInt() and 0xff
+                require(ivSize in 12..16 && decoded.size > ivSize + 1) { "Format kunci database Telegram rusak." }
+                val iv = decoded.copyOfRange(1, 1 + ivSize)
+                val ciphertext = decoded.copyOfRange(1 + ivSize, decoded.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, getExistingKey(), GCMParameterSpec(128, iv))
+                return cipher.doFinal(ciphertext).also { require(it.size == 32) }
+            } catch (error: Exception) {
+                throw IllegalStateException(
+                    "Kunci database Telegram lama tidak dapat dibuka. Database sesi tetap dipertahankan dan kunci tidak diganti.",
+                    error
+                )
+            }
+        }
+        check(allowCreate) {
+            "Database Telegram lama ditemukan tetapi kunci enkripsinya tidak ada. Pembuatan kunci baru dibatalkan agar sesi lama tidak tertimpa."
         }
         val key = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
         storeDatabaseEncryptionKey(key)
@@ -119,9 +143,14 @@ class TelegramApiCredentialStore(context: Context) {
         ).commit()) { "Gagal menyimpan kunci database Telegram." }
     }
 
-    private fun getOrCreateKey(): java.security.Key {
+    private fun getExistingKey(): java.security.Key {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? java.security.Key)?.let { return it }
+        return keyStore.getKey(KEY_ALIAS, null) as? java.security.Key
+            ?: throw IllegalStateException("Kunci Android Keystore Telegram tidak ditemukan. Kunci baru tidak dibuat untuk membuka data lama.")
+    }
+
+    private fun getOrCreateKey(): java.security.Key {
+        runCatching { getExistingKey() }.getOrNull()?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(
@@ -133,8 +162,7 @@ class TelegramApiCredentialStore(context: Context) {
                 .setRandomizedEncryptionRequired(true)
                 .build()
         )
-        generator.generateKey()
-        return keyStore.getKey(KEY_ALIAS, null)
+        return generator.generateKey()
     }
 
     private companion object {
