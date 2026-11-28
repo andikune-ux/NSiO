@@ -68,10 +68,30 @@ object TelegramClientManager {
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
     private val cacheCleanupLock = Any()
     private val activeDownloadCallbacks = java.util.concurrent.atomic.AtomicInteger(0)
+    private val activeMediaStreams = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var cacheCleanupInProgress = false
 
+    /**
+     * A lease covers the complete lifetime of a Telegram Media3 upstream.
+     * Cache maintenance must not evict TDLib files while a stream is reading them.
+     */
+    fun beginMediaStream(): Boolean = synchronized(cacheCleanupLock) {
+        if (cacheCleanupInProgress) false
+        else {
+            activeMediaStreams.incrementAndGet()
+            true
+        }
+    }
+
+    fun endMediaStream() {
+        synchronized(cacheCleanupLock) {
+            if (activeMediaStreams.get() > 0) activeMediaStreams.decrementAndGet()
+        }
+    }
+
     fun beginCacheCleanup(): Boolean = synchronized(cacheCleanupLock) {
-        if (cacheCleanupInProgress || downloadCallbacks.isNotEmpty() || activeDownloadCallbacks.get() > 0) {
+        if (cacheCleanupInProgress || downloadCallbacks.isNotEmpty() ||
+            activeDownloadCallbacks.get() > 0 || activeMediaStreams.get() > 0) {
             false
         } else {
             cacheCleanupInProgress = true
