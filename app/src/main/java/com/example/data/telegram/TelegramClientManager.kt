@@ -459,6 +459,18 @@ object TelegramClientManager {
         }
     }
 
+    /** Fetch one known media message on demand; does not scan chat history. */
+    fun refreshMediaMessage(chatId: Long, messageId: Long, onFinished: (TelegramMedia?) -> Unit) {
+        val activeClient = client
+        if (activeClient == null || mutableState.value.stage != AuthStage.READY) {
+            onFinished(null)
+            return
+        }
+        activeClient.send(TdApi.GetMessage(chatId, messageId)) { result ->
+            onFinished((result as? TdApi.Message)?.let { extractMedia(chatId, it) })
+        }
+    }
+
     fun loadLinkedMessage(chatId: Long, messageId: Long) {
         val activeClient = client ?: return
         mutableState.value = mutableState.value.copy(media = emptyList(), message = "Memeriksa postingan Telegram…")
