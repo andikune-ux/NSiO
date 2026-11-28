@@ -25,32 +25,45 @@ internal class TelegramTdlibDataSource : DataSource {
     private var chunk = ByteArray(0)
     private var chunkPosition = 0
     private var chunkLength = 0
+    private var streamLeaseHeld = false
 
     override fun addTransferListener(transferListener: TransferListener) = Unit
 
     @Throws(IOException::class)
     override fun open(dataSpec: DataSpec): Long {
-        currentUri = dataSpec.uri
-        fileId = dataSpec.uri.lastPathSegment.orEmpty()
-            .substringBefore('.')
-            .toIntOrNull()
-            ?: throw IOException("ID file Telegram tidak valid.")
-        position = dataSpec.position
-        val metadata = try {
-            TelegramClientManager.getFileBlocking(fileId)
+        if (!TelegramClientManager.beginMediaStream()) {
+            throw IOException("Cache Telegram sedang dibersihkan. Coba putar ulang sebentar lagi.")
+        }
+        streamLeaseHeld = true
+        try {
+            currentUri = dataSpec.uri
+            fileId = dataSpec.uri.lastPathSegment.orEmpty()
+                .substringBefore('.')
+                .toIntOrNull()
+                ?: throw IOException("ID file Telegram tidak valid.")
+            position = dataSpec.position
+            val metadata = try {
+                TelegramClientManager.getFileBlocking(fileId)
+            } catch (error: Exception) {
+                throw IOException("Tidak dapat membaca metadata file Telegram.", error)
+            }
+            totalLength = metadata.size.takeIf { it > 0L } ?: C.LENGTH_UNSET.toLong()
+            if (totalLength != C.LENGTH_UNSET.toLong() && position > totalLength) {
+                throw IOException("Posisi baca melewati ukuran file Telegram.")
+            }
+            bytesRemaining = when {
+                dataSpec.length != C.LENGTH_UNSET.toLong() -> dataSpec.length
+                totalLength != C.LENGTH_UNSET.toLong() -> (totalLength - position).coerceAtLeast(0L)
+                else -> Long.MAX_VALUE
+            }
+            return if (bytesRemaining == Long.MAX_VALUE) C.LENGTH_UNSET.toLong() else bytesRemaining
         } catch (error: Exception) {
-            throw IOException("Tidak dapat membaca metadata file Telegram.", error)
+            if (streamLeaseHeld) {
+                streamLeaseHeld = false
+                TelegramClientManager.endMediaStream()
+            }
+            throw error
         }
-        totalLength = metadata.size.takeIf { it > 0L } ?: C.LENGTH_UNSET.toLong()
-        if (totalLength != C.LENGTH_UNSET.toLong() && position > totalLength) {
-            throw IOException("Posisi baca melewati ukuran file Telegram.")
-        }
-        bytesRemaining = when {
-            dataSpec.length != C.LENGTH_UNSET.toLong() -> dataSpec.length
-            totalLength != C.LENGTH_UNSET.toLong() -> (totalLength - position).coerceAtLeast(0L)
-            else -> Long.MAX_VALUE
-        }
-        return if (bytesRemaining == Long.MAX_VALUE) C.LENGTH_UNSET.toLong() else bytesRemaining
     }
 
     @Throws(IOException::class)
@@ -123,9 +136,7 @@ internal class TelegramTdlibDataSource : DataSource {
     override fun getResponseHeaders(): Map<String, List<String>> = emptyMap()
 
     override fun close() {
-        // Media3 may close/reopen upstreams between cache holes, seeks, and retries.
-        // Deleting the TDLib file here races other active DataSources for the same fileId.
-        // TDLib local-file cleanup is performed only by explicit completed-copy flows.
+        // Keep TDLib's upstream file protected until Media3 has finished this read.
         currentUri = null
         fileId = 0
         position = 0L
@@ -134,6 +145,10 @@ internal class TelegramTdlibDataSource : DataSource {
         chunk = ByteArray(0)
         chunkPosition = 0
         chunkLength = 0
+        if (streamLeaseHeld) {
+            streamLeaseHeld = false
+            TelegramClientManager.endMediaStream()
+        }
     }
 
     internal class Factory : DataSource.Factory {
