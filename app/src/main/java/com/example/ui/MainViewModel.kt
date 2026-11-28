@@ -2594,7 +2594,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         val source = downloaded?.let { File(it) }
-                        if (source?.isFile == true && source.length() > 0L) {
+                        if (source != null && source.isFile && source.length() > 0L) {
                             val directory = File(getApplication<Application>().cacheDir, "telegram/thumbnails")
                                 .apply { mkdirs() }
                             val target = File(directory, "${current.id}.jpg")
