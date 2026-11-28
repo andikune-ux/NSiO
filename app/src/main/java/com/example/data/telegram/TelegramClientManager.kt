@@ -249,8 +249,27 @@ object TelegramClientManager {
 
     private fun refreshChat(chatId: Long) {
         client?.send(TdApi.GetChat(chatId), { result ->
-            if (result is TdApi.Chat) upsertChat(result)
+            if (result is TdApi.Chat) {
+                val stillInAccountDialogs = result.positions.any { position ->
+                    position.list is TdApi.ChatListMain || position.list is TdApi.ChatListArchive
+                }
+                if (stillInAccountDialogs) {
+                    upsertChat(result)
+                } else {
+                    // TDLib has confirmed the chat no longer has a Main/Archive dialog
+                    // position. Only this authoritative refresh may remove a saved row.
+                    removeChatFromCatalog(chatId)
+                }
+            }
         })
+    }
+
+    private fun removeChatFromCatalog(chatId: Long) {
+        val remaining = mutableState.value.chats.filterNot { it.id == chatId }
+        if (remaining.size != mutableState.value.chats.size) {
+            mutableState.value = mutableState.value.copy(chats = remaining)
+            persistCatalog()
+        }
     }
 
     /** Resolve public Telegram links through TDLib; never auto-join private invites. */
