@@ -292,11 +292,23 @@ class MainActivity : ComponentActivity() {
             }
 
             secretMessage?.let { message ->
+                val isStorageDiagnostic = message.startsWith("PENYIMPANAN NSiO")
                 AlertDialog(
                     onDismissRequest = { secretMessage = null },
                     title = { Text(if (message == SecretCodeRegistry.allCodes) "Kode Rahasia NSiO" else "NSiO • Secret Tools") },
                     text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState())) },
-                    confirmButton = { Button(onClick = { secretMessage = null }) { Text("Tutup") } }
+                    confirmButton = {
+                        Row {
+                            if (isStorageDiagnostic) {
+                                Button(onClick = {
+                                    context.getSystemService(ClipboardManager::class.java)
+                                        ?.setPrimaryClip(ClipData.newPlainText("NSiO • Diagnostik Penyimpanan", message))
+                                    secretMessage = "Diagnostik penyimpanan berhasil disalin. Tempelkan hasilnya di chat untuk diperiksa."
+                                }) { Text("Salin Cepat") }
+                            }
+                            Button(onClick = { secretMessage = null }) { Text("Tutup") }
+                        }
+                    }
                 )
             }
             if (showCacheResetConfirm) {
