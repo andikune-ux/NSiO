@@ -723,6 +723,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (_activeProfile.value?.id == profile.id) return@launch
             _activeProfile.value = profile
+            TelegramClientManager.selectProfile(getApplication(), profile.id)
             _isServerUnlocked.value = false
             _settings.value = loadSettingsForProfile(profile.id)
             _cloudStreamSourceHealth.value = loadCloudStreamSourceHealth(profile.id)
