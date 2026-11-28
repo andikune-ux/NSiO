@@ -22,6 +22,12 @@ object AppCacheCleaner {
         val telegramCleared = !telegramDirectory.exists() || runCatching {
             telegramDirectory.deleteRecursively()
         }.getOrDefault(false)
-        return driveCleared && telegramCleared
+        val allMediaCachesCleared = driveCleared && telegramCleared
+        if (allMediaCachesCleared) {
+            // Let TDLib evict its own disposable downloaded media through its supported API.
+            // Its database, account state, and user Downloads are not touched.
+            com.example.data.telegram.TelegramClientManager.optimizeDisposableStorage()
+        }
+        return allMediaCachesCleared
     }
 }
