@@ -214,28 +214,47 @@ object TelegramClientManager {
             initialize(context, profileId)
             return
         }
-        if (activeProfileId != profileId || client != null) {
-            clientGeneration++
-            client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
-            client = null
-            activeProfileId = profileId
+        if (activeProfileId != profileId && client != null) {
+            closeClientForLifecycle {
+                activeProfileId = profileId
+                mutableState.value = State(message = "Telegram tidak terhubung pada profil ini.")
+            }
+            return
         }
+        if (clientClosing) {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database sesi. Tunggu sampai proses selesai."
+            )
+            return
+        }
+        activeProfileId = profileId
         mutableState.value = State(message = "Telegram tidak terhubung pada profil ini.")
     }
 
     @Synchronized
     fun releaseProfile(context: Context, profileId: String) {
         if (!isProfileOwner(context, profileId)) return
-        clientGeneration++
-        client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
-        client = null
-        activeProfileId = ""
-        TelegramApiCredentialStore(context).clearAll()
-        File(context.filesDir, "telegram/tdlib/database").deleteRecursively()
-        File(context.cacheDir, "telegram/tdlib/files").deleteRecursively()
-        profileBindingPreferences(context).edit().remove("owner_profile_id").commit()
-        catalogPreferences(context).edit().clear().commit()
-        mutableState.value = State(message = "Integrasi Telegram dilepas dari profil.")
+        val releaseData = {
+            activeProfileId = ""
+            TelegramApiCredentialStore(context).clearAll()
+            File(context.filesDir, "telegram/tdlib/database").deleteRecursively()
+            File(context.cacheDir, "telegram/tdlib/files").deleteRecursively()
+            profileBindingPreferences(context).edit().remove("owner_profile_id").commit()
+            catalogPreferences(context).edit().clear().commit()
+            mutableState.value = State(message = "Integrasi Telegram dilepas dari profil.")
+        }
+        clearInitializationTimeout()
+        if (client != null) {
+            closeClientForLifecycle(releaseData)
+        } else if (!clientClosing) {
+            releaseData()
+        } else {
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "TDLib masih menutup database. Integrasi belum dilepas agar file sesi tidak dihapus saat sedang digunakan."
+            )
+        }
     }
 
     @Synchronized
@@ -1336,12 +1355,27 @@ object TelegramClientManager {
     @Synchronized
     fun logout() {
         val activeClient = client ?: return
-        activeClient.send(TdApi.LogOut(), { result ->
-            if (result is TdApi.Error) {
-                mutableState.value = mutableState.value.copy(message = "Gagal keluar dari Telegram: ${result.message}")
+        if (clientClosing) return
+        activeClient.send(TdApi.LogOut()) { result ->
+            synchronized(this) {
+                if (result is TdApi.Error) {
+                    mutableState.value = mutableState.value.copy(
+                        stage = AuthStage.ERROR,
+                        message = "Gagal keluar dari Telegram: ${result.message}"
+                    )
+                } else {
+                    mutableState.value = mutableState.value.copy(
+                        stage = AuthStage.INITIALIZING,
+                        message = "Telegram berhasil keluar. Menutup database sesi dengan aman…"
+                    )
+                    closeClientForLifecycle {
+                        mutableState.value = State(
+                            stage = AuthStage.NOT_CONFIGURED,
+                            message = "Sesi Telegram telah diakhiri."
+                        )
+                    }
+                }
             }
-        })
-        client = null
-        mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Sesi Telegram sedang diakhiri.")
+        }
     }
 }
