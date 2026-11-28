@@ -11,8 +11,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Clears disposable media only. Room, PINs, credentials, TDLib database,
- * profiles, playlists, watch history, plugin installations and user downloads survive.
+ * Clears disposable media only. Room, PINs, credentials, NSiO profiles,
+ * playlists, watch history, plugin installations and user downloads survive.
  */
 object AppCacheCleaner {
     suspend fun clear(context: Context): Boolean = withContext(Dispatchers.IO) {
