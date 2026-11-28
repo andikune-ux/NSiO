@@ -296,7 +296,7 @@ fun SettingsScreen(
             SettingsGlassCard(
                 icon = Icons.Default.Language,
                 title = "Integrasi Telegram",
-                subtitle = "Simpan API ID dan API Hash Telegram secara terenkripsi di perangkat ini."
+                subtitle = "Kredensial Telegram terenkripsi dan terikat pada profil aktif. Profil lain tidak dapat mengakses integrasi ini."
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
