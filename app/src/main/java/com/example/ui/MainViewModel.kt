@@ -2565,7 +2565,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val thumbnailId = fields["thumbnailFileId"]?.toIntOrNull()
                     ?.takeIf { it > 0 } ?: media.thumbnailFileId
                 val extra = item.extraInfo.split('&').filter { it.substringBefore('=') != "thumbnailFileId" }
-                    .plus(if (thumbnailId > 0) "thumbnailFileId=$thumbnailId" else emptyList())
+                    .plus(if (thumbnailId > 0) listOf("thumbnailFileId=$thumbnailId") else emptyList())
                     .joinToString("&")
                 if (extra != updated.extraInfo) updated = updated.copy(extraInfo = extra)
 
