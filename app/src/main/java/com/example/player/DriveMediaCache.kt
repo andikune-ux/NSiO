@@ -1,6 +1,9 @@
 package com.example.player
 
 import android.content.Context
+import android.net.Uri
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
@@ -18,12 +21,24 @@ internal object DriveMediaCache {
 
     @Volatile
     private var instance: SimpleCache? = null
+    private var activeReaders: Int = 0
+
+    internal fun track(dataSource: androidx.media3.datasource.DataSource): androidx.media3.datasource.DataSource =
+        ActiveReadDataSource(dataSource)
+
+    @Synchronized
+    internal fun acquireRead() { activeReaders++ }
+
+    @Synchronized
+    internal fun releaseRead() { activeReaders = (activeReaders - 1).coerceAtLeast(0) }
 
     /**
      * Evict cached media entries without deleting the cache database directory
      * while Media3 may still hold an active SimpleCache instance.
      */
     fun clear(context: Context): Boolean = synchronized(this) {
+        // Never mutate/remove cache spans while ExoPlayer is reading them.
+        if (activeReaders > 0) return@synchronized false
         val activeCache = instance
         if (activeCache != null) {
             runCatching {
@@ -44,4 +59,55 @@ internal object DriveMediaCache {
             ).also { instance = it }
         }
     }
+}
+
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ActiveReadDataSource(
+    private val delegate: androidx.media3.datasource.DataSource
+) : androidx.media3.datasource.DataSource {
+    private var leaseHeld = false
+
+    override fun addTransferListener(transferListener: TransferListener) {
+        delegate.addTransferListener(transferListener)
+    }
+
+    override fun open(dataSpec: DataSpec): Long {
+        DriveMediaCacheLease.acquire()
+        leaseHeld = true
+        return try {
+            delegate.open(dataSpec)
+        } catch (error: Throwable) {
+            releaseLease()
+            throw error
+        }
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+        delegate.read(buffer, offset, length)
+
+    override fun getUri(): Uri? = delegate.uri
+
+    override fun getResponseHeaders(): Map<String, List<String>> = delegate.responseHeaders
+
+    override fun close() {
+        try {
+            delegate.close()
+        } finally {
+            releaseLease()
+        }
+    }
+
+    private fun releaseLease() {
+        if (leaseHeld) {
+            leaseHeld = false
+            DriveMediaCacheLease.release()
+        }
+    }
+}
+
+/** Narrow bridge keeps lease accounting private to the cache owner. */
+private object DriveMediaCacheLease {
+    fun acquire() = DriveMediaCache.acquireRead()
+    fun release() = DriveMediaCache.releaseRead()
 }
