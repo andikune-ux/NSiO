@@ -134,7 +134,7 @@ object TelegramClientManager {
         }
         if (activeProfileId != profileId) {
             clientGeneration++
-            client?.let { runCatching { it.send(TdApi.Close()) } }
+            client?.let { runCatching { it.send(TdApi.Close()) { } } }
             client = null
             activeProfileId = profileId
         }
