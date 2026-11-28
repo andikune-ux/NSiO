@@ -66,6 +66,9 @@ object TelegramClientManager {
     @Volatile private var clientGeneration: Long = 0L
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
+    private val thumbnailDownloadsInFlight = ConcurrentHashMap.newKeySet<Int>()
+    private val fileUpdateMonitor = Object()
+    private val latestFileUpdates = ConcurrentHashMap<Int, TdApi.File>()
     private val cacheCleanupLock = Any()
     private val activeDownloadCallbacks = java.util.concurrent.atomic.AtomicInteger(0)
     private val activeMediaStreams = java.util.concurrent.atomic.AtomicInteger(0)
@@ -230,6 +233,8 @@ object TelegramClientManager {
             is TdApi.UpdateChatPosition -> refreshChat(update.chatId, allowRemoval = true)
             is TdApi.UpdateFile -> {
                 val file = update.file
+                latestFileUpdates[file.id] = file
+                synchronized(fileUpdateMonitor) { fileUpdateMonitor.notifyAll() }
                 val local = file.local
                 if (local.isDownloadingCompleted && local.path.isNotBlank()) {
                     completeDownload(file.id, local.path)
@@ -607,9 +612,10 @@ object TelegramClientManager {
 
     fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
         if (cacheCleanupInProgress) throw java.io.IOException("Cache Telegram sedang dibersihkan.")
-        // After moving TDLib's files directory or clearing cache, its persistent file
-        // database can still report an old completed path. Remove only that stale local
-        // copy so TDLib recreates it under the new cacheDir on this range request.
+        require(fileId > 0 && offset >= 0L && limit > 0L) { "Rentang file Telegram tidak valid." }
+
+        // TDLib can retain a completed-file record after its disposable cache file
+        // has been evicted. Delete only that stale local record, then request the range.
         val current = getFileBlocking(fileId)
         val localPath = current.local.path
         if (current.local.isDownloadingCompleted) {
@@ -618,7 +624,41 @@ object TelegramClientManager {
                 (current.size > 0L && localFile.length() < current.size)
             if (stale) sendBlockingOk(TdApi.DeleteFile(fileId))
         }
-        return sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+
+        val requested = sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+        return awaitFileRange(fileId, offset, limit, requested)
+    }
+
+    /**
+     * DownloadFile acknowledges the request, not necessarily the bytes. Wait for
+     * UpdateFile until the requested offset has at least some readable data.
+     * Media3 asks for the next chunk again after consuming this contiguous prefix.
+     */
+    private fun awaitFileRange(fileId: Int, offset: Long, limit: Long, initial: TdApi.File): TdApi.File {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45)
+        var latest = initial
+        while (true) {
+            latestFileUpdates[fileId]?.let { latest = it }
+            val local = latest.local
+            val path = local.path.takeIf(String::isNotBlank)?.let(::File)
+            val prefixEnd = local.downloadOffset + local.downloadedPrefixSize
+            val hasRequestedBytes = path?.isFile == true &&
+                offset >= local.downloadOffset &&
+                offset < prefixEnd &&
+                runCatching { path.length() > offset }.getOrDefault(false)
+            if (hasRequestedBytes || local.isDownloadingCompleted) return latest
+            if (cacheCleanupInProgress) throw java.io.IOException("Cache Telegram sedang dibersihkan.")
+            if (System.nanoTime() >= deadline) {
+                throw java.io.IOException("Telegram belum menyediakan data pada byte $offset setelah 45 detik.")
+            }
+            synchronized(fileUpdateMonitor) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining > 0L) {
+                    val millis = TimeUnit.NANOSECONDS.toMillis(remaining).coerceAtLeast(1L)
+                    fileUpdateMonitor.wait(minOf(millis, 500L))
+                }
+            }
+        }
     }
 
     private fun sendBlockingOk(request: TdApi.Function<TdApi.Ok>): TdApi.Ok {
@@ -668,6 +708,9 @@ object TelegramClientManager {
             onFinished(null)
             return
         }
+        // Multiple visible cards can request the same poster during recomposition.
+        // Keep one TDLib download and fan its result out to every waiting callback.
+        if (!thumbnailDownloadsInFlight.add(fileId)) return
         activeClient.send(TdApi.DownloadFile(fileId, 8, 0L, 0L, true)) { result ->
             when (result) {
                 is TdApi.File -> {
@@ -1063,6 +1106,7 @@ object TelegramClientManager {
         }
 
     private fun completeDownload(fileId: Int, path: String?) {
+        thumbnailDownloadsInFlight.remove(fileId)
         val callbacks = synchronized(cacheCleanupLock) {
             downloadCallbacks.remove(fileId)?.also { activeDownloadCallbacks.addAndGet(it.size) }
         }
