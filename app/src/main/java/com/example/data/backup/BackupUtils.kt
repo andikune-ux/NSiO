@@ -9,6 +9,7 @@ import com.example.data.model.MediaItem
 import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
+import com.example.data.plugin.PluginManager
 import com.example.data.security.PinVault
 import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
@@ -164,6 +165,7 @@ object BackupUtils {
                         runCatching { put("cloudStreamPluginOrder", JSONArray(order)) }
                     }
                 })
+                put("cloudStreamBackup", PluginManager(context).exportBackupData())
             }
             val fileContent = if (profile.isPinEnabled) {
                 ProfileBackupCrypto.encrypt(payload.toString(), profilePin)
@@ -551,7 +553,21 @@ object BackupUtils {
                     BackupResult(isSuccess = false, message = "Format file backup tidak dikenali.")
                 }
             }
-            return@withContext result
+            val finalResult = if (backupType == "PROFILE_BACKUP" && result.isSuccess) {
+                val pluginBackup = root.optJSONObject("cloudStreamBackup")
+                if (pluginBackup != null) {
+                    runCatching { PluginManager(context).restoreBackupData(pluginBackup) }
+                        .fold(
+                            onSuccess = { (restored, failed) ->
+                                result.copy(message = result.message + " Plugin CloudStream dipulihkan: $restored; gagal dipasang ulang: $failed.")
+                            },
+                            onFailure = { error ->
+                                result.copy(message = result.message + " Metadata/plugin CloudStream belum seluruhnya dipulihkan: ${error.localizedMessage}.")
+                            }
+                        )
+                } else result
+            } else result
+            return@withContext finalResult
         } catch (e: Exception) {
             BackupResult(isSuccess = false, message = "Gagal memulihkan backup: ${e.localizedMessage}")
         }
