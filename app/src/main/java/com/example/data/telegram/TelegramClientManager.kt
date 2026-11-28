@@ -808,10 +808,16 @@ object TelegramClientManager {
                 output.toByteArray()
             }
         } catch (error: Exception) {
-            if (wasConnected) runCatching { initialize(context, profileId) }
+            if (wasConnected) {
+                clientGeneration++
+                runCatching { initialize(context, profileId) }
+            }
             throw error
         }
-        if (wasConnected) initialize(context, profileId)
+        if (wasConnected) {
+            clientGeneration++
+            initialize(context, profileId)
+        }
         val catalog = catalogPreferences(context).getString("items", "[]") ?: "[]"
         return JSONObject()
             .put("credentials", credentials)
@@ -900,6 +906,7 @@ object TelegramClientManager {
                         true
                     } ?: false
                     require(closed) { "Database Telegram masih aktif. Pemulihan dibatalkan." }
+                    clientGeneration++
                 }
 
                 previous.deleteRecursively()
