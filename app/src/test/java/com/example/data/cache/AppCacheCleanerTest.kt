@@ -14,10 +14,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class AppCacheCleanerTest {
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
