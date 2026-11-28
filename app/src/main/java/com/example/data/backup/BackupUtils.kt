@@ -10,6 +10,7 @@ import com.example.data.model.Profile
 import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
+import com.example.data.telegram.TelegramClientManager
 import com.example.data.security.PinVault
 import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
@@ -166,10 +167,20 @@ object BackupUtils {
                     }
                 })
                 put("cloudStreamBackup", PluginManager(context).exportBackupData())
+                val telegramBackup = TelegramClientManager.exportProfileBackup(context, profile.id)
+                if (telegramBackup != null) {
+                    require(profile.isPinEnabled) {
+                        "Integrasi Telegram berisi kunci sesi. Aktifkan PIN profil sebelum membuat backup agar kredensial tidak tersimpan sebagai JSON terbuka."
+                    }
+                    put("telegramBackup", telegramBackup)
+                }
             }
             val fileContent = if (profile.isPinEnabled) {
                 ProfileBackupCrypto.encrypt(payload.toString(), profilePin)
             } else payload.toString(2)
+            require(fileContent.length <= 64 * 1024 * 1024) {
+                "Backup melebihi batas 64 MB. Kurangi data sumber atau pisahkan backup."
+            }
 
             val profileFolder = safeFolderName(profile.name)
             val fileName = "${profile.id.replace(Regex("[^A-Za-z0-9_-]"), "_")}.json"
@@ -553,20 +564,32 @@ object BackupUtils {
                     BackupResult(isSuccess = false, message = "Format file backup tidak dikenali.")
                 }
             }
-            val finalResult = if (backupType == "PROFILE_BACKUP" && result.isSuccess) {
+            val telegramResult = if (backupType == "PROFILE_BACKUP" && result.isSuccess) {
+                val telegramBackup = root.optJSONObject("telegramBackup")
+                if (telegramBackup != null) {
+                    runCatching { TelegramClientManager.restoreProfileBackup(context, currentProfileId, telegramBackup) }
+                        .fold(
+                            onSuccess = { result.copy(message = result.message + " $it") },
+                            onFailure = { error ->
+                                result.copy(message = result.message + " Sesi Telegram belum pulih: ${error.localizedMessage}.")
+                            }
+                        )
+                } else result
+            } else result
+            val finalResult = if (backupType == "PROFILE_BACKUP" && telegramResult.isSuccess) {
                 val pluginBackup = root.optJSONObject("cloudStreamBackup")
                 if (pluginBackup != null) {
                     runCatching { PluginManager(context).restoreBackupData(pluginBackup) }
                         .fold(
                             onSuccess = { (restored, failed) ->
-                                result.copy(message = result.message + " Plugin CloudStream dipulihkan: $restored; gagal dipasang ulang: $failed.")
+                                telegramResult.copy(message = telegramResult.message + " Plugin CloudStream dipulihkan: $restored; gagal dipasang ulang: $failed.")
                             },
                             onFailure = { error ->
-                                result.copy(message = result.message + " Metadata/plugin CloudStream belum seluruhnya dipulihkan: ${error.localizedMessage}.")
+                                telegramResult.copy(message = telegramResult.message + " Metadata/plugin CloudStream belum seluruhnya dipulihkan: ${error.localizedMessage}.")
                             }
                         )
-                } else result
-            } else result
+                } else telegramResult
+            } else telegramResult
             return@withContext finalResult
         } catch (e: Exception) {
             BackupResult(isSuccess = false, message = "Gagal memulihkan backup: ${e.localizedMessage}")
