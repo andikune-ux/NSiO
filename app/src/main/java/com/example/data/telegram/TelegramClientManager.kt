@@ -2,6 +2,8 @@ package com.example.data.telegram
 
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
@@ -72,6 +74,35 @@ object TelegramClientManager {
     private val activeDownloadCallbacks = java.util.concurrent.atomic.AtomicInteger(0)
     private val activeMediaStreams = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var cacheCleanupInProgress = false
+    private val initializationHandler = Handler(Looper.getMainLooper())
+    @Volatile private var initializationTimeout: Runnable? = null
+
+    /**
+     * TDLib may fail to emit its first authorization update on damaged runtime/session
+     * state. Never leave the settings screen spinning forever in INITIALIZING.
+     */
+    @Synchronized
+    private fun armInitializationTimeout(generation: Long, phase: String) {
+        initializationTimeout?.let(initializationHandler::removeCallbacks)
+        val timeout = Runnable {
+            if (generation != clientGeneration || mutableState.value.stage != AuthStage.INITIALIZING) return@Runnable
+            val stalledClient = client
+            client = null
+            stalledClient?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
+            mutableState.value = mutableState.value.copy(
+                stage = AuthStage.ERROR,
+                message = "Inisialisasi Telegram melewati batas waktu pada tahap $phase. Database sesi dan kunci tetap dipertahankan. Coba Hubungkan Telegram kembali; jika berulang, kirim log NSiO."
+            )
+        }
+        initializationTimeout = timeout
+        initializationHandler.postDelayed(timeout, 30_000L)
+    }
+
+    @Synchronized
+    private fun clearInitializationTimeout() {
+        initializationTimeout?.let(initializationHandler::removeCallbacks)
+        initializationTimeout = null
+    }
 
     /**
      * A lease covers the complete lifetime of a Telegram Media3 upstream.
@@ -198,6 +229,8 @@ object TelegramClientManager {
             return
         }
         mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
+        val generation = clientGeneration
+        armInitializationTimeout(generation, "menunggu respons awal TDLib")
         // The stable 256-bit database key is wrapped by Android Keystore.
         val databaseRoot = File(app.filesDir, "telegram/tdlib/database").apply { mkdirs() }
         val mediaCacheRoot = File(app.cacheDir, "telegram/tdlib/files").apply { mkdirs() }
@@ -220,12 +253,12 @@ object TelegramClientManager {
         pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
         pendingHadExistingDatabase = hasExistingDatabase
-        val generation = clientGeneration
         try {
             client = Client.create({ update ->
                 if (generation == clientGeneration) handleUpdate(update)
             }, { error ->
                 if (generation == clientGeneration) {
+                    clearInitializationTimeout()
                     mutableState.value = mutableState.value.copy(
                         stage = AuthStage.ERROR,
                         message = error.message ?: "Kesalahan inisialisasi TDLib."
@@ -233,6 +266,7 @@ object TelegramClientManager {
                 }
             }, { error ->
                 if (generation == clientGeneration) {
+                    clearInitializationTimeout()
                     mutableState.value = mutableState.value.copy(
                         stage = AuthStage.ERROR,
                         message = error.message ?: "Kesalahan TDLib."
@@ -278,6 +312,11 @@ object TelegramClientManager {
     }
 
     private fun handleAuthorizationState(auth: TdApi.AuthorizationState) {
+        if (auth is TdApi.AuthorizationStateWaitTdlibParameters) {
+            armInitializationTimeout(clientGeneration, "mengirim parameter TDLib")
+        } else {
+            clearInitializationTimeout()
+        }
         when (auth) {
             is TdApi.AuthorizationStateWaitTdlibParameters -> {
                 val parameters = TdApi.SetTdlibParameters().apply {
@@ -317,6 +356,7 @@ object TelegramClientManager {
                 loadChats()
             }
             is TdApi.AuthorizationStateClosed -> {
+                clearInitializationTimeout()
                 client = null
                 mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Sesi Telegram ditutup.")
             }
@@ -1180,6 +1220,7 @@ object TelegramClientManager {
         activeClient.send(function, { result ->
             if (result is TdApi.Error) {
                 val initializationFailed = function is TdApi.SetTdlibParameters
+                if (initializationFailed) clearInitializationTimeout()
                 mutableState.value = mutableState.value.copy(
                     stage = if (initializationFailed) AuthStage.ERROR else mutableState.value.stage,
                     message = "Telegram (${result.code}): ${result.message}"
