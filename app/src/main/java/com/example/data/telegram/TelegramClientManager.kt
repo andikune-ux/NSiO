@@ -300,7 +300,7 @@ object TelegramClientManager {
             is TdApi.MessageDocument -> content.document?.let { document ->
                 val mime = document.mimeType.orEmpty()
                 if (mime.startsWith("video/") || mime.startsWith("image/")) {
-                    TelegramMedia(chatId, message.id, document.fileName.orEmpty().ifBlank { if (mime.startsWith("image/")) "Foto Telegram" else "Video Telegram" }, document.document.id, mime.startsWith("image/"), mime, content.caption?.text.orEmpty(), message.date * 1000L, document.document.thumbnail?.file?.id ?: 0)
+                    TelegramMedia(chatId, message.id, document.fileName.orEmpty().ifBlank { if (mime.startsWith("image/")) "Foto Telegram" else "Video Telegram" }, document.document.id, mime.startsWith("image/"), mime, content.caption?.text.orEmpty(), message.date * 1000L, document.thumbnail?.file?.id ?: 0)
                 } else null
             }
             else -> null
