@@ -1182,6 +1182,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val cleanSourceUrl = sourceUrl.trim()
+                val thumbnailUrl = if (media.thumbnailFileId > 0) {
+                    val thumbnailPath = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                        TelegramClientManager.downloadThumbnail(media.thumbnailFileId) { path ->
+                            if (continuation.isActive) continuation.resume(path)
+                        }
+                    }
+                    thumbnailPath?.let { path ->
+                        val source = java.io.File(path)
+                        val directory = java.io.File(getApplication<Application>().filesDir, "telegram/thumbnails").apply { mkdirs() }
+                        val target = java.io.File(directory, "$mediaId.jpg")
+                        runCatching {
+                            if (source.isFile && source.length() > 0L) {
+                                source.copyTo(target, overwrite = true)
+                                TelegramClientManager.deleteDownloadedFile(media.thumbnailFileId)
+                                Uri.fromFile(target).toString()
+                            } else ""
+                        }.getOrDefault("")
+                    }.orEmpty()
+                } else ""
                 val playlist = ensureSourcePlaylist(
                     cleanSourceUrl,
                     sourceName.trim().take(48).ifBlank { "Telegram ${media.chatId}" },
@@ -1192,7 +1211,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     id = mediaId, profileId = profileId,
                     title = media.caption.takeIf { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.take(120)
                         ?: media.title.ifBlank { if (media.isPhoto) "Foto Telegram" else "Video Telegram" },
-                    url = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.${if (media.isPhoto) "jpg" else if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"}", thumbnailUrl = "",
+                    url = if (media.isPhoto) thumbnailUrl else "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.${if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"}", thumbnailUrl = thumbnailUrl,
                     type = if (media.isPhoto) "PHOTO" else "VIDEO",
                     sourceType = "TELEGRAM", category = "Telegram",
                     playlistId = playlist.id, sourceUrl = cleanSourceUrl,
