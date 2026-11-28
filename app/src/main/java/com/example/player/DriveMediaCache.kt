@@ -8,8 +8,8 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import java.io.File
 
 /**
- * Device-local cache shared by every NSiO player surface.
- * Only Google Drive media is routed through this cache.
+ * Device-local Media3 cache shared by Drive and Telegram playback.
+ * Telegram is fetched in byte ranges; both sources share the same 1 GiB LRU budget.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal object DriveMediaCache {
