@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.UUID
-import File
+import java.io.File
 
 data class CloudStreamHealthEvent(
     val timestamp: Long,
