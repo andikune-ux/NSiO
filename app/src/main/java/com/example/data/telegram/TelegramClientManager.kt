@@ -67,13 +67,14 @@ object TelegramClientManager {
         }
         mutableState.value = State(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
         // The stable 256-bit database key is wrapped by Android Keystore.
-        val root = File(app.filesDir, "telegram/tdlib").apply { mkdirs() }
+        val databaseRoot = File(app.filesDir, "telegram/tdlib/database").apply { mkdirs() }
+        val mediaCacheRoot = File(app.cacheDir, "telegram/tdlib/files").apply { mkdirs() }
         val databaseKey = TelegramApiCredentialStore(app).loadOrCreateDatabaseEncryptionKey()
         // TDLib sends AuthorizationStateWaitTdlibParameters after Client.create.
         pendingApiId = apiId
         pendingApiHash = credentials.apiHash
-        pendingDatabaseDirectory = File(root, "database").apply { mkdirs() }.absolutePath
-        pendingFilesDirectory = File(root, "files").apply { mkdirs() }.absolutePath
+        pendingDatabaseDirectory = databaseRoot.absolutePath
+        pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
         client = Client.create({ update -> handleUpdate(update) }, { error ->
             mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = error.message ?: "Kesalahan TDLib.")
@@ -501,7 +502,17 @@ object TelegramClientManager {
     fun optimizeDisposableStorage() {
         val activeClient = client ?: return
         if (mutableState.value.stage != AuthStage.READY) return
-        activeClient.send(TdApi.OptimizeStorage()) { result ->
+        val request = TdApi.OptimizeStorage().apply {
+            size = 0L
+            ttl = 0
+            count = 0
+            immunityDelay = 0
+            fileTypes = emptyArray()
+            chatIds = longArrayOf()
+            excludeChatIds = longArrayOf()
+            chatLimit = 0
+        }
+        activeClient.send(request) { result ->
             when (result) {
                 is TdApi.StorageStatistics -> {
                     android.util.Log.i("NSiO.Telegram", "TDLib storage optimization completed: $result")
