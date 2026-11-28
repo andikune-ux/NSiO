@@ -112,7 +112,7 @@ object TelegramClientManager {
         }
         if (activeProfileId != profileId || client != null) {
             clientGeneration++
-            client?.let { runCatching { it.send(TdApi.Close()) { } } }
+            client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
             client = null
             activeProfileId = profileId
         }
@@ -123,7 +123,7 @@ object TelegramClientManager {
     fun releaseProfile(context: Context, profileId: String) {
         if (!isProfileOwner(context, profileId)) return
         clientGeneration++
-        client?.let { runCatching { it.send(TdApi.Close()) { } } }
+        client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
         client = null
         activeProfileId = ""
         TelegramApiCredentialStore(context).clearAll()
@@ -141,7 +141,7 @@ object TelegramClientManager {
         if (!claimProfile(app, profileId)) {
             if (activeProfileId != profileId || client != null) {
                 clientGeneration++
-                client?.let { runCatching { it.send(TdApi.Close()) { } } }
+                client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
                 client = null
                 activeProfileId = profileId
             }
@@ -150,7 +150,7 @@ object TelegramClientManager {
         }
         if (activeProfileId != profileId) {
             clientGeneration++
-            client?.let { runCatching { it.send(TdApi.Close()) { } } }
+            client?.let { runCatching { it.send(TdApi.Close()) { _ -> } } }
             client = null
             activeProfileId = profileId
         }
@@ -779,7 +779,7 @@ object TelegramClientManager {
             val closingClient = client
             mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = "Menutup sesi Telegram untuk backup…")
             val closeResult = CompletableDeferred<Unit>()
-            closingClient?.send(TdApi.Close()) { closeResult.complete(Unit) }
+            closingClient?.send(TdApi.Close()) { _ -> closeResult.complete(Unit) }
             val acknowledged = withTimeoutOrNull(15_000L) { closeResult.await(); true } ?: false
             if (!acknowledged) throw IllegalStateException("TDLib belum mengonfirmasi penutupan database. Backup Telegram dibatalkan.")
             val closed = withTimeoutOrNull(15_000L) {
@@ -892,7 +892,7 @@ object TelegramClientManager {
                 val currentClient = client
                 if (currentClient != null) {
                     val closeResult = CompletableDeferred<Unit>()
-                    currentClient.send(TdApi.Close()) { closeResult.complete(Unit) }
+                    currentClient.send(TdApi.Close()) { _ -> closeResult.complete(Unit) }
                     val acknowledged = withTimeoutOrNull(15_000L) { closeResult.await(); true } ?: false
                     require(acknowledged) { "TDLib belum berhenti. Pemulihan Telegram dibatalkan." }
                     val closed = withTimeoutOrNull(15_000L) {
