@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text as Material3Text
 import com.example.ui.components.AppText as Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -65,8 +66,10 @@ fun MediaGridCard(
     onDownload: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onFavorite: (() -> Unit)? = null,
-    onRename: (() -> Unit)? = null
+    onRename: (() -> Unit)? = null,
+    onVisible: (() -> Unit)? = null
 ) {
+    LaunchedEffect(item.id, item.thumbnailUrl, item.title) { onVisible?.invoke() }
     val interactionSource = remember { MutableInteractionSource() }
     var captionExpanded by remember(item.id) { mutableStateOf(false) }
     var captionHasOverflow by remember(item.id) { mutableStateOf(false) }
