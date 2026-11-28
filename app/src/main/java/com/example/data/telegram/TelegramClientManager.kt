@@ -253,6 +253,7 @@ object TelegramClientManager {
         pendingFilesDirectory = mediaCacheRoot.absolutePath
         pendingDatabaseKey = databaseKey
         pendingHadExistingDatabase = hasExistingDatabase
+        val generation = clientGeneration
         try {
             client = Client.create({ update ->
                 if (generation == clientGeneration) handleUpdate(update)
