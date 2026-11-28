@@ -22,6 +22,10 @@ internal object MediaCacheIdentity {
      * CloudStream/CDN URL refreshes reuse the same cached byte ranges.
      */
     fun forPlayback(rawUrl: String, stableMediaKey: String?): String? {
+        val scheme = runCatching { URI(rawUrl.trim()).scheme?.lowercase() }.getOrNull()
+        // Local downloads and user-selected content URIs are permanent files, not
+        // streaming cache candidates; never duplicate them into the Media3 cache.
+        if (scheme == "file" || scheme == "content") return null
         val urlIdentity = forUrl(rawUrl)
         urlIdentity?.takeIf { it.startsWith("drive:") }?.let { return it }
         TelegramTdlibDataSource.cacheIdentity(rawUrl)?.let { return it }
