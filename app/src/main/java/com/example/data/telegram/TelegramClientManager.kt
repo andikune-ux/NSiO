@@ -49,6 +49,22 @@ object TelegramClientManager {
     @Volatile private var appContext: Context? = null
     private val downloadCallbacks = ConcurrentHashMap<Int, CopyOnWriteArrayList<(String?) -> Unit>>()
     private val photoDownloadsInFlight = ConcurrentHashMap.newKeySet<Long>()
+    private val cacheCleanupLock = Any()
+    private val activeDownloadCallbacks = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var cacheCleanupInProgress = false
+
+    fun beginCacheCleanup(): Boolean = synchronized(cacheCleanupLock) {
+        if (cacheCleanupInProgress || downloadCallbacks.isNotEmpty() || activeDownloadCallbacks.get() > 0) {
+            false
+        } else {
+            cacheCleanupInProgress = true
+            true
+        }
+    }
+
+    fun endCacheCleanup() {
+        synchronized(cacheCleanupLock) { cacheCleanupInProgress = false }
+    }
 
     @Synchronized
     fun initialize(context: Context) {
@@ -409,7 +425,10 @@ object TelegramClientManager {
             onFinished(null)
             return
         }
-        registerDownloadCallback(fileId, onFinished)
+        if (!registerDownloadCallback(fileId, onFinished)) {
+            onFinished(null)
+            return
+        }
         client?.send(TdApi.DownloadFile(fileId, 16, 0L, 0L, true)) { result ->
             when (result) {
                 is TdApi.File -> {
@@ -427,7 +446,10 @@ object TelegramClientManager {
 
     fun downloadMedia(media: TelegramMedia, onFinished: (String?) -> Unit) {
         val activeClient = client ?: run { onFinished(null); return }
-        registerDownloadCallback(media.fileId, onFinished)
+        if (!registerDownloadCallback(media.fileId, onFinished)) {
+            onFinished(null)
+            return
+        }
         activeClient.send(TdApi.DownloadFile(media.fileId, 32, 0L, 0L, true), { result ->
             when (result) {
                 is TdApi.File -> {
@@ -452,6 +474,7 @@ object TelegramClientManager {
     fun getFileBlocking(fileId: Int): TdApi.File = sendBlocking(TdApi.GetFile(fileId))
 
     fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
+        if (cacheCleanupInProgress) throw java.io.IOException("Cache Telegram sedang dibersihkan.")
         // After moving TDLib's files directory or clearing cache, its persistent file
         // database can still report an old completed path. Remove only that stale local
         // copy so TDLib recreates it under the new cacheDir on this range request.
@@ -509,7 +532,10 @@ object TelegramClientManager {
             onFinished(null)
             return
         }
-        registerDownloadCallback(fileId, onFinished)
+        if (!registerDownloadCallback(fileId, onFinished)) {
+            onFinished(null)
+            return
+        }
         activeClient.send(TdApi.DownloadFile(fileId, 8, 0L, 0L, true)) { result ->
             when (result) {
                 is TdApi.File -> {
@@ -653,13 +679,23 @@ object TelegramClientManager {
         }
     }
 
-    private fun registerDownloadCallback(fileId: Int, callback: (String?) -> Unit) {
-        downloadCallbacks.computeIfAbsent(fileId) { CopyOnWriteArrayList() }.add(callback)
-    }
+    private fun registerDownloadCallback(fileId: Int, callback: (String?) -> Unit): Boolean =
+        synchronized(cacheCleanupLock) {
+            if (cacheCleanupInProgress) return@synchronized false
+            downloadCallbacks.computeIfAbsent(fileId) { CopyOnWriteArrayList() }.add(callback)
+            true
+        }
 
     private fun completeDownload(fileId: Int, path: String?) {
-        downloadCallbacks.remove(fileId)?.forEach { callback ->
-            runCatching { callback(path) }
+        val callbacks = synchronized(cacheCleanupLock) {
+            downloadCallbacks.remove(fileId)?.also { activeDownloadCallbacks.addAndGet(it.size) }
+        }
+        callbacks?.forEach { callback ->
+            try {
+                runCatching { callback(path) }
+            } finally {
+                activeDownloadCallbacks.decrementAndGet()
+            }
         }
     }
 
