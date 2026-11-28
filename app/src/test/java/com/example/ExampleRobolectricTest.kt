@@ -60,6 +60,20 @@ class ExampleRobolectricTest {
   }
 
 
+
+  @Test
+  fun `Telegram integration cannot be claimed by a second profile`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    context.getSharedPreferences("nsio_telegram_profile_binding", Context.MODE_PRIVATE)
+      .edit().clear().commit()
+
+    assertTrue(com.example.data.telegram.TelegramClientManager.claimProfile(context, "telegram-owner-a"))
+    assertTrue(com.example.data.telegram.TelegramClientManager.isProfileOwner(context, "telegram-owner-a"))
+    assertTrue(!com.example.data.telegram.TelegramClientManager.claimProfile(context, "telegram-owner-b"))
+    assertTrue(!com.example.data.telegram.TelegramClientManager.isProfileOwner(context, "telegram-owner-b"))
+    assertEquals("telegram-owner-a", com.example.data.telegram.TelegramClientManager.ownerProfileId(context))
+  }
+
   @Test
   fun `TikTod profile preferences restore with remapped media IDs`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
