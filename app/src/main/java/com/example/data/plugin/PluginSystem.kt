@@ -713,6 +713,124 @@ class PluginManager(private val context: Context) {
         prefs.edit().putString(REPOSITORIES_KEY, array.toString()).apply()
     }
 
+    /** Portable metadata for user-added repositories and installed CloudStream plugins. */
+    fun exportBackupData(): JSONObject = JSONObject().apply {
+        put("repositories", JSONArray().apply {
+            _repositories.value.filterNot { it.isBuiltIn }.forEach { repo ->
+                put(JSONObject().apply {
+                    put("name", repo.name)
+                    put("description", repo.description)
+                    put("manifestVersion", repo.manifestVersion)
+                    put("pluginLists", JSONArray(repo.pluginLists))
+                    put("sourceUrl", repo.sourceUrl)
+                    put("plugins", JSONArray().apply {
+                        repo.plugins.forEach { plugin ->
+                            put(JSONObject().apply {
+                                put("name", plugin.name)
+                                put("internalName", plugin.internalName)
+                                put("version", plugin.version)
+                                put("apiVersion", plugin.apiVersion)
+                                put("status", plugin.status)
+                                put("url", plugin.url)
+                                put("description", plugin.description)
+                                put("authors", JSONArray(plugin.authors))
+                                put("tvTypes", JSONArray(plugin.tvTypes))
+                                put("language", plugin.language)
+                                put("iconUrl", plugin.iconUrl)
+                                put("fileHash", plugin.fileHash)
+                                put("fileSize", plugin.fileSize)
+                            })
+                        }
+                    })
+                })
+            }
+        })
+        put("installedPlugins", JSONArray().apply {
+            val root = File(context.filesDir, "cloudstream_plugins")
+            root.listFiles()?.filter { it.isFile && it.name.endsWith(".cs3") }?.forEach { file ->
+                val version = file.nameWithoutExtension.substringAfterLast('-', "").toIntOrNull() ?: return@forEach
+                val internalName = file.nameWithoutExtension.substringBeforeLast('-')
+                put(JSONObject().put("internalName", internalName).put("version", version))
+            }
+        })
+    }
+
+    /**
+     * Restores repository metadata offline first, then attempts to fetch the previously
+     * installed public plugin artifacts. Authentication is never fabricated or exported.
+     */
+    suspend fun restoreBackupData(payload: JSONObject): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        val restoredRepositories = mutableListOf<RepoManifest>()
+        val array = payload.optJSONArray("repositories") ?: JSONArray()
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val sourceUrl = item.optString("sourceUrl").trim()
+            if (sourceUrl.isBlank()) continue
+            val pluginLists = item.optJSONArray("pluginLists") ?: JSONArray()
+            val entries = item.optJSONArray("plugins") ?: JSONArray()
+            val plugins = (0 until entries.length()).mapNotNull { entryIndex ->
+                val plugin = entries.optJSONObject(entryIndex) ?: return@mapNotNull null
+                val authors = plugin.optJSONArray("authors") ?: JSONArray()
+                val tvTypes = plugin.optJSONArray("tvTypes") ?: JSONArray()
+                CloudStreamPluginEntry(
+                    name = plugin.optString("name"),
+                    internalName = plugin.optString("internalName"),
+                    version = plugin.optInt("version", 1),
+                    apiVersion = plugin.optInt("apiVersion", 1),
+                    status = plugin.optInt("status", 1),
+                    url = plugin.optString("url"),
+                    description = plugin.optString("description"),
+                    authors = (0 until authors.length()).map { authors.optString(it) },
+                    tvTypes = (0 until tvTypes.length()).map { tvTypes.optString(it) },
+                    language = plugin.optString("language"),
+                    iconUrl = plugin.optString("iconUrl"),
+                    fileHash = plugin.optString("fileHash"),
+                    fileSize = plugin.optLong("fileSize", 0L)
+                )
+            }
+            restoredRepositories += RepoManifest(
+                name = item.optString("name").ifBlank { "Repositori pengguna" },
+                description = item.optString("description"),
+                manifestVersion = item.optInt("manifestVersion", 1),
+                pluginLists = (0 until pluginLists.length()).map { pluginLists.optString(it) }.filter(String::isNotBlank),
+                sourceUrl = sourceUrl,
+                plugins = plugins,
+                isBuiltIn = false
+            )
+        }
+        val builtIns = _repositories.value.filter { it.isBuiltIn }
+        val currentCustom = _repositories.value.filterNot { it.isBuiltIn }
+        val mergedCustom = (currentCustom + restoredRepositories).distinctBy { it.sourceUrl.trim().lowercase() }
+        _repositories.value = mergedCustom + builtIns
+        saveRepositories()
+
+        var restoredPlugins = 0
+        var failedPlugins = 0
+        val installed = payload.optJSONArray("installedPlugins") ?: JSONArray()
+        for (index in 0 until installed.length()) {
+            val item = installed.optJSONObject(index) ?: continue
+            val internalName = item.optString("internalName")
+            val version = item.optInt("version", 0)
+            val entry = _repositories.value.asSequence()
+                .flatMap { it.plugins.asSequence() }
+                .firstOrNull {
+                    it.internalName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80) == internalName &&
+                        it.version == version && it.status != 0
+                }
+            if (entry == null) {
+                failedPlugins++
+                continue
+            }
+            try {
+                if (!isCloudStreamPluginInstalled(entry)) installCloudStreamPlugin(entry)
+                restoredPlugins++
+            } catch (_: Exception) {
+                failedPlugins++
+            }
+        }
+        restoredPlugins to failedPlugins
+    }
+
     /**
      * Restores NSiO-native plugin metadata placeholders. CloudStream .cs3
      * artifacts are managed and executed by CloudStreamPluginRuntime.
