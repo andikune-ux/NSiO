@@ -974,10 +974,10 @@ fun SettingsScreen(
             SettingsGlassCard(
                 icon = Icons.Default.Delete,
                 title = "Pembersihan Cache",
-                subtitle = "Hapus cache video Drive dan Telegram untuk mengosongkan ruang."
+                subtitle = "Hapus cache video Drive, Telegram, CloudStream, dan sumber online lainnya."
             ) {
                 Text(
-                    cacheClearMessage ?: "Profil, akun Google, link Drive, playlist, sesi Telegram, dan pengaturan tidak ikut dihapus.",
+                    cacheClearMessage ?: "Cache streaming video online dibersihkan. Profil, PIN, akun, playlist, sesi Telegram, dan unduhan manual tetap aman.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1304,7 +1304,7 @@ fun SettingsScreen(
             onDismissRequest = { if (!cacheClearRunning) showCacheClearDialog = false },
             title = { Text("Hapus cache media?") },
             text = {
-                Text("Yang dihapus hanya cache video Google Drive dan media Telegram. Profil, akun, link sumber, playlist, sesi Telegram, unduhan APK, dan pengaturan tetap disimpan.")
+                Text("Yang dihapus hanya cache streaming video dari Drive, Telegram, CloudStream, dan sumber online lainnya. Profil, PIN, akun, playlist, sesi Telegram, unduhan manual, serta unduhan APK tetap disimpan.")
             },
             confirmButton = {
                 TextButton(
@@ -1318,9 +1318,9 @@ fun SettingsScreen(
                             cacheClearRunning = false
                             showCacheClearDialog = false
                             cacheClearMessage = if (success) {
-                                "Cache media Drive dan Telegram berhasil dibersihkan."
+                                "Cache video dari Drive, Telegram, CloudStream, dan sumber online berhasil dibersihkan."
                             } else {
-                                "Sebagian cache gagal dibersihkan karena sedang digunakan. Data akun tetap aman."
+                                "Sebagian cache video gagal dibersihkan karena sedang digunakan. Data akun dan profil tetap aman."
                             }
                         }
                     }
