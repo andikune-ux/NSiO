@@ -1191,7 +1191,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     thumbnailPath?.let { path ->
                         val source = java.io.File(path)
-                        val directory = java.io.File(getApplication<Application>().filesDir, "telegram/thumbnails").apply { mkdirs() }
+                        val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails").apply { mkdirs() }
                         val target = java.io.File(directory, "$mediaId.jpg")
                         runCatching {
                             if (source.isFile && source.length() > 0L) {
