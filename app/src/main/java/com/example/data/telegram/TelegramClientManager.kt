@@ -2,15 +2,26 @@ package com.example.data.telegram
 
 import android.content.Context
 import android.os.Build
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import com.example.data.security.TelegramApiCredentialStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -45,6 +56,7 @@ object TelegramClientManager {
         val media: List<TelegramMedia> = emptyList()
     )
 
+    private const val MAX_TELEGRAM_BACKUP_ZIP_BYTES = 36 * 1024 * 1024
     private val mutableState = MutableStateFlow(State())
     val state: StateFlow<State> = mutableState.asStateFlow()
     @Volatile private var client: Client? = null
@@ -750,6 +762,114 @@ object TelegramClientManager {
     /** Persist known source containers independently of media counts. */
     private fun catalogPreferences(context: Context) =
         context.getSharedPreferences("telegram_source_catalog", Context.MODE_PRIVATE)
+
+    /**
+     * Export the Telegram session database and its decryption material. The caller must
+     * place this object inside the PIN-encrypted profile backup before writing it to disk.
+     */
+    suspend fun exportProfileBackup(context: Context, profileId: String): JSONObject? {
+        require(isProfileOwner(context, profileId)) { "Telegram bukan milik profil aktif." }
+        val credentials = TelegramApiCredentialStore(context).exportPortableData() ?: return null
+        val wasConnected = activeProfileId == profileId && client != null
+        if (wasConnected) {
+            val closingClient = client
+            val closeResult = CompletableDeferred<Unit>()
+            closingClient?.send(TdApi.Close()) { closeResult.complete(Unit) }
+            val acknowledged = withTimeoutOrNull(15_000L) { closeResult.await(); true } ?: false
+            if (!acknowledged) throw IllegalStateException("TDLib belum mengonfirmasi penutupan database. Backup Telegram dibatalkan.")
+            val closed = withTimeoutOrNull(15_000L) {
+                mutableState.first { it.stage == AuthStage.NOT_CONFIGURED }
+                true
+            } ?: false
+            if (!closed) throw IllegalStateException("Database Telegram masih aktif. Backup Telegram dibatalkan.")
+        }
+
+        val databaseRoot = File(context.filesDir, "telegram/tdlib/database")
+        val zipBytes = ByteArrayOutputStream().use { output ->
+            ZipOutputStream(output).use { zip ->
+                if (databaseRoot.isDirectory) {
+                    databaseRoot.walkTopDown().filter { it.isFile }.forEach { file ->
+                        val relative = file.relativeTo(databaseRoot).invariantSeparatorsPath
+                        zip.putNextEntry(ZipEntry(relative))
+                        file.inputStream().buffered().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                        require(output.size() <= MAX_TELEGRAM_BACKUP_ZIP_BYTES) {
+                            "Database Telegram terlalu besar untuk dimasukkan ke backup profil."
+                        }
+                    }
+                }
+            }
+            output.toByteArray()
+        }
+        if (wasConnected) initialize(context, profileId)
+        val catalog = catalogPreferences(context).getString("items", "[]") ?: "[]"
+        return JSONObject()
+            .put("credentials", credentials)
+            .put("databaseZipBase64", Base64.encodeToString(zipBytes, Base64.NO_WRAP))
+            .put("catalog", catalog)
+    }
+
+    /** Restore the encrypted Telegram database and re-wrap its key on this installation. */
+    suspend fun restoreProfileBackup(context: Context, profileId: String, payload: JSONObject): String =
+        withContext(Dispatchers.IO) {
+            require(profileId.isNotBlank()) { "Profil tujuan Telegram tidak valid." }
+            val currentClient = client
+            if (currentClient != null) {
+                val closeResult = CompletableDeferred<Unit>()
+                currentClient.send(TdApi.Close()) { closeResult.complete(Unit) }
+                val acknowledged = withTimeoutOrNull(15_000L) { closeResult.await(); true } ?: false
+                require(acknowledged) { "TDLib belum berhenti. Pemulihan Telegram dibatalkan." }
+                val closed = withTimeoutOrNull(15_000L) {
+                    mutableState.first { it.stage == AuthStage.NOT_CONFIGURED }
+                    true
+                } ?: false
+                require(closed) { "Database Telegram masih aktif. Pemulihan dibatalkan." }
+            }
+
+            val databaseRoot = File(context.filesDir, "telegram/tdlib/database").canonicalFile
+            require(databaseRoot.parentFile?.isDirectory == true || databaseRoot.parentFile?.mkdirs() == true) {
+                "Folder database Telegram tidak dapat dibuat."
+            }
+            databaseRoot.deleteRecursively()
+            require(databaseRoot.mkdirs() || databaseRoot.isDirectory) {
+                "Folder database Telegram tidak dapat dipulihkan."
+            }
+
+            val encodedZip = payload.optString("databaseZipBase64")
+            if (encodedZip.isNotBlank()) {
+                val zipBytes = Base64.decode(encodedZip, Base64.NO_WRAP)
+                require(zipBytes.size <= MAX_TELEGRAM_BACKUP_ZIP_BYTES) {
+                    "Arsip database Telegram melebihi batas yang diizinkan."
+                }
+                ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        val target = File(databaseRoot, entry.name).canonicalFile
+                        require(target == databaseRoot || target.path.startsWith(databaseRoot.path + File.separator)) {
+                            "Arsip Telegram berisi jalur file yang tidak valid."
+                        }
+                        if (entry.isDirectory) {
+                            require(target.mkdirs() || target.isDirectory)
+                        } else {
+                            require(target.parentFile?.mkdirs() == true || target.parentFile?.isDirectory == true)
+                            target.outputStream().buffered().use { zip.copyTo(it) }
+                        }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            TelegramApiCredentialStore(context).importPortableData(payload.getJSONObject("credentials"))
+            val catalog = payload.optString("catalog", "[]")
+            JSONArray(catalog)
+            profileBindingPreferences(context).edit().putString("owner_profile_id", profileId).commit()
+            catalogPreferences(context).edit().putString("items", catalog).commit()
+            activeProfileId = ""
+            client = null
+            mutableState.value = State(message = "Data Telegram dipulihkan. Menyambungkan kembali…")
+            initialize(context, profileId)
+            "Kredensial, kunci database, sesi TDLib, dan katalog Telegram berhasil dipulihkan."
+        }
+
 
     private fun restoreCatalog(context: Context) {
         val stored = runCatching { catalogPreferences(context).getString("items", "[]") ?: "[]" }.getOrDefault("[]")
