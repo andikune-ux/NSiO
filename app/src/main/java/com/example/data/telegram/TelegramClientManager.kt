@@ -10,6 +10,9 @@ import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -436,6 +439,33 @@ object TelegramClientManager {
                 }
             }
         })
+    }
+
+    /**
+     * TDLib byte-range requests used by Media3. A request completes only after the
+     * requested range is available, so the player never needs to download the full file.
+     */
+    fun getFileBlocking(fileId: Int): TdApi.File = sendBlocking(TdApi.GetFile(fileId))
+
+    fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File =
+        sendBlocking(TdApi.DownloadFile(fileId, 32, offset, limit, true))
+
+    private fun sendBlocking(request: TdApi.Function): TdApi.File {
+        val activeClient = client ?: throw IllegalStateException("Telegram belum terhubung.")
+        val latch = CountDownLatch(1)
+        val response = AtomicReference<TdApi.Object?>()
+        activeClient.send(request) { result ->
+            response.set(result)
+            latch.countDown()
+        }
+        if (!latch.await(120, TimeUnit.SECONDS)) {
+            throw java.io.IOException("Telegram terlalu lama mengirim bagian video.")
+        }
+        return when (val result = response.get()) {
+            is TdApi.File -> result
+            is TdApi.Error -> throw java.io.IOException("Telegram: ${result.message}")
+            else -> throw java.io.IOException("Respons file Telegram tidak valid.")
+        }
     }
 
     /** Remove TDLib's downloaded local copy after it has been placed in NSiO's bounded cache. */
