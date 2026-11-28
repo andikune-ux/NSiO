@@ -44,9 +44,16 @@ class TelegramLegacyCacheMigrationTest {
         val legacy = File(imported, "verified-video.mp4").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
         val cacheKey = "telegram:-100123:458:791"
         val cache = DriveMediaCache.get(context)
-        val cacheFile = cache.startFile(cacheKey, 0L, 4L)
-        FileOutputStream(cacheFile).use { it.write(byteArrayOf(5, 6, 7, 8)) }
-        cache.commitFile(cacheFile, 4L)
+        // Media3 requires a locked hole span before startFile/commitFile.
+        // Calling startFile directly leaves no CachedContent entry and throws NPE.
+        val holeSpan = cache.startReadWrite(cacheKey, 0L, 4L)
+        try {
+            val cacheFile = cache.startFile(cacheKey, 0L, 4L)
+            FileOutputStream(cacheFile).use { it.write(byteArrayOf(5, 6, 7, 8)) }
+            cache.commitFile(cacheFile, 4L)
+        } finally {
+            cache.releaseHoleSpan(holeSpan)
+        }
 
         TelegramLegacyCacheMigration.remember(context, cacheKey, legacy)
 
