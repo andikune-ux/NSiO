@@ -99,7 +99,11 @@ object TelegramCatalogSync {
                                             }
                                             Log.i(TAG, "Referensi video Telegram dimigrasikan ke streaming; salinan lama menunggu verifikasi cache: $id")
                                         }
-                                        if (current.thumbnailUrl.isBlank() && media.thumbnailFileId > 0) {
+                                        val currentThumbnailUri = Uri.parse(current.thumbnailUrl)
+                                        val currentThumbnailMissing = current.thumbnailUrl.isBlank() ||
+                                            (currentThumbnailUri.scheme == "file" &&
+                                                currentThumbnailUri.path?.let(::File)?.isFile != true)
+                                        if (currentThumbnailMissing && media.thumbnailFileId > 0) {
                                             val thumbnail = downloadTelegramThumbnail(context, id, media.thumbnailFileId)
                                             if (!thumbnail.isNullOrBlank()) {
                                                 database.mediaDao().updateThumbnailUrl(id, thumbnail)
