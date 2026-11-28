@@ -48,6 +48,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import java.io.IOException
+import com.example.player.multiview.MultiviewResolvedSource
 
 data class PlayerTrackOption(
     val id: String,
@@ -872,6 +873,25 @@ class CS3IPlayer(
     ) {
         attemptedPluginStreamKeys.clear()
         playInternal(url, title, startPositionMs, requestHeaders, mimeType, externalSubtitles, videoInterceptor, pluginStreams, mediaCacheKey)
+    }
+
+    /**
+     * Keeps Multiview's CloudStream metadata and cache identity conversion next to
+     * the player API, avoiding a fragile cross-screen call with plugin class types.
+     */
+    fun playResolvedMultiviewSource(source: MultiviewResolvedSource) {
+        val plugin = source.cloudStream
+        val cacheKey = source.mediaItem?.let { it.sourceType + ":" + it.id }
+        playWithMimeType(
+            url = source.uri.toString(),
+            title = source.title,
+            requestHeaders = source.requestHeaders,
+            mimeType = source.mimeType,
+            externalSubtitles = plugin?.subtitles.orEmpty(),
+            videoInterceptor = plugin?.videoInterceptor,
+            pluginStreams = source.pluginStreams,
+            mediaCacheKey = cacheKey
+        )
     }
 
     private fun buildSubtitleConfigurations(
