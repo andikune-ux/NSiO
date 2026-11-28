@@ -277,19 +277,28 @@ fun SettingsScreen(
                 val profileId = activeProfile?.id
                 if (profileId != null) {
                     val owner = com.example.data.telegram.TelegramClientManager.ownerProfileId(context)
-                    val mayLoadLegacy = owner.isNullOrBlank() && telegramCredentialStore.load() != null
-                    if (owner == profileId || (mayLoadLegacy &&
-                            com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId))) {
-                        val saved = telegramCredentialStore.load()
-                        if (saved != null) {
-                            telegramApiId = saved.apiId
-                            telegramApiHash = saved.apiHash
-                            telegramCredentialsSaved = true
+                    try {
+                        val saved = telegramCredentialStore.loadOrThrow()
+                        val mayLoadLegacy = owner.isNullOrBlank() && saved != null
+                        if (owner == profileId || (mayLoadLegacy &&
+                                com.example.data.telegram.TelegramClientManager.claimProfile(context, profileId))) {
+                            if (saved != null) {
+                                telegramApiId = saved.apiId
+                                telegramApiHash = saved.apiHash
+                                telegramCredentialsSaved = true
+                            }
+                        } else {
+                            telegramApiId = ""
+                            telegramApiHash = ""
+                            telegramCredentialsSaved = false
+                            if (!owner.isNullOrBlank()) {
+                                telegramCredentialMessage = "Integrasi Telegram terikat ke profil lain. Data sesi tidak diubah."
+                            }
                         }
-                    } else {
-                        telegramApiId = ""
-                        telegramApiHash = ""
+                    } catch (error: Exception) {
                         telegramCredentialsSaved = false
+                        telegramCredentialMessage = error.localizedMessage
+                            ?: "Kredensial Telegram tidak dapat dibuka. Data sesi tidak dihapus."
                     }
                 }
             }
