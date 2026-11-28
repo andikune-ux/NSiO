@@ -33,6 +33,16 @@ internal object MediaCacheIdentity {
         return urlIdentity
     }
 
+    fun forCacheRequest(activeCacheKey: String?, explicitCacheKey: String?, encodedPath: String): String? {
+        val activeKey = activeCacheKey ?: return explicitCacheKey
+        val path = encodedPath.ifBlank { "/" }
+        return when {
+            activeKey.startsWith("media:") || activeKey.startsWith("url:") -> activeKey + ":" + path
+            explicitCacheKey != null -> explicitCacheKey
+            else -> activeKey
+        }
+    }
+
     fun forUrl(rawUrl: String): String? {
         if (rawUrl.isBlank()) return null
         val uri = runCatching { URI(rawUrl.trim()) }.getOrNull() ?: return null
