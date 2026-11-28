@@ -91,6 +91,12 @@ class ExampleRobolectricTest {
   fun `profile backup exports only matching profile media and settings`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val profile = Profile(id = "profile_a", name = "Profile A")
+    context.getSharedPreferences("nsio_catalog_preferences", Context.MODE_PRIVATE).edit()
+      .putString("home_filter_profile_a", "CLOUDSTREAM_PLUGIN:provider-a")
+      .putString("home_sort_profile_a", "TITLE").commit()
+    context.getSharedPreferences("nsio_cloudstream_plugin_order", Context.MODE_PRIVATE).edit()
+      .putString("plugin_order_profile_a", """["provider-a","provider-b"]""").commit()
+    com.example.tiktok.TikTodLocalStore(context).setSelectedAvatar("profile_a", "p2:custom-avatar")
     val media = listOf(
       MediaItem(id = "a1", profileId = "profile_a", title = "Owned", url = "https://example.com/a.mp4"),
       MediaItem(id = "b1", profileId = "profile_b", title = "Other", url = "https://example.com/b.mp4")
@@ -127,6 +133,11 @@ class ExampleRobolectricTest {
     assertEquals("Profile A", exportedProfile.getString("name"))
     assertEquals("🎬", exportedProfile.getString("avatarEmoji"))
     assertEquals("p1:balqyz", json.getJSONObject("avatarAssignments").getString("a1"))
+    assertEquals("p2:custom-avatar", json.getJSONObject("tikTodPreferences").getString("selectedAvatar"))
+    val profilePreferences = json.getJSONObject("profilePreferences")
+    assertEquals("CLOUDSTREAM_PLUGIN:provider-a", profilePreferences.getString("homeFilter"))
+    assertEquals("TITLE", profilePreferences.getString("homeSort"))
+    assertEquals("provider-b", profilePreferences.getJSONArray("cloudStreamPluginOrder").getString(1))
     assertEquals("Favorit", json.getJSONArray("sourcePlaylists").getJSONObject(0).getString("name"))
     assertTrue(backupFile.name.contains("profile_a"))
   }
