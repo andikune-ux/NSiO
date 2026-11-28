@@ -1,5 +1,6 @@
 package com.example.player
 
+import androidx.media3.common.util.UnstableApi
 import java.net.URI
 import java.net.URLDecoder
 
@@ -21,6 +22,7 @@ internal object MediaCacheIdentity {
      * then a stable catalog media ID, and only then the resolved URL. This lets
      * CloudStream/CDN URL refreshes reuse the same cached byte ranges.
      */
+    @OptIn(UnstableApi::class)
     fun forPlayback(rawUrl: String, stableMediaKey: String?): String? {
         val scheme = runCatching { URI(rawUrl.trim()).scheme?.lowercase() }.getOrNull()
         // Local downloads and user-selected content URIs are permanent files, not
