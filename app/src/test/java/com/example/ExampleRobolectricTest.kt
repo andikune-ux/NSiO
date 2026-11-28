@@ -59,6 +59,34 @@ class ExampleRobolectricTest {
     assertTrue(rejected)
   }
 
+
+  @Test
+  fun `TikTod profile preferences restore with remapped media IDs`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = com.example.tiktok.TikTodLocalStore(context)
+    val profileA = "backup_tiktod_source"
+    val profileB = "backup_tiktod_target"
+    store.setSelectedAvatar(profileA, "p2:custom-avatar")
+    store.syncEligibleVideos(profileA, listOf("source-one", "source-two"))
+    store.markVideoStarted(profileA, "source-one")
+
+    val snapshot = store.exportProfilePreferences(profileA)
+    store.importProfilePreferences(
+      profileB,
+      snapshot,
+      mapOf("source-one" to "target-one", "source-two" to "target-two")
+    )
+
+    assertEquals("p2:custom-avatar", store.selectedAvatar(profileB))
+    assertEquals("target-one", store.lastVideoId(profileB))
+    val restored = store.exportProfilePreferences(profileB)
+    val known = restored.getJSONArray("knownVideos")
+    assertEquals(2, known.length())
+    val pending = restored.getJSONArray("newVideos")
+    assertEquals(1, pending.length())
+    assertEquals("target-two", pending.getString(0))
+  }
+
   @Test
   fun `profile backup exports only matching profile media and settings`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
