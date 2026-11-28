@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.UUID
+import File
 
 data class CloudStreamHealthEvent(
     val timestamp: Long,
@@ -144,10 +145,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun scheduleLegacyTelegramStorageCleanup(context: Application) {
         val legacyDirectories = listOf(
-            java.io.File(context.filesDir, "telegram/tdlib/files"),
-            java.io.File(context.filesDir, "telegram/imported"),
-            java.io.File(context.filesDir, "telegram/thumbnails"),
-            java.io.File(context.filesDir, "telegram/profiles")
+            File(context.filesDir, "telegram/tdlib/files"),
+            File(context.filesDir, "telegram/imported"),
+            File(context.filesDir, "telegram/thumbnails"),
+            File(context.filesDir, "telegram/profiles")
         )
         if (legacyDirectories.none { it.exists() && !it.list().isNullOrEmpty() }) return
 
@@ -1124,11 +1125,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 if (!photoPath.isNullOrBlank()) {
-                    val sourceFile = java.io.File(photoPath)
+                    val sourceFile = File(photoPath)
                     if (sourceFile.isFile && sourceFile.length() > 0L) {
                         val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
-                        val targetDir = java.io.File(getApplication<Application>().cacheDir, "telegram/profiles").apply { mkdirs() }
-                        val targetFile = java.io.File(targetDir, "$chatId.$extension")
+                        val targetDir = File(getApplication<Application>().cacheDir, "telegram/profiles").apply { mkdirs() }
+                        val targetFile = File(targetDir, "$chatId.$extension")
                         sourceFile.copyTo(targetFile, overwrite = true)
                         TelegramClientManager.state.value.chats.firstOrNull { it.id == chatId }
                             ?.photoFileId?.let(TelegramClientManager::deleteDownloadedFile)
@@ -1231,9 +1232,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     thumbnailPath?.let { path ->
-                        val source = java.io.File(path)
-                        val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails").apply { mkdirs() }
-                        val target = java.io.File(directory, "$mediaId.jpg")
+                        val source = File(path)
+                        val directory = File(getApplication<Application>().cacheDir, "telegram/thumbnails").apply { mkdirs() }
+                        val target = File(directory, "$mediaId.jpg")
                         runCatching {
                             if (source.isFile && source.length() > 0L) {
                                 source.copyTo(target, overwrite = true)
@@ -1922,7 +1923,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val parsedUri = Uri.parse(rawUri)
         val normalizedUri = when (parsedUri.scheme?.lowercase()) {
             "content", "file" -> parsedUri.toString()
-            null -> if (rawUri.startsWith("/")) Uri.fromFile(java.io.File(rawUri)).toString() else null
+            null -> if (rawUri.startsWith("/")) Uri.fromFile(File(rawUri)).toString() else null
             else -> null
         }
         if (normalizedUri == null) {
@@ -2574,7 +2575,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     val thumbnailFile = runCatching {
                         val uri = Uri.parse(current.thumbnailUrl)
-                        if (uri.scheme == "file") uri.path?.let { java.io.File(it) } else null
+                        if (uri.scheme == "file") uri.path?.let { File(it) } else null
                     }.getOrNull()
                     val thumbnailMissing = current.thumbnailUrl.isBlank() ||
                         (thumbnailFile != null && !thumbnailFile.isFile)
@@ -2592,11 +2593,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 if (continuation.isActive) continuation.resume(path)
                             }
                         }
-                        val source = downloaded?.let { java.io.File(it) }
+                        val source = downloaded?.let { File(it) }
                         if (source?.isFile == true && source.length() > 0L) {
-                            val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails")
+                            val directory = File(getApplication<Application>().cacheDir, "telegram/thumbnails")
                                 .apply { mkdirs() }
-                            val target = java.io.File(directory, "${current.id}.jpg")
+                            val target = File(directory, "${current.id}.jpg")
                             runCatching {
                                 source.copyTo(target, overwrite = true)
                                 TelegramClientManager.deleteDownloadedFile(thumbnailId)
@@ -2777,7 +2778,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         fields["mimeType"].orEmpty().contains("matroska", true) -> "mkv"
                         else -> "mp4"
                     }
-                    downloadManager.importCompletedDownload(item.id, item.title, java.io.File(downloaded), extension)
+                    downloadManager.importCompletedDownload(item.id, item.title, File(downloaded), extension)
                     TelegramClientManager.deleteDownloadedFile(fileId)
                     showStatus("Unduhan '${item.title}' selesai dan tersimpan.")
                     return@launch
