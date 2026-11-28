@@ -84,6 +84,10 @@ class AppCacheCleanerTest {
             parentFile?.mkdirs()
             writeBytes(byteArrayOf(9, 8, 7))
         }
+        val newTdlibCache = File(context.cacheDir, "telegram/tdlib/files/new-video.bin").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(6, 5, 4))
+        }
 
         assertTrue(AppCacheCleaner.clear(context))
 
@@ -92,6 +96,7 @@ class AppCacheCleanerTest {
         assertFalse(legacyVideo.exists())
         assertTrue(tdlibDatabase.exists())
         assertFalse(oldTdlibMedia.exists())
+        assertFalse(newTdlibCache.exists())
     }
 
     @Test
