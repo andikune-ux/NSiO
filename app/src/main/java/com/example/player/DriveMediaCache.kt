@@ -9,6 +9,7 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.database.StandaloneDatabaseProvider
 import java.io.File
+import com.example.data.telegram.TelegramLegacyCacheMigration
 
 /**
  * Device-local Media3 cache shared by Drive and Telegram playback.
@@ -23,8 +24,15 @@ internal object DriveMediaCache {
     private var instance: SimpleCache? = null
     private var activeReaders: Int = 0
 
-    internal fun track(dataSource: androidx.media3.datasource.DataSource): androidx.media3.datasource.DataSource =
-        ActiveReadDataSource(dataSource)
+    internal fun track(
+        dataSource: androidx.media3.datasource.DataSource,
+        context: Context
+    ): androidx.media3.datasource.DataSource = ActiveReadDataSource(dataSource, context.applicationContext)
+
+    internal fun hasCachedData(cacheKey: String): Boolean = synchronized(this) {
+        val activeCache = instance ?: return@synchronized false
+        runCatching { activeCache.getCachedSpans(cacheKey).isNotEmpty() }.getOrDefault(false)
+    }
 
     @Synchronized
     internal fun acquireRead() { activeReaders++ }
@@ -64,15 +72,18 @@ internal object DriveMediaCache {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ActiveReadDataSource(
-    private val delegate: androidx.media3.datasource.DataSource
+    private val delegate: androidx.media3.datasource.DataSource,
+    private val context: Context
 ) : androidx.media3.datasource.DataSource {
     private var leaseHeld = false
+    private var cacheKey: String? = null
 
     override fun addTransferListener(transferListener: TransferListener) {
         delegate.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        cacheKey = dataSpec.key
         DriveMediaCacheLease.acquire()
         leaseHeld = true
         return try {
@@ -93,7 +104,11 @@ private class ActiveReadDataSource(
     override fun close() {
         try {
             delegate.close()
+            // CacheDataSink commits its current fragment during close. Only now
+            // can a verified Telegram cache span authorize deleting the old copy.
+            TelegramLegacyCacheMigration.cleanupIfCached(context, cacheKey)
         } finally {
+            cacheKey = null
             releaseLease()
         }
     }
