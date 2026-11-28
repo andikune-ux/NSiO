@@ -32,7 +32,8 @@ object TelegramClientManager {
         val isPhoto: Boolean,
         val mimeType: String,
         val caption: String = "",
-        val createdAt: Long = 0L
+        val createdAt: Long = 0L,
+        val thumbnailFileId: Int = 0
     )
 
     data class State(
@@ -287,15 +288,17 @@ object TelegramClientManager {
     private fun extractMedia(chatId: Long, message: TdApi.Message): TelegramMedia? {
         return when (val content = message.content) {
             is TdApi.MessageVideo -> content.video?.video?.let {
-                TelegramMedia(chatId, message.id, content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" }, content.caption?.text.orEmpty(), message.date * 1000L)
+                TelegramMedia(chatId, message.id, content.video.fileName.orEmpty().ifBlank { "Video Telegram" }, it.id, false, content.video.mimeType.orEmpty().ifBlank { "video/mp4" }, content.caption?.text.orEmpty(), message.date * 1000L, content.video.thumbnail?.file?.id ?: 0)
             }
-            is TdApi.MessagePhoto -> content.photo?.sizes?.maxByOrNull { it.width.toLong() * it.height }?.photo?.let {
-                TelegramMedia(chatId, message.id, "Foto Telegram", it.id, true, "image/jpeg", content.caption?.text.orEmpty(), message.date * 1000L)
+            is TdApi.MessagePhoto -> content.photo?.sizes?.maxByOrNull { it.width.toLong() * it.height }?.let { largest ->
+                val smallest = content.photo.sizes.minByOrNull { it.width.toLong() * it.height }
+                TelegramMedia(chatId, message.id, "Foto Telegram", largest.photo.id, true, "image/jpeg",
+                    content.caption?.text.orEmpty(), message.date * 1000L, smallest?.photo?.id ?: 0)
             }
             is TdApi.MessageDocument -> content.document?.let { document ->
                 val mime = document.mimeType.orEmpty()
                 if (mime.startsWith("video/") || mime.startsWith("image/")) {
-                    TelegramMedia(chatId, message.id, document.fileName.orEmpty().ifBlank { if (mime.startsWith("image/")) "Foto Telegram" else "Video Telegram" }, document.document.id, mime.startsWith("image/"), mime, content.caption?.text.orEmpty(), message.date * 1000L)
+                    TelegramMedia(chatId, message.id, document.fileName.orEmpty().ifBlank { if (mime.startsWith("image/")) "Foto Telegram" else "Video Telegram" }, document.document.id, mime.startsWith("image/"), mime, content.caption?.text.orEmpty(), message.date * 1000L, document.document.thumbnail?.file?.id ?: 0)
                 } else null
             }
             else -> null
@@ -465,6 +468,26 @@ object TelegramClientManager {
             is TdApi.File -> result
             is TdApi.Error -> throw java.io.IOException("Telegram: ${result.message}")
             else -> throw java.io.IOException("Respons file Telegram tidak valid.")
+        }
+    }
+
+    /** Download only Telegram's small preview image, never the corresponding video. */
+    fun downloadThumbnail(fileId: Int, onFinished: (String?) -> Unit) {
+        val activeClient = client
+        if (activeClient == null || fileId <= 0) {
+            onFinished(null)
+            return
+        }
+        registerDownloadCallback(fileId, onFinished)
+        activeClient.send(TdApi.DownloadFile(fileId, 8, 0L, 0L, true)) { result ->
+            when (result) {
+                is TdApi.File -> {
+                    if (result.local.isDownloadingCompleted && result.local.path.isNotBlank()) {
+                        completeDownload(fileId, result.local.path)
+                    }
+                }
+                is TdApi.Error -> completeDownload(fileId, null)
+            }
         }
     }
 
