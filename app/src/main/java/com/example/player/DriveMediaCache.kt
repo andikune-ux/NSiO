@@ -9,7 +9,6 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.database.StandaloneDatabaseProvider
 import java.io.File
-import com.example.data.telegram.TelegramLegacyCacheMigration
 
 /**
  * Device-local Media3 cache shared by Drive and Telegram playback.
@@ -25,9 +24,8 @@ internal object DriveMediaCache {
     private var activeReaders: Int = 0
 
     internal fun track(
-        dataSource: androidx.media3.datasource.DataSource,
-        context: Context
-    ): androidx.media3.datasource.DataSource = ActiveReadDataSource(dataSource, context.applicationContext)
+        dataSource: androidx.media3.datasource.DataSource
+    ): androidx.media3.datasource.DataSource = ActiveReadDataSource(dataSource)
 
     internal fun hasCachedData(cacheKey: String): Boolean = synchronized(this) {
         val activeCache = instance ?: return@synchronized false
@@ -44,11 +42,9 @@ internal object DriveMediaCache {
      * Evict cached media entries without deleting the cache database directory
      * while Media3 may still hold an active SimpleCache instance.
      */
-    fun clear(context: Context, beforeClear: () -> Unit = {}): Boolean = synchronized(this) {
+    fun clear(context: Context): Boolean = synchronized(this) {
         // Never mutate/remove cache spans while ExoPlayer is reading them.
         if (activeReaders > 0) return@synchronized false
-        // Verify and reclaim redundant Telegram legacy copies before cache spans disappear.
-        runCatching { beforeClear() }
         val activeCache = instance
         if (activeCache != null) {
             runCatching {
@@ -74,19 +70,15 @@ internal object DriveMediaCache {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ActiveReadDataSource(
-    private val delegate: androidx.media3.datasource.DataSource,
-    private val context: Context
+    private val delegate: androidx.media3.datasource.DataSource
 ) : androidx.media3.datasource.DataSource {
     private var leaseHeld = false
-    private var cacheKey: String? = null
-    private var bytesRead: Long = 0L
 
     override fun addTransferListener(transferListener: TransferListener) {
         delegate.addTransferListener(transferListener)
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        cacheKey = dataSpec.key
         DriveMediaCacheLease.acquire()
         leaseHeld = true
         return try {
@@ -98,9 +90,7 @@ private class ActiveReadDataSource(
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        val count = delegate.read(buffer, offset, length)
-        if (count > 0) bytesRead += count
-        return count
+        return delegate.read(buffer, offset, length)
     }
 
     override fun getUri(): Uri? = delegate.uri
@@ -110,12 +100,7 @@ private class ActiveReadDataSource(
     override fun close() {
         try {
             delegate.close()
-            // CacheDataSink commits its current fragment during close. Only now
-            // can a verified Telegram cache span authorize deleting the old copy.
-            TelegramLegacyCacheMigration.cleanupIfCached(context, cacheKey, bytesRead > 0L)
         } finally {
-            cacheKey = null
-            bytesRead = 0L
             releaseLease()
         }
     }
