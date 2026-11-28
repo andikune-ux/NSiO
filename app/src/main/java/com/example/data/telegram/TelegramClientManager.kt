@@ -492,6 +492,13 @@ object TelegramClientManager {
         }
     }
 
+    /** Clear stale UI references after Telegram preview files are evicted. */
+    fun invalidateCachedPhotoPaths() {
+        mutableState.value = mutableState.value.copy(
+            chats = mutableState.value.chats.map { it.copy(photoPath = "") }
+        )
+    }
+
     /**
      * Ask TDLib to reclaim disposable local media files using its own storage policy.
      *
