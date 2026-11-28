@@ -110,7 +110,7 @@ object TelegramClientManager {
     fun releaseProfile(context: Context, profileId: String) {
         if (!isProfileOwner(context, profileId)) return
         clientGeneration++
-        client?.let { runCatching { it.send(TdApi.Close()) } }
+        client?.let { runCatching { it.send(TdApi.Close()) { } } }
         client = null
         activeProfileId = ""
         profileBindingPreferences(context).edit().remove("owner_profile_id").commit()
