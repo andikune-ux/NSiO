@@ -34,4 +34,7 @@ interface SourcePlaylistDao {
 
     @Query("UPDATE source_playlists SET itemCount = :count, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateCount(id: String, count: Int, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE source_playlists SET thumbnailUrl = '' WHERE thumbnailUrl LIKE 'file:%/telegram/%'")
+    suspend fun clearTelegramCachedThumbnails()
 }
