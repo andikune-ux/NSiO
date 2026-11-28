@@ -28,7 +28,6 @@ import com.example.data.model.SourcePlaylist
 import com.example.data.model.TelegramSourceLinkPolicy
 import com.example.data.telegram.TelegramClientManager
 import com.example.data.telegram.TelegramCatalogSync
-import com.example.data.telegram.TelegramDeferredMediaCache
 import kotlin.coroutines.resume
 import com.example.data.plugin.PluginManager
 import com.example.player.PlayerRuntime
@@ -2465,67 +2464,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startPlaybackProgressPersistence(item)
     }
 
-    private suspend fun resolveDeferredTelegramMedia(item: MediaItem): MediaItem? {
-        val parts = runCatching { java.net.URI(item.url).path.orEmpty().split('/').filter(String::isNotBlank) }.getOrDefault(emptyList())
-        if (parts.size != 3) return null
-        val chatId = parts[0].toLongOrNull() ?: return null
-        val messageId = parts[1].toLongOrNull() ?: return null
-        val fileId = parts[2].toIntOrNull() ?: return null
-        val extension = when {
-            item.type.equals("PHOTO", true) -> "jpg"
-            item.extraInfo.contains("webm", true) -> "webm"
-            item.extraInfo.contains("matroska", true) -> "mkv"
-            else -> "mp4"
-        }
-        val cacheKey = "${item.profileId}_${item.id}"
-        val context = getApplication<Application>()
-        val cached = TelegramDeferredMediaCache.get(context, cacheKey, extension)
-        val playableFile = cached ?: run {
-            _playbackPreparationMessage.value = "Mengunduh media Telegram saat diputar…"
-            val fields = item.extraInfo.split('&').mapNotNull { part ->
-                val separator = part.indexOf('=')
-                if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
-            }.toMap()
-            val media = TelegramClientManager.TelegramMedia(
-                chatId = chatId,
-                messageId = messageId,
-                title = item.title,
-                fileId = fileId,
-                isPhoto = item.type.equals("PHOTO", true),
-                mimeType = fields["mimeType"] ?: if (item.type.equals("PHOTO", true)) "image/jpeg" else "video/mp4",
-                caption = item.caption,
-                createdAt = item.createdAt
-            )
-            val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
-                TelegramClientManager.downloadMedia(media) { path ->
-                    if (continuation.isActive) continuation.resume(path)
-                }
-            } ?: return null
-            val stored = TelegramDeferredMediaCache.store(context, cacheKey, extension, java.io.File(downloaded)) ?: return null
-            TelegramClientManager.deleteDownloadedFile(fileId)
-            stored
-        }
-        return item.copy(url = Uri.fromFile(playableFile).toString())
-    }
-
     fun playMedia(item: MediaItem) {
-        if (item.sourceType.equals("TELEGRAM", true) && item.url.startsWith("telegram://media/")) {
-            syncPlaybackQueue(item)
-            _currentlyPlaying.value = item
-            _playbackPreparationMessage.value = "Menyiapkan media Telegram…"
-            viewModelScope.launch {
-                val playable = runCatching { resolveDeferredTelegramMedia(item) }.getOrNull()
-                if (_currentlyPlaying.value?.id != item.id) return@launch
-                if (playable == null) {
-                    _playbackPreparationMessage.value = null
-                    showStatus("Media Telegram gagal diunduh. Periksa koneksi dan akses postingan.")
-                } else {
-                    _playbackPreparationMessage.value = null
-                    playMedia(playable)
-                }
-            }
-            return
-        }
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
             player.clearError()
