@@ -1089,7 +1089,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val sourceFile = java.io.File(photoPath)
                     if (sourceFile.isFile && sourceFile.length() > 0L) {
                         val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
-                        val targetDir = java.io.File(getApplication<Application>().filesDir, "telegram/profiles").apply { mkdirs() }
+                        val targetDir = java.io.File(getApplication<Application>().cacheDir, "telegram/profiles").apply { mkdirs() }
                         val targetFile = java.io.File(targetDir, "$chatId.$extension")
                         sourceFile.copyTo(targetFile, overwrite = true)
                         playlist = playlist.copy(thumbnailUrl = Uri.fromFile(targetFile).toString(), updatedAt = System.currentTimeMillis())
