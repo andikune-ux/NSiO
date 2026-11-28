@@ -168,7 +168,8 @@ fun MultiviewScreen(
                                 requestHeaders = headers,
                                 sourceKind = MultiviewSourceKind.CLOUDSTREAM,
                                 cloudStream = selected,
-                                pluginStreams = streams
+                                pluginStreams = streams,
+                                mediaItem = item
                             )
                         )
                     }
@@ -249,7 +250,6 @@ fun MultiviewScreen(
 
     fun startResolvedSource(index: Int, source: MultiviewResolvedSource) {
         slots[index] = MultiviewSlotUi(source = source, status = MultiviewSlotStatus.READY)
-        val plugin = source.cloudStream
         players[index].playResolvedMultiviewSource(source)
         setAudioFocus(audioSlot)
     }
