@@ -4,8 +4,8 @@ import java.net.URI
 import java.net.URLDecoder
 
 /**
- * Cache identity is independent from database item IDs, profile IDs, playlist
- * IDs and Avatar assignments. Drive links share by underlying file ID.
+ * Cache identity prefers source-native IDs, then a stable catalog item ID.
+ * It deliberately excludes profile IDs so the same media can share cached bytes.
  */
 internal object MediaCacheIdentity {
     private val driveHosts = setOf(
