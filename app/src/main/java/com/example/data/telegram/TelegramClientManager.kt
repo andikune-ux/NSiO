@@ -1227,7 +1227,7 @@ object TelegramClientManager {
         }
         activeClient.send(function, { result ->
             if (result is TdApi.Error) {
-                val initializationFailed = function is TdApi.SetTdlibParameters
+                val initializationFailed = function is TdApi.SetTdlibParameters || function is TdApi.CheckDatabaseEncryptionKey
                 if (initializationFailed) clearInitializationTimeout()
                 mutableState.value = mutableState.value.copy(
                     stage = if (initializationFailed) AuthStage.ERROR else mutableState.value.stage,
