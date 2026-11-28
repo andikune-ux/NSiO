@@ -295,7 +295,7 @@ class MainActivity : ComponentActivity() {
                 AlertDialog(
                     onDismissRequest = { secretMessage = null },
                     title = { Text(if (message == SecretCodeRegistry.allCodes) "Kode Rahasia NSiO" else "NSiO • Secret Tools") },
-                    text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState()), maxLines = 24) },
+                    text = { Text(text = message, modifier = Modifier.verticalScroll(rememberScrollState())) },
                     confirmButton = { Button(onClick = { secretMessage = null }) { Text("Tutup") } }
                 )
             }
