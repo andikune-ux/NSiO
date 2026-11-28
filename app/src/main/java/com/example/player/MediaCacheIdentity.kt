@@ -8,6 +8,7 @@ import java.net.URLDecoder
  * Cache identity prefers source-native IDs, then a stable catalog item ID.
  * It deliberately excludes profile IDs so the same media can share cached bytes.
  */
+@UnstableApi
 internal object MediaCacheIdentity {
     private val driveHosts = setOf(
         "drive.google.com",
@@ -22,7 +23,6 @@ internal object MediaCacheIdentity {
      * then a stable catalog media ID, and only then the resolved URL. This lets
      * CloudStream/CDN URL refreshes reuse the same cached byte ranges.
      */
-    @OptIn(UnstableApi::class)
     fun forPlayback(rawUrl: String, stableMediaKey: String?): String? {
         val scheme = runCatching { URI(rawUrl.trim()).scheme?.lowercase() }.getOrNull()
         // Local downloads and user-selected content URIs are permanent files, not
@@ -35,7 +35,6 @@ internal object MediaCacheIdentity {
         return urlIdentity
     }
 
-    @OptIn(UnstableApi::class)
     fun forCacheRequest(activeCacheKey: String?, explicitCacheKey: String?, encodedPath: String): String? {
         val activeKey = activeCacheKey ?: return explicitCacheKey
         val path = encodedPath.ifBlank { "/" }
