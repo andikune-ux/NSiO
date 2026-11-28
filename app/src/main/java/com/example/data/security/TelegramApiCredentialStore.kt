@@ -79,6 +79,14 @@ class TelegramApiCredentialStore(context: Context) {
         preferences.edit().remove(KEY_PAYLOAD).commit()
     }
 
+    /** Remove credentials and the database key when the profile explicitly releases Telegram. */
+    fun clearAll() {
+        preferences.edit().clear().commit()
+        runCatching {
+            KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }.deleteEntry(KEY_ALIAS)
+        }
+    }
+
     /** Portable secrets are included only inside the PIN-encrypted profile backup envelope. */
     fun exportPortableData(): JSONObject? {
         val credentials = load() ?: return null
