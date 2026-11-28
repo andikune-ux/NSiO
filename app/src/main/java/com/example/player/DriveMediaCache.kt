@@ -44,9 +44,11 @@ internal object DriveMediaCache {
      * Evict cached media entries without deleting the cache database directory
      * while Media3 may still hold an active SimpleCache instance.
      */
-    fun clear(context: Context): Boolean = synchronized(this) {
+    fun clear(context: Context, beforeClear: () -> Unit = {}): Boolean = synchronized(this) {
         // Never mutate/remove cache spans while ExoPlayer is reading them.
         if (activeReaders > 0) return@synchronized false
+        // Verify and reclaim redundant Telegram legacy copies before cache spans disappear.
+        runCatching { beforeClear() }
         val activeCache = instance
         if (activeCache != null) {
             runCatching {
