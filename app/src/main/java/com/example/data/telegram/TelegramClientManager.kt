@@ -499,10 +499,17 @@ object TelegramClientManager {
      * history, or files copied into NSiO's user Downloads. TDLib retains metadata and
      * can download media again when it is opened later.
      */
-    fun optimizeDisposableStorage() {
-        val activeClient = client ?: return
-        if (mutableState.value.stage != AuthStage.READY) return
+    fun clearDisposableStorage(context: Context, timeoutSeconds: Long = 60L): Boolean {
+        val activeClient = client
+        if (activeClient == null) {
+            val directory = File(context.applicationContext.cacheDir, "telegram/tdlib/files")
+            return !directory.exists() || runCatching { directory.deleteRecursively() }.getOrDefault(false)
+        }
+        if (mutableState.value.stage != AuthStage.READY) return false
+
         val request = TdApi.OptimizeStorage().apply {
+            // Zero limits and no immunity window ask TDLib to remove all eligible
+            // downloaded media. The encrypted database and chat history are untouched.
             size = 0L
             ttl = 0
             count = 0
@@ -512,17 +519,28 @@ object TelegramClientManager {
             excludeChatIds = longArrayOf()
             chatLimit = 0
         }
+        val latch = CountDownLatch(1)
+        val response = AtomicReference<TdApi.Object?>()
         activeClient.send(request) { result ->
-            when (result) {
-                is TdApi.StorageStatistics -> {
-                    android.util.Log.i("NSiO.Telegram", "TDLib storage optimization completed: $result")
-                }
-                is TdApi.Error -> {
-                    android.util.Log.w("NSiO.Telegram", "TDLib storage optimization failed: ${result.message}")
-                }
-                else -> {
-                    android.util.Log.w("NSiO.Telegram", "Unexpected TDLib storage optimization response: $result")
-                }
+            response.set(result)
+            latch.countDown()
+        }
+        if (!latch.await(timeoutSeconds, TimeUnit.SECONDS)) {
+            android.util.Log.w("NSiO.Telegram", "TDLib cache cleanup timed out.")
+            return false
+        }
+        return when (val result = response.get()) {
+            is TdApi.StorageStatistics -> {
+                android.util.Log.i("NSiO.Telegram", "TDLib disposable media cleared: $result")
+                true
+            }
+            is TdApi.Error -> {
+                android.util.Log.w("NSiO.Telegram", "TDLib cache cleanup failed: ${result.message}")
+                false
+            }
+            else -> {
+                android.util.Log.w("NSiO.Telegram", "Unexpected TDLib cache cleanup response: $result")
+                false
             }
         }
     }
