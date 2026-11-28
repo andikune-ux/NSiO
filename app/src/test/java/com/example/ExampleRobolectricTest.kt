@@ -61,6 +61,28 @@ class ExampleRobolectricTest {
 
 
 
+
+  @Test
+  fun `profile backup omits settings belonging to another profile`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val root = File(context.cacheDir, "profile-backup-mismatched-settings").apply {
+      deleteRecursively()
+      mkdirs()
+    }
+    val result = BackupUtils.createProfileBackup(
+      context = context,
+      profile = Profile(id = "profile_settings_owner", name = "Owner"),
+      settings = ProfileSettings(profileId = "different_profile", language = "EN"),
+      mediaList = emptyList(),
+      sourcePlaylists = emptyList(),
+      profilePin = "",
+      avatarAssignments = emptyMap(),
+      storageRootOverride = root
+    )
+    assertTrue(result.message, result.isSuccess)
+    assertTrue(!JSONObject(File(result.filePath).readText()).has("settings"))
+  }
+
   @Test
   fun `Telegram integration cannot be claimed by a second profile`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
@@ -112,7 +134,7 @@ class ExampleRobolectricTest {
       .putString("plugin_order_profile_a", """["provider-a","provider-b"]""").commit()
     com.example.tiktok.TikTodLocalStore(context).setSelectedAvatar("profile_a", "p2:custom-avatar")
     val media = listOf(
-      MediaItem(id = "a1", profileId = "profile_a", title = "Owned", url = "https://example.com/a.mp4"),
+      MediaItem(id = "a1", profileId = "profile_a", title = "Owned", url = "https://example.com/a.mp4", caption = "Caption milik profil A"),
       MediaItem(id = "b1", profileId = "profile_b", title = "Other", url = "https://example.com/b.mp4")
     )
 
@@ -134,6 +156,7 @@ class ExampleRobolectricTest {
     val exportedMedia = json.getJSONArray("mediaItems")
     assertEquals(1, exportedMedia.length())
     assertEquals("a1", exportedMedia.getJSONObject(0).getString("id"))
+    assertEquals("Caption milik profil A", exportedMedia.getJSONObject(0).getString("caption"))
     assertEquals("Profile A", json.getString("sourceProfileName"))
     val exportedSettings = json.getJSONObject("settings")
     assertEquals("EN", exportedSettings.getString("language"))
