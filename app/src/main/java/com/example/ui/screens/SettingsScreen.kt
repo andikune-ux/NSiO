@@ -363,13 +363,20 @@ fun SettingsScreen(
                         }
                         Button(
                             onClick = {
-                                telegramCredentialStore.clear()
-                                activeProfile?.id?.let { com.example.data.telegram.TelegramClientManager.releaseProfile(context, it) }
-                                telegramApiId = ""
-                                telegramApiHash = ""
-                                telegramCredentialsSaved = false
-                                telegramCredentialMessage = null
-                                Toast.makeText(context, "Integrasi Telegram dilepas dari profil ini.", Toast.LENGTH_SHORT).show()
+                                val profileId = activeProfile?.id
+                                if (profileId != null &&
+                                    com.example.data.telegram.TelegramClientManager.isProfileOwner(context, profileId)
+                                ) {
+                                    telegramCredentialStore.clear()
+                                    com.example.data.telegram.TelegramClientManager.releaseProfile(context, profileId)
+                                    telegramApiId = ""
+                                    telegramApiHash = ""
+                                    telegramCredentialsSaved = false
+                                    telegramCredentialMessage = null
+                                    Toast.makeText(context, "Integrasi Telegram dilepas dari profil ini.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    telegramCredentialMessage = "Profil ini tidak memiliki izin menghapus integrasi Telegram profil lain."
+                                }
                             },
                             enabled = telegramCredentialsSaved || telegramApiId.isNotBlank() || telegramApiHash.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(
