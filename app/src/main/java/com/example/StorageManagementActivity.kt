@@ -65,10 +65,11 @@ class StorageManagementActivity : ComponentActivity() {
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "• Cache media sementara dari pemutaran Drive dan Telegram.\n" +
-                                "• Cache media Telegram lama jika masih ada.\n\n" +
-                                "Yang tetap dipertahankan: profil, PIN, playlist dan tautan sumber, " +
-                                "pengaturan, login Firebase, kredensial Telegram, sesi TDLib, serta file pembaruan APK.",
+                            text = "• Cache video streaming dari semua sumber remote: Drive, Telegram, CloudStream, HTTP/M3U, dan lainnya.\n" +
+                                "• Cache media Telegram lama, thumbnail, dan foto grup/channel.\n\n" +
+                                "Yang tetap dipertahankan: profil dan PIN NSiO, akun dan sesi Telegram, riwayat tontonan, " +
+                                "playlist serta tautan Drive/CloudStream, pengaturan dan tata letak TikTod, plugin terpasang, " +
+                                "unduhan manual, dan file pembaruan APK.",
                             style = MaterialTheme.typography.bodyMedium
                         )
 
