@@ -76,15 +76,15 @@ object TelegramClientManager {
         if (client != null) return
         val credentials = TelegramApiCredentialStore(app).load()
         if (credentials == null) {
-            mutableState.value = State(message = "Masukkan API ID dan API Hash di Pengaturan Telegram.")
+            mutableState.value = mutableState.value.copy(stage = AuthStage.NOT_CONFIGURED, message = "Masukkan API ID dan API Hash di Pengaturan Telegram.")
             return
         }
         val apiId = credentials.apiId.toIntOrNull()
         if (apiId == null) {
-            mutableState.value = State(stage = AuthStage.ERROR, message = "API ID Telegram tidak valid.")
+            mutableState.value = mutableState.value.copy(stage = AuthStage.ERROR, message = "API ID Telegram tidak valid.")
             return
         }
-        mutableState.value = State(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
+        mutableState.value = mutableState.value.copy(stage = AuthStage.INITIALIZING, message = "Menginisialisasi koneksi Telegram…")
         // The stable 256-bit database key is wrapped by Android Keystore.
         val databaseRoot = File(app.filesDir, "telegram/tdlib/database").apply { mkdirs() }
         val mediaCacheRoot = File(app.cacheDir, "telegram/tdlib/files").apply { mkdirs() }
@@ -114,11 +114,11 @@ object TelegramClientManager {
             is TdApi.UpdateNewChat -> upsertChat(update.chat)
             is TdApi.UpdateChatTitle -> refreshChat(update.chatId)
             is TdApi.UpdateChatLastMessage -> {
-                // A previously empty group/channel may receive its first photo or video later.
+                // Metadata refreshes may arrive before TDLib has populated dialog positions.
                 refreshChat(update.chatId)
             }
-            // Keep the integration list synchronized when a chat moves between Main and Archive.
-            is TdApi.UpdateChatPosition -> refreshChat(update.chatId)
+            // Only a position update is allowed to confirm removal from both account dialog lists.
+            is TdApi.UpdateChatPosition -> refreshChat(update.chatId, allowRemoval = true)
             is TdApi.UpdateFile -> {
                 val file = update.file
                 val local = file.local
@@ -247,7 +247,7 @@ object TelegramClientManager {
         loadList(0)
     }
 
-    private fun refreshChat(chatId: Long) {
+    private fun refreshChat(chatId: Long, allowRemoval: Boolean = false) {
         client?.send(TdApi.GetChat(chatId), { result ->
             if (result is TdApi.Chat) {
                 val stillInAccountDialogs = result.positions.any { position ->
@@ -255,9 +255,9 @@ object TelegramClientManager {
                 }
                 if (stillInAccountDialogs) {
                     upsertChat(result)
-                } else {
-                    // TDLib has confirmed the chat no longer has a Main/Archive dialog
-                    // position. Only this authoritative refresh may remove a saved row.
+                } else if (allowRemoval) {
+                    // A missing position is authoritative only after a dialog-position update,
+                    // never after title/last-message metadata refreshes.
                     removeChatFromCatalog(chatId)
                 }
             }
