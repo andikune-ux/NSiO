@@ -183,14 +183,16 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/compute-nsio-version.sh
-      - name: Assemble APK
-        run: gradle assembleDebug --no-daemon
+      - name: Assemble matching Debug and Release APKs
+        run: gradle assembleDebug assembleRelease --no-daemon
       - name: Verify APK ABIs, API floor, and persistent signing identity
         shell: bash
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$DEBUG_APK"
+          test -s "$RELEASE_APK"
           test -s debug.keystore
 
           # Prevent an accidental debug-key replacement from creating an APK
@@ -216,21 +218,32 @@ jobs:
           echo "APK under verification: $APK"
 
           KEY_CERT_SHA="$(keytool -exportcert -keystore debug.keystore -storepass android -alias androiddebugkey | sha256sum | awk '{print tolower($1)}')"
-          APKSIGNER_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
-          echo "$APKSIGNER_OUTPUT"
-          APK_CERT_SHA="$(awk '/Signer: certificate SHA-256 digest:/ { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(":", ""); print tolower($0); exit }' <<< "$APKSIGNER_OUTPUT")"
-          echo "Keystore certificate SHA-256: $KEY_CERT_SHA"
-          echo "APK certificate SHA-256: $APK_CERT_SHA"
-          if [[ -z "$KEY_CERT_SHA" || -z "$APK_CERT_SHA" ]]; then
-            echo "::error::Unable to read the APK or permanent keystore signing certificate."
-            exit 1
-          fi
-          if [[ "$KEY_CERT_SHA" != "$APK_CERT_SHA" ]]; then
-            echo "::error::APK signer does not match the permanent NSiO debug.keystore."
+          for APK in "$DEBUG_APK" "$RELEASE_APK"; do
+            "$APKSIGNER" verify --verbose "$APK"
+            APK_CERT_SHA="$("$APKSIGNER" verify --print-certs "$APK" 2>&1 | awk '/Signer: certificate SHA-256 digest:/ { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(":", ""); print tolower($0); exit }')"
+            if [[ -z "$KEY_CERT_SHA" || "$KEY_CERT_SHA" != "$APK_CERT_SHA" ]]; then
+              echo "::error::APK signer does not match the permanent updater-compatible NSiO signing identity: $APK"
+              exit 1
+            fi
+            APK_BADGING="$("$AAPT" dump badging "$APK")"
+            echo "$APK_BADGING" | grep -E "^(package:|sdkVersion:)"
+            if ! grep -q "package: name='dev.andikune.NSiO'" <<< "$APK_BADGING"; then
+              echo "::error::Unexpected application ID in $APK"
+              exit 1
+            fi
+            if ! grep -q "sdkVersion:'24'" <<< "$APK_BADGING"; then
+              echo "::error::APK minimum SDK is not Android API 24: $APK"
+              exit 1
+            fi
+          done
+          DEBUG_CERT_SHA="$("$APKSIGNER" verify --print-certs "$DEBUG_APK" 2>&1 | awk '/Signer: certificate SHA-256 digest:/ { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(":", ""); print tolower($0); exit }')"
+          RELEASE_CERT_SHA="$("$APKSIGNER" verify --print-certs "$RELEASE_APK" 2>&1 | awk '/Signer: certificate SHA-256 digest:/ { sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); gsub(":", ""); print tolower($0); exit }')"
+          if [[ "$DEBUG_CERT_SHA" != "$RELEASE_CERT_SHA" ]]; then
+            echo "::error::Debug and Release signing identities differ."
             exit 1
           fi
 
-          APK_ABIS="$(unzip -Z1 "$APK" | awk -F/ '$1 == "lib" && NF >= 3 {print $2}' | sort -u | paste -sd ' ' -)"
+          APK_ABIS="$(unzip -Z1 "$RELEASE_APK" | awk -F/ '$1 == "lib" && NF >= 3 {print $2}' | sort -u | paste -sd ' ' -)"
           echo "Native ABIs found in APK: ${APK_ABIS:-none}"
           if [[ "$APK_ABIS" != "arm64-v8a armeabi-v7a" ]]; then
             echo "::error::Unexpected native ABIs in APK: $APK_ABIS"
@@ -247,24 +260,29 @@ jobs:
             echo "- Native ABIs: $APK_ABIS"
             echo "- Minimum Android API: 24"
             echo "- Signing certificate SHA-256: $APK_CERT_SHA"
-            echo "- Persistent signing key: verified against the committed debug.keystore"
-            echo "- Distribution: one ARM universal APK, preserving compatibility with the existing in-app updater."
+            echo "- Debug and Release use the same persistent signing certificate."
+            echo "- Release package ID: dev.andikune.NSiO"
+            echo "- Distribution: the true Release variant, preserving compatibility with the in-app updater."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Package APK and checksum
         env:
           VERSION_TAG: ${{ steps.version.outputs.version_tag }}
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          cp "$APK" "NSiO-$VERSION_TAG-debug.apk"
-          sha256sum "NSiO-$VERSION_TAG-debug.apk" | tee "NSiO-$VERSION_TAG-debug.apk.sha256"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$DEBUG_APK"
+          test -s "$RELEASE_APK"
+          cp "$DEBUG_APK" "NSiO-$VERSION_TAG-debug.apk"
+          cp "$RELEASE_APK" "NSiO-$VERSION_TAG.apk"
+          sha256sum "NSiO-$VERSION_TAG.apk" | tee "NSiO-$VERSION_TAG.apk.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: NSiO-${{ steps.version.outputs.version_tag }}
           path: |
+            NSiO-${{ steps.version.outputs.version_tag }}.apk
+            NSiO-${{ steps.version.outputs.version_tag }}.apk.sha256
             NSiO-${{ steps.version.outputs.version_tag }}-debug.apk
-            NSiO-${{ steps.version.outputs.version_tag }}-debug.apk.sha256
           retention-days: 14
 
   apk_validation:
@@ -280,7 +298,7 @@ jobs:
         run: |
           set -euo pipefail
           cd verified-apk
-          APK="NSiO-${{ needs.build.outputs.version_tag }}-debug.apk"
+          APK="NSiO-${{ needs.build.outputs.version_tag }}.apk"
           test -s "$APK"
           sha256sum -c "$APK.sha256"
           unzip -t "$APK" >/dev/null
@@ -296,7 +314,7 @@ jobs:
           path: size-report
       - name: Report APK size
         run: |
-          APK="size-report/NSiO-${{ needs.build.outputs.version_tag }}-debug.apk"
+          APK="size-report/NSiO-${{ needs.build.outputs.version_tag }}.apk"
           BYTES="$(stat -c '%s' "$APK")"
           MIB="$(awk -v bytes="$BYTES" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
           echo "APK size: $BYTES bytes ($MIB MiB)" >> "$GITHUB_STEP_SUMMARY"
@@ -322,7 +340,7 @@ jobs:
           VERSION_TAG: ${{ needs.build.outputs.version_tag }}
         run: |
           set -euo pipefail
-          APK="release-files/NSiO-$VERSION_TAG-debug.apk"
+          APK="release-files/NSiO-$VERSION_TAG.apk"
           CHECKSUM="$APK.sha256"
           test -s "$APK"
           test -s "$CHECKSUM"
