@@ -49,6 +49,8 @@ class ExampleRobolectricTest {
     val encrypted = ProfileBackupCrypto.encrypt(payload, "2468")
     val envelope = JSONObject(encrypted)
     assertEquals("PROFILE_BACKUP_ENCRYPTED", envelope.getString("backupType"))
+    assertEquals(2, envelope.getInt("formatVersion"))
+    assertEquals("GZIP", envelope.getString("compression"))
     assertEquals(payload, ProfileBackupCrypto.decrypt(envelope, "2468"))
     var rejected = false
     try {
