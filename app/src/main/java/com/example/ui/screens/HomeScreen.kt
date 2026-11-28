@@ -952,6 +952,7 @@ fun HomeScreen(
                                                 ) { mediaItem ->
                                                     MediaGridCard(
                                                         item = mediaItem,
+                                                        onVisible = { viewModel.ensureTelegramMediaMetadata(mediaItem) },
                                                         modifier = Modifier.width(148.dp),
                                                         onClick = { viewModel.requestCloudStreamDetail(mediaItem) },
                                                         onLongClick = { viewModel.toggleFavorite(mediaItem) },
@@ -1071,6 +1072,7 @@ fun HomeScreen(
                                                 playlistItems.forEach { mediaItem ->
                                                     MediaGridCard(
                                                         item = mediaItem,
+                                                        onVisible = { viewModel.ensureTelegramMediaMetadata(mediaItem) },
                                                         modifier = Modifier.width(148.dp),
                                                         onClick = { viewModel.playMedia(mediaItem) },
                                                         onLongClick = { viewModel.toggleFavorite(mediaItem) },
