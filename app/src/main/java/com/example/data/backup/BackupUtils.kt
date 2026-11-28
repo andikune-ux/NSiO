@@ -98,7 +98,7 @@ object BackupUtils {
             val profileMedia = mediaList.filter { it.profileId == profile.id }
             val payload = JSONObject().apply {
                 put("backupType", "PROFILE_BACKUP")
-                put("version", 4)
+                put("version", 5)
                 put("createdAt", System.currentTimeMillis())
                 put("sourceProfileName", profile.name)
                 val avatarBytes = readProfileAvatarBytes(context, profile.avatarEmoji)
@@ -240,7 +240,7 @@ object BackupUtils {
             "Jenis file backup tidak didukung."
         }
         val version = root.optInt("version", 1)
-        require(version in 1..4) { "Versi backup $version belum didukung aplikasi ini." }
+        require(version in 1..5) { "Versi backup $version belum didukung aplikasi ini." }
         val media = root.optJSONArray("mediaItems")
             ?: throw IllegalArgumentException("Backup tidak memiliki daftar media.")
         require(media.length() <= 50_000) { "Backup berisi terlalu banyak item media." }
