@@ -11,6 +11,7 @@ import com.example.data.model.ProfileSettings
 import com.example.data.model.SourcePlaylist
 import com.example.data.plugin.PluginManager
 import com.example.data.telegram.TelegramClientManager
+import com.example.data.security.TelegramApiCredentialStore
 import com.example.data.security.PinVault
 import com.example.tiktok.TikTodLocalStore
 import com.example.tiktok.TikTodFeedPolicy
@@ -167,6 +168,11 @@ object BackupUtils {
                     }
                 })
                 put("cloudStreamBackup", PluginManager(context).exportBackupData())
+                if (TelegramClientManager.ownerProfileId(context).isNullOrBlank() &&
+                    TelegramApiCredentialStore(context).load() != null
+                ) {
+                    TelegramClientManager.claimProfile(context, profile.id)
+                }
                 if (TelegramClientManager.isProfileOwner(context, profile.id)) {
                     require(profile.isPinEnabled) {
                         "Integrasi Telegram berisi kunci sesi. Aktifkan PIN profil sebelum membuat backup agar kredensial tidak tersimpan sebagai JSON terbuka."
