@@ -103,26 +103,26 @@ internal class TelegramTdlibDataSource : DataSource {
         val localStart = local.downloadOffset
         val relativeOffset = position - localStart
         val path = java.io.File(local.path)
-        val available = if (local.isDownloadingCompleted) {
-            path.length()
+        val availablePrefix = if (local.isDownloadingCompleted) {
+            (path.length() - localStart).coerceAtLeast(0L)
         } else {
-            min(local.downloadedPrefixSize, path.length())
+            local.downloadedPrefixSize.coerceAtLeast(0L)
         }
-        if (relativeOffset < 0L || relativeOffset >= available) {
+        if (relativeOffset < 0L || relativeOffset >= availablePrefix) {
             if (totalLength != C.LENGTH_UNSET.toLong() && position >= totalLength) {
                 chunkLength = 0
                 return
             }
-            throw IOException("Bagian file Telegram belum lengkap (offset $localStart, tersedia $available).")
+            throw IOException("Bagian file Telegram belum tersedia (offset $localStart, prefix $availablePrefix).")
         }
-        val count = min(wanted, available - relativeOffset).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        if (count <= 0) {
-            chunkLength = 0
-            return
-        }
+        // downloadedPrefixSize describes bytes from downloadOffset; the TDLib file
+        // itself is sparse and addressed at absolute offsets. Bound reads by both.
+        val logicalAvailable = availablePrefix - relativeOffset
+        val physicalAvailable = (path.length() - position).coerceAtLeast(0L)
+        val count = min(wanted, min(logicalAvailable, physicalAvailable))
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        if (count <= 0) throw IOException("TDLib melaporkan rentang tersedia tetapi file lokal belum dapat dibaca.")
         chunk = ByteArray(count)
-        // TDLib writes sparse range data at its absolute file offsets (pwrite).
-        // downloadedPrefixSize is relative to downloadOffset, but the file seek is absolute.
         RandomAccessFile(path, "r").use { input ->
             input.seek(position)
             input.readFully(chunk)
