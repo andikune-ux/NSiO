@@ -346,8 +346,7 @@ class CS3IPlayer(
                                 }
                             }
                             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-                            .createDataSource(),
-                        context
+                            .createDataSource()
                     )
                 } else upstreamFactory.createDataSource()
             }
