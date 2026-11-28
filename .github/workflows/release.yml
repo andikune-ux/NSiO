@@ -50,8 +50,8 @@ jobs:
           test "$CURRENT_MAIN" = "$GITHUB_SHA"
           test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
 
-      - name: 🧪 Test & build exact APK
-        run: gradle testDebugUnitTest assembleDebug --no-daemon
+      - name: 🧪 Test & build exact Debug and Release variants
+        run: gradle testDebugUnitTest assembleDebug assembleRelease --no-daemon
 
       - name: 🏷️ Publish verified release
         env:
@@ -59,16 +59,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "NSiO-$RELEASE_TAG-debug.apk"
-          sha256sum "NSiO-$RELEASE_TAG-debug.apk" > "NSiO-$RELEASE_TAG-debug.apk.sha256"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          cp "$APK" "NSiO-$RELEASE_TAG.apk"
+          sha256sum "NSiO-$RELEASE_TAG.apk" > "NSiO-$RELEASE_TAG.apk.sha256"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release already exists; refusing to replace immutable assets."
             exit 0
           fi
           gh release create "$RELEASE_TAG" \
-            "NSiO-$RELEASE_TAG-debug.apk" \
-            "NSiO-$RELEASE_TAG-debug.apk.sha256" \
+            "NSiO-$RELEASE_TAG.apk" \
+            "NSiO-$RELEASE_TAG.apk.sha256" \
             --target "$GITHUB_SHA" \
             --title "NSiO $RELEASE_TAG" \
             --generate-notes
