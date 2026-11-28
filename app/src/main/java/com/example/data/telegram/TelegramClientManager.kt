@@ -126,6 +126,9 @@ object TelegramClientManager {
         client?.let { runCatching { it.send(TdApi.Close()) { } } }
         client = null
         activeProfileId = ""
+        TelegramApiCredentialStore(context).clearAll()
+        File(context.filesDir, "telegram/tdlib/database").deleteRecursively()
+        File(context.cacheDir, "telegram/tdlib/files").deleteRecursively()
         profileBindingPreferences(context).edit().remove("owner_profile_id").commit()
         catalogPreferences(context).edit().clear().commit()
         mutableState.value = State(message = "Integrasi Telegram dilepas dari profil.")
