@@ -24,7 +24,8 @@ class GoogleDriveMultiviewAdapter : MultiviewSourceAdapter {
                 uri = Uri.parse(normalized),
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: "Google Drive" },
                 requestHeaders = parseSourceHeaders(request.mediaItem),
-                sourceKind = kind
+                sourceKind = kind,
+                mediaItem = request.mediaItem
             )
         )
     }
@@ -55,7 +56,8 @@ class LocalFileMultiviewAdapter : MultiviewSourceAdapter {
             MultiviewResolvedSource(
                 uri = resolvedUri,
                 title = request.displayName.ifBlank { request.mediaItem?.title ?: "File lokal" },
-                sourceKind = kind
+                sourceKind = kind,
+                mediaItem = request.mediaItem
             )
         )
     }
