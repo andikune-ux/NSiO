@@ -107,6 +107,36 @@ class VideoDownloadManager private constructor(private val context: Context) {
         scheduleDownload(savedItem, requestHeaders)
     } }
 
+    /** Save a Telegram file only when the user explicitly chooses Download. */
+    suspend fun importCompletedDownload(
+        mediaId: String,
+        title: String,
+        sourceFile: File,
+        extension: String
+    ): DownloadItem = withContext(Dispatchers.IO) {
+        require(sourceFile.isFile && sourceFile.length() > 0L) { "File Telegram kosong atau tidak ditemukan." }
+        val safeTitle = title.trim().replace(Regex("[^a-zA-Z0-9._-]+"), "_").take(80).ifEmpty { "telegram_media" }
+        val folder = File(context.getExternalFilesDir(null) ?: context.filesDir, "NSiO/Downloads")
+        if (!folder.exists() && !folder.mkdirs()) throw IOException("Folder unduhan tidak dapat dibuat")
+        val safeExtension = extension.lowercase().filter(Char::isLetterOrDigit).take(8).ifBlank { "mp4" }
+        val target = File(folder, "$safeTitle-${UUID.randomUUID()}.$safeExtension")
+        sourceFile.copyTo(target, overwrite = false)
+        val size = target.length()
+        val item = DownloadItem(
+            id = UUID.randomUUID().toString(),
+            mediaId = mediaId,
+            title = title,
+            url = "telegram://downloaded/$mediaId",
+            localPath = target.absolutePath,
+            status = "COMPLETED",
+            progressPercent = 100,
+            downloadedBytes = size,
+            totalBytes = size
+        )
+        downloadDao.insertDownload(item)
+        item
+    }
+
     private fun scheduleDownload(item: DownloadItem, requestHeaders: Map<String, String>) {
         val input = Data.Builder()
             .putString(KEY_ID, item.id).putString(KEY_MEDIA_ID, item.mediaId)
