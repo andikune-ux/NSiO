@@ -2528,6 +2528,70 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startPlaybackProgressPersistence(item)
     }
 
+    /**
+     * Recover only the Telegram message currently needed by a visible media card.
+     * No chat-history scan or video download is performed here.
+     */
+    fun ensureTelegramMediaMetadata(item: MediaItem) {
+        if (!item.sourceType.equals("TELEGRAM", true)) return
+        val fields = item.extraInfo.split('&').mapNotNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0) null else part.substring(0, separator) to part.substring(separator + 1)
+        }.toMap()
+        val chatId = fields["chatId"]?.toLongOrNull() ?: return
+        val messageId = fields["messageId"]?.toLongOrNull() ?: return
+        val titleNeedsRecovery = item.title.isBlank() ||
+            item.title.equals("Video Telegram", true) ||
+            item.title.equals("Foto Telegram", true)
+        val thumbnailFile = runCatching {
+            val uri = Uri.parse(item.thumbnailUrl)
+            if (uri.scheme == "file") uri.path?.let(::java.io.File) else null
+        }.getOrNull()
+        val thumbnailMissing = item.thumbnailUrl.isBlank() ||
+            (thumbnailFile != null && !thumbnailFile.isFile)
+        if (!titleNeedsRecovery && !thumbnailMissing) return
+
+        TelegramClientManager.refreshMediaMessage(chatId, messageId) { media ->
+            if (media == null) return@refreshMediaMessage
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                var updated = item
+                if (titleNeedsRecovery) {
+                    val recoveredTitle = media.caption.lineSequence().firstOrNull()
+                        ?.trim()?.takeIf { it.isNotBlank() }
+                        ?: media.title.takeIf { it.isNotBlank() }
+                    if (!recoveredTitle.isNullOrBlank()) updated = updated.copy(title = recoveredTitle.take(120))
+                }
+
+                val thumbnailId = fields["thumbnailFileId"]?.toIntOrNull()
+                    ?.takeIf { it > 0 } ?: media.thumbnailFileId
+                val extra = item.extraInfo.split('&').filter { it.substringBefore('=') != "thumbnailFileId" }
+                    .plus(if (thumbnailId > 0) "thumbnailFileId=$thumbnailId" else emptyList())
+                    .joinToString("&")
+                if (extra != updated.extraInfo) updated = updated.copy(extraInfo = extra)
+
+                if (thumbnailMissing && thumbnailId > 0) {
+                    val downloaded = kotlinx.coroutines.suspendCancellableCoroutine<String?> { continuation ->
+                        TelegramClientManager.downloadThumbnail(thumbnailId) { path ->
+                            if (continuation.isActive) continuation.resume(path)
+                        }
+                    }
+                    val source = downloaded?.let(::java.io.File)
+                    if (source?.isFile == true && source.length() > 0L) {
+                        val directory = java.io.File(getApplication<Application>().cacheDir, "telegram/thumbnails")
+                            .apply { mkdirs() }
+                        val target = java.io.File(directory, "${item.id}.jpg")
+                        runCatching {
+                            source.copyTo(target, overwrite = true)
+                            TelegramClientManager.deleteDownloadedFile(thumbnailId)
+                            updated = updated.copy(thumbnailUrl = Uri.fromFile(target).toString())
+                        }
+                    }
+                }
+                if (updated != item) runCatching { mediaDao.updateMedia(updated) }
+            }
+        }
+    }
+
     fun playMedia(item: MediaItem) {
         syncPlaybackQueue(item)
         if (item.sourceType == "CLOUDSTREAM") {
