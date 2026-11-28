@@ -75,11 +75,7 @@ object TelegramCatalogSync {
                                         // Only files inside telegram/imported are eligible; manual downloads
                                         // and unrelated file:// media are never touched.
                                         if (!media.isPhoto && isLegacyImportedVideo(context, previous.url)) {
-                                            val extension = when {
-                                                media.mimeType.contains("webm", true) -> "webm"
-                                                media.mimeType.contains("matroska", true) -> "mkv"
-                                                else -> "mp4"
-                                            }
+                                            val extension = resolveTelegramPlaybackFormat(media.mimeType).extension
                                             val streamUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
                                             val migrated = previous.copy(
                                                 url = streamUrl,
@@ -114,7 +110,7 @@ object TelegramCatalogSync {
                                         continue
                                     }
                                     // Persist only Telegram metadata. Full media is fetched on first playback.
-                                    val extension = if (media.isPhoto) "jpg" else if (media.mimeType.contains("webm", true)) "webm" else if (media.mimeType.contains("matroska", true)) "mkv" else "mp4"
+                                    val extension = if (media.isPhoto) "jpg" else resolveTelegramPlaybackFormat(media.mimeType).extension
                                     val deferredUrl = "telegram://media/${media.chatId}/${media.messageId}/${media.fileId}.$extension"
                                     val thumbnail = if (media.thumbnailFileId > 0)
                                         downloadTelegramThumbnail(context, id, media.thumbnailFileId).orEmpty() else ""
