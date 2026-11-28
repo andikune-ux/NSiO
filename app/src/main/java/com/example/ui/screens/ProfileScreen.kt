@@ -118,50 +118,50 @@ fun ProfileScreen(
     ) { uri ->
         if (uri != null) {
             restoreScope.launch {
-                val savedAvatar = withContext(Dispatchers.IO) {
-                    var destination: File? = null
-                    try {
-                        val mimeType = context.contentResolver.getType(uri)
-                        require(mimeType == null || mimeType.startsWith("image/")) {
-                            "File yang dipilih bukan gambar."
-                        }
-                        val avatarDirectory = File(context.filesDir, "profile_avatars")
-                        check(avatarDirectory.exists() || avatarDirectory.mkdirs()) {
-                            "Folder foto profil tidak dapat dibuat."
-                        }
-                        destination = File(avatarDirectory, "${UUID.randomUUID()}.img")
-                        val input = context.contentResolver.openInputStream(uri)
-                            ?: throw IllegalStateException("Foto tidak dapat dibaca dari galeri.")
-                        var totalBytes = 0L
-                        input.use { source ->
-                            FileOutputStream(destination).use { output ->
-                                val buffer = ByteArray(8 * 1024)
-                                while (true) {
-                                    val count = source.read(buffer)
-                                    if (count < 0) break
-                                    totalBytes += count
-                                    require(totalBytes <= 20L * 1024L * 1024L) {
-                                        "Ukuran foto profil maksimal 20 MB."
-                                    }
-                                    output.write(buffer, 0, count)
-                                }
-                                output.fd.sync()
+                try {
+                    val savedAvatar = withContext(Dispatchers.IO) {
+                        var destination: File? = null
+                        try {
+                            val mimeType = context.contentResolver.getType(uri)
+                            require(mimeType == null || mimeType.startsWith("image/")) {
+                                "File yang dipilih bukan gambar."
                             }
+                            val avatarDirectory = File(context.filesDir, "profile_avatars")
+                            check(avatarDirectory.exists() || avatarDirectory.mkdirs()) {
+                                "Folder foto profil tidak dapat dibuat."
+                            }
+                            destination = File(avatarDirectory, "${UUID.randomUUID()}.img")
+                            val input = context.contentResolver.openInputStream(uri)
+                                ?: throw IllegalStateException("Foto tidak dapat dibaca dari galeri.")
+                            var totalBytes = 0L
+                            input.use { source ->
+                                FileOutputStream(destination).use { output ->
+                                    val buffer = ByteArray(8 * 1024)
+                                    while (true) {
+                                        val count = source.read(buffer)
+                                        if (count < 0) break
+                                        totalBytes += count
+                                        require(totalBytes <= 20L * 1024L * 1024L) {
+                                            "Ukuran foto profil maksimal 20 MB."
+                                        }
+                                        output.write(buffer, 0, count)
+                                    }
+                                    output.fd.sync()
+                                }
+                            }
+                            check(destination.length() > 0L) { "File foto kosong." }
+                            destination
+                        } catch (error: Exception) {
+                            destination?.delete()
+                            throw error
                         }
-                        check(destination.length() > 0L) { "File foto kosong." }
-                        destination
-                    } catch (error: Exception) {
-                        destination?.delete()
-                        throw error
                     }
-                }
-                if (savedAvatar != null) {
-                    editingProfileAvatar = Uri.fromFile(savedAvatar).toString()
-                    viewModel.showStatus("Foto profil berhasil disimpan ke penyimpanan permanen NSiO.")
-                }
-            }.invokeOnCompletion { error ->
-                if (error != null) {
-                    viewModel.showStatus("Gagal menyimpan foto profil: ${error.cause?.localizedMessage ?: error.localizedMessage ?: "kesalahan tidak diketahui"}")
+                    if (savedAvatar != null) {
+                        editingProfileAvatar = Uri.fromFile(savedAvatar).toString()
+                        viewModel.showStatus("Foto profil berhasil disimpan ke penyimpanan permanen NSiO.")
+                    }
+                } catch (error: Exception) {
+                    viewModel.showStatus("Gagal menyimpan foto profil: ${error.localizedMessage ?: "kesalahan tidak diketahui"}")
                 }
             }
         }
