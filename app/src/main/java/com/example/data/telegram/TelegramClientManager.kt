@@ -314,6 +314,8 @@ object TelegramClientManager {
     private fun handleAuthorizationState(auth: TdApi.AuthorizationState) {
         if (auth is TdApi.AuthorizationStateWaitTdlibParameters) {
             armInitializationTimeout(clientGeneration, "mengirim parameter TDLib")
+        } else if (auth is TdApi.AuthorizationStateWaitEncryptionKey) {
+            armInitializationTimeout(clientGeneration, "memverifikasi kunci database TDLib")
         } else {
             clearInitializationTimeout()
         }
@@ -338,6 +340,11 @@ object TelegramClientManager {
                     applicationVersion = "NSiO"
                 }
                 send(parameters)
+            }
+            is TdApi.AuthorizationStateWaitEncryptionKey -> {
+                // TDLib requires this explicit acknowledgement before it can restore
+                // the existing authorization session and advance to WaitPhoneNumber/Ready.
+                send(TdApi.CheckDatabaseEncryptionKey(pendingDatabaseKey))
             }
             is TdApi.AuthorizationStateWaitPhoneNumber -> {
                 val message = if (pendingHadExistingDatabase) {
